@@ -160,7 +160,7 @@ export default function SchemeDetailsPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div><strong>Monthly Amount:</strong> {formatCurrency(scheme.monthlyPaymentAmount)}</div>
           <div><strong>Duration:</strong> {scheme.durationMonths} Months</div>
           <div><strong>Total Expected:</strong> {formatCurrency(scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0))}</div>
@@ -237,7 +237,7 @@ export default function SchemeDetailsPage() {
         </TabsContent>
 
         <TabsContent value="visuals">
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="font-headline">Monthly Progress</CardTitle>
@@ -263,7 +263,7 @@ export default function SchemeDetailsPage() {
                       <RechartsBarChart data={paymentChartData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
-                        <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
+                        <YAxis tickFormatter={(value) => formatCurrency(value, 'INR').replace('₹', '')} />
                         <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
                         <Legend />
                         <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
@@ -279,7 +279,7 @@ export default function SchemeDetailsPage() {
                       <LineChart data={cumulativePaymentData}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
-                        <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
+                        <YAxis tickFormatter={(value) => formatCurrency(value, 'INR').replace('₹', '')} />
                         <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
                         <Legend />
                         <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
@@ -300,7 +300,7 @@ export default function SchemeDetailsPage() {
                     <CardDescription>Overview of the completed scheme for {scheme.customerName}.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 border rounded-lg bg-green-50 dark:bg-green-900/20">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 border rounded-lg bg-green-50 dark:bg-green-900/20">
                         <div className="flex items-center gap-3">
                             <CheckCircle className="h-8 w-8 text-green-600" />
                             <div>
@@ -324,7 +324,7 @@ export default function SchemeDetailsPage() {
                         <ResponsiveContainer width="100%" height={200}>
                              <RechartsBarChart data={[{ name: 'Scheme Total', paid: scheme.totalCollected || 0 }]} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
+                                <XAxis type="number" tickFormatter={(value) => formatCurrency(value, 'INR').replace('₹', '')} />
                                 <YAxis type="category" dataKey="name" width={100} />
                                 <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                                 <Bar dataKey="paid" fill="var(--color-paid)" barSize={30} radius={[4, 4, 0, 0]} />
@@ -342,3 +342,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+

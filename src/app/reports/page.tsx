@@ -1,3 +1,4 @@
+
 import { ComingSoon } from '@/components/shared/ComingSoon';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ export default function ReportsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-headline font-semibold">Reports</h1>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2">
@@ -71,3 +72,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+

@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
     // Mock notifications
     const upcomingPayments = loadedSchemes.flatMap(s => s.payments)
-      .filter(p => p.status === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && differenceInDays(parseISO(p.dueDate), new Date()) >= 0);
+      .filter(p => getPaymentStatus(p, s.startDate) === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && differenceInDays(parseISO(p.dueDate), new Date()) >= 0);
     
     if (upcomingPayments.length > 0) {
       const scheme = loadedSchemes.find(s => s.id === upcomingPayments[0].schemeId);
@@ -44,7 +44,7 @@ export default function DashboardPage() {
       });
     }
     
-    const overduePayments = loadedSchemes.flatMap(s => s.payments).filter(p => p.status === 'Overdue');
+    const overduePayments = loadedSchemes.flatMap(s => s.payments).filter(p => getPaymentStatus(p, s.startDate) === 'Overdue');
     if (overduePayments.length > 0) {
        const scheme = loadedSchemes.find(s => s.id === overduePayments[0].schemeId);
       toast({
@@ -62,7 +62,7 @@ export default function DashboardPage() {
     const totalExpectedFromActive = activeSchemes.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected,0) ,0);
     const totalOverdueAmount = schemes
       .flatMap(s => s.payments)
-      .filter(p => p.status === 'Overdue')
+      .filter(p => getPaymentStatus(p, s.startDate) === 'Overdue')
       .reduce((sum, p) => sum + p.amountExpected, 0);
       
     return {
@@ -113,7 +113,7 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Schemes</CardTitle>
@@ -161,7 +161,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Overall Payment Progress (Active Schemes)</CardTitle>
@@ -171,10 +171,10 @@ export default function DashboardPage() {
             {chartData.some(d => d.value > 0) ? (
               <ChartContainer config={chartConfig} className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 20 }}>
+                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 20, left:10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} />
+                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value, 'INR').replace('₹', '')} />
+                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={80} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent />} />
                     <Bar dataKey="value" radius={5} />
@@ -209,7 +209,7 @@ export default function DashboardPage() {
         </Card>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Upcoming Payments (Next 30 Days)</CardTitle>
