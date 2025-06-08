@@ -30,3 +30,11 @@ export interface Scheme {
   totalRemaining?: number;
   paymentsMadeCount?: number;
 }
+
+export interface GroupDetail {
+  groupName: string;
+  schemes: Scheme[];
+  customerNames: string[];
+  totalSchemesInGroup: number;
+  recordableSchemeCount: number; // Number of schemes in this group with a next payment due
+}

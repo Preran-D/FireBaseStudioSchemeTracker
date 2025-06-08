@@ -3,16 +3,16 @@ import type { PropsWithChildren } from 'react';
 import { SideContextWrapper, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, CircleDollarSign, Repeat } from 'lucide-react'; 
+import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, CircleDollarSign, Repeat, Users2 } from 'lucide-react'; 
 import { AppLogo } from '@/components/shared/AppLogo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-// Removed SheetHeader, SheetTitle import as they are not directly used here and their usage in Sidebar was problematic
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
   { href: '/transactions', label: 'Transactions', icon: Repeat }, 
+  { href: '/groups', label: 'Groups', icon: Users2 },
   { href: '/reports', label: 'Reports', icon: FileText },
 ];
 
@@ -20,11 +20,6 @@ export default function AppLayout({ children }: PropsWithChildren) {
   return (
     <SideContextWrapper defaultOpen>
       <Sidebar collapsible="icon" variant="sidebar" className="border-r">
-        {/*
-          The SheetHeader and SheetTitle for mobile accessibility were previously managed within Sidebar.tsx.
-          To resolve persistent context errors, SheetTitle is no longer rendered,
-          and SheetContent in Sidebar.tsx (mobile view) uses aria-label.
-        */}
         <SidebarHeader className="p-4">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             <AppLogo className="size-7 text-primary group-data-[collapsible=icon]:size-6" />
@@ -119,4 +114,3 @@ export default function AppLayout({ children }: PropsWithChildren) {
     </SideContextWrapper>
   );
 }
-
