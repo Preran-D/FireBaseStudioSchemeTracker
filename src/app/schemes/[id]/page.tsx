@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle, PieChart } from 'lucide-react';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
@@ -20,6 +20,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, LineChart, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
 import Link from 'next/link';
 import { isPast, parseISO } from 'date-fns';
+import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
 
 
 export default function SchemeDetailsPage() {
@@ -236,45 +237,60 @@ export default function SchemeDetailsPage() {
         </TabsContent>
 
         <TabsContent value="visuals">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline">Payment Visuals</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Monthly Payments (Expected vs. Paid)</h3>
-                <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                  <ResponsiveContainer>
-                    <RechartsBarChart data={paymentChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
-                      <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                      <Legend />
-                      <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
-                    </RechartsBarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Cumulative Payments Over Time</h3>
-                 <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                  <ResponsiveContainer>
-                    <LineChart data={cumulativePaymentData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
-                      <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                      <Legend />
-                      <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
-                      <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline">Monthly Progress</CardTitle>
+                <CardDescription>Visual breakdown of payments by month.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MonthlyCircularProgress 
+                  payments={scheme.payments} 
+                  startDate={scheme.startDate}
+                  durationMonths={scheme.durationMonths}
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-headline">Payment Trends</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Monthly Payments (Expected vs. Paid)</h3>
+                  <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                    <ResponsiveContainer>
+                      <RechartsBarChart data={paymentChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
+                        <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
+                        <Legend />
+                        <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Cumulative Payments Over Time</h3>
+                  <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                    <ResponsiveContainer>
+                      <LineChart data={cumulativePaymentData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
+                        <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
+                        <Legend />
+                        <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
+                        <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
         
         <TabsContent value="summary">
@@ -326,5 +342,3 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
-
-    
