@@ -1,0 +1,28 @@
+export type PaymentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Upcoming';
+
+export interface Payment {
+  id: string;
+  schemeId: string;
+  monthNumber: number; // 1-12
+  dueDate: string; // ISO Date string
+  paymentDate?: string; // ISO Date string
+  amountExpected: number;
+  amountPaid?: number;
+  status: PaymentStatus;
+}
+
+export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming';
+
+export interface Scheme {
+  id: string;
+  customerName: string;
+  startDate: string; // ISO Date string
+  monthlyPaymentAmount: number;
+  durationMonths: 12;
+  status: SchemeStatus;
+  payments: Payment[];
+  // Calculated fields (optional, can be derived)
+  totalCollected?: number;
+  totalRemaining?: number;
+  paymentsMadeCount?: number;
+}
