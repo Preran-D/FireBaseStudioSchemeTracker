@@ -230,7 +230,7 @@ export default function GroupDetailsPage() {
                 {allSchemesInGroup.map((scheme) => (
                   <TableRow key={scheme.id}>
                     <TableCell className="font-medium">{scheme.customerName}</TableCell>
-                    <TableCell className="truncate max-w-[100px] sm:max-w-xs">{scheme.id}</TableCell>
+                    <TableCell className="truncate max-w-[100px] sm:max-w-xs">{scheme.id.toUpperCase()}</TableCell>
                     <TableCell>{formatDate(scheme.startDate)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
                     <TableCell className="text-center">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>

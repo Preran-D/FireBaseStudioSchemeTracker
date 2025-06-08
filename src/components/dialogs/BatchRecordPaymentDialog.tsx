@@ -190,7 +190,7 @@ export function BatchRecordPaymentDialog({
                         className="mt-1"
                       />
                       <label htmlFor={`scheme-${p.schemeId}`} className="flex-grow cursor-pointer">
-                        For {p.schemeCustomerName} - Scheme <Button variant="link" asChild className="p-0 h-auto inline"><Link href={`/schemes/${p.schemeId}`} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] sm:max-w-xs inline-block">{p.schemeId.substring(0,8)}...</Link></Button>
+                        For {p.schemeCustomerName} - Scheme <Button variant="link" asChild className="p-0 h-auto inline"><Link href={`/schemes/${p.schemeId}`} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] sm:max-w-xs inline-block">{p.schemeId.toUpperCase()}</Link></Button>
                         - Month {p.monthNumber} <br/>
                         Due: {formatDate(p.dueDate)}, Amount: {formatCurrency(p.amountExpected)}
                       </label>
@@ -288,3 +288,4 @@ export function BatchRecordPaymentDialog({
     </Dialog>
   );
 }
+

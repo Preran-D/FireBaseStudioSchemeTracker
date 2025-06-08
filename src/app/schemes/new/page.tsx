@@ -79,6 +79,8 @@ export default function NewSchemePage() {
         groupOption: groupOption,
         existingGroupName: existingGroupVal,
         newGroupName: newGroupVal,
+        customerPhone: searchParams.get('customerPhone') || '',
+        customerAddress: searchParams.get('customerAddress') || '',
     };
     return initialValues;
   }, [searchParams, existingGroupNames]);
@@ -101,6 +103,8 @@ export default function NewSchemePage() {
     try {
       const newScheme = addMockScheme({
         customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerAddress: data.customerAddress,
         startDate: data.startDate, 
         monthlyPaymentAmount: data.monthlyPaymentAmount,
         customerGroupName: data.customerGroupName,
@@ -112,7 +116,7 @@ export default function NewSchemePage() {
       setFirstPaymentModeOfPayment(['Cash']); // Reset mode of payment for new dialog
       toast({
         title: 'Scheme Created',
-        description: `Scheme for ${newScheme.customerName} ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
+        description: `Scheme for ${newScheme.customerName} (ID: ${newScheme.id.toUpperCase()}) ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
       });
       setIsFirstPaymentAlertOpen(true);
     } catch (error) {
@@ -155,8 +159,9 @@ export default function NewSchemePage() {
       toast({ title: 'Payment Recording Failed', description: 'Could not record the first payment.', variant: 'destructive' });
     }
     setIsFirstPaymentAlertOpen(false);
+    const schemeIdToNav = newlyCreatedScheme.id;
     setNewlyCreatedScheme(null); // Clear the scheme after handling
-    router.push(`/schemes/${updatedScheme ? updatedScheme.id : newlyCreatedScheme.id}`);
+    router.push(`/schemes/${updatedScheme ? updatedScheme.id : schemeIdToNav}`);
   };
 
   const handleSkipFirstPayment = () => {
@@ -209,7 +214,7 @@ export default function NewSchemePage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Record First Payment for {newlyCreatedScheme.customerName}?</AlertDialogTitle>
               <AlertDialogDescription>
-                The first payment (Month 1) is due on {formatDate(newlyCreatedScheme.payments[0].dueDate)}.
+                The first payment (Month 1) for scheme ID {newlyCreatedScheme.id.toUpperCase()} is due on {formatDate(newlyCreatedScheme.payments[0].dueDate)}.
                 Expected amount: {formatCurrency(newlyCreatedScheme.payments[0].amountExpected)}.
                 {newlyCreatedScheme.customerGroupName && ` This scheme is part of group: ${newlyCreatedScheme.customerGroupName}.`}
                 <br />
@@ -269,3 +274,4 @@ export default function NewSchemePage() {
     </>
   );
 }
+

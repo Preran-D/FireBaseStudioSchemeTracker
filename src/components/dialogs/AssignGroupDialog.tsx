@@ -84,7 +84,7 @@ export function AssignGroupDialog({ isOpen, onClose, scheme, existingGroupNames,
         <DialogHeader>
           <DialogTitle className="font-headline">Assign/Change Group for {scheme.customerName}</DialogTitle>
           <DialogDescription>
-            Scheme ID: {scheme.id.substring(0,8)}... <br/>
+            Scheme ID: {scheme.id.toUpperCase()} <br/>
             Current Group: {scheme.customerGroupName || 'None'}
           </DialogDescription>
         </DialogHeader>
@@ -187,3 +187,4 @@ export function AssignGroupDialog({ isOpen, onClose, scheme, existingGroupNames,
     </Dialog>
   );
 }
+

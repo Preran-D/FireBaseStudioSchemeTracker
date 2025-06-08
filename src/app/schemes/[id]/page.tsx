@@ -110,7 +110,7 @@ export default function SchemeDetailsPage() {
       if (activeAccordionItem === updatedSchemeFromMock.id) {
         setActiveAccordionItem(updatedSchemeFromMock.id); // re-trigger memo for schemeForVisuals
       }
-      toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
+      toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.toUpperCase()} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
     }
@@ -152,7 +152,7 @@ export default function SchemeDetailsPage() {
       if (activeAccordionItem === closedSchemeResult.id) {
         setActiveAccordionItem(closedSchemeResult.id); 
       }
-      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.substring(0,8)}) has been updated.` });
+      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been updated.` });
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
     }
@@ -281,7 +281,7 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Primary Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}<br/>
+              Primary Scheme ID: {scheme.id.toUpperCase()}<br/> Started on {formatDate(scheme.startDate)}<br/>
               Phone: {scheme.customerPhone || 'N/A'}<br/>
               Address: {scheme.customerAddress || 'N/A'}<br/>
               {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
@@ -327,7 +327,7 @@ export default function SchemeDetailsPage() {
                     <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
                         <div className="flex justify-between items-center w-full">
                         <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                            <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
+                            <span className="font-medium">ID: {s.id.toUpperCase()}</span>
                             <SchemeStatusBadge status={s.status} />
                             {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                         </div>
@@ -339,7 +339,7 @@ export default function SchemeDetailsPage() {
                     </AccordionTrigger>
                     <AccordionContent className="p-0">
                         <div className="border-t p-4 space-y-4">
-                            <p className="text-sm font-semibold mb-2">Details for Scheme {s.id.substring(0,8)}...</p>
+                            <p className="text-sm font-semibold mb-2">Details for Scheme {s.id.toUpperCase()}</p>
                             {s.status === 'Completed' ? (
                             <div className="text-sm">
                                 <p className="font-semibold">Scheme Completed</p>
@@ -384,7 +384,7 @@ export default function SchemeDetailsPage() {
                                                     <DialogContent>
                                                     <DialogHeader>
                                                         <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
-                                                        <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
+                                                        <CardDescription>Scheme ID: {s.id.toUpperCase()} (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
                                                     </DialogHeader>
                                                     <RecordPaymentForm
                                                         payment={selectedPaymentForRecord}
@@ -443,7 +443,7 @@ export default function SchemeDetailsPage() {
       {schemeForVisuals && (
         <Card>
             <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Scheme ID: {schemeForVisuals.id.substring(0,8)}...</CardTitle>
+                <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Scheme ID: {schemeForVisuals.id.toUpperCase()}</CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -539,7 +539,7 @@ export default function SchemeDetailsPage() {
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Scheme Closure for {schemeToCloseInDialog.customerName}</AlertDialogTitle>
-               <AlertDialogDescription>Scheme ID: {schemeToCloseInDialog.id.substring(0,8)}...</AlertDialogDescription>
+               <AlertDialogDescription>Scheme ID: {schemeToCloseInDialog.id.toUpperCase()}</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4 py-2">
                 <div>
@@ -645,3 +645,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+

@@ -248,7 +248,7 @@ export default function TransactionsPage() {
             <TableCell>
               <Button variant="link" asChild className="p-0 h-auto">
                   <Link href={`/schemes/${transaction.schemeId}`} className="truncate max-w-[100px] sm:max-w-xs block">
-                    {transaction.schemeId.substring(0,8)}...
+                    {transaction.schemeId.toUpperCase()}
                   </Link>
               </Button>
             </TableCell>
@@ -443,7 +443,7 @@ export default function TransactionsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="font-headline">Edit Payment for {selectedPaymentForEdit.customerName} (Month {selectedPaymentForEdit.monthNumber})</DialogTitle>
-               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId.substring(0,8)}...</CardDescription>
+               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId.toUpperCase()}</CardDescription>
             </DialogHeader>
             <RecordPaymentForm
               payment={selectedPaymentForEdit}
@@ -481,3 +481,4 @@ export default function TransactionsPage() {
     
 
     
+

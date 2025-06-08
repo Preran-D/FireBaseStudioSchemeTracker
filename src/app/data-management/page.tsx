@@ -81,7 +81,7 @@ export default function DataManagementPage() {
           if (paymentStatus === 'Paid' && payment.paymentDate && payment.amountPaid !== undefined) {
             paidTransactions.push([
               scheme.customerName,
-              scheme.id,
+              scheme.id.toUpperCase(),
               scheme.customerGroupName || 'N/A',
               payment.monthNumber,
               formatDate(payment.paymentDate),
@@ -128,7 +128,7 @@ export default function DataManagementPage() {
           reportData.push([
             scheme.customerName,
             scheme.customerGroupName || 'N/A',
-            scheme.id,
+            scheme.id.toUpperCase(),
             formatDate(scheme.startDate),
             scheme.monthlyPaymentAmount,
             scheme.durationMonths,
@@ -173,7 +173,7 @@ export default function DataManagementPage() {
       schemes.forEach(scheme => {
         reportData.push([
           scheme.customerName,
-          scheme.id,
+          scheme.id.toUpperCase(),
           formatDate(scheme.startDate),
           scheme.monthlyPaymentAmount,
           scheme.paymentsMadeCount || 0,
@@ -201,9 +201,9 @@ export default function DataManagementPage() {
 
   const handleDownloadNewSchemeSample = () => {
     const sampleData: any[][] = [
-      ['CustomerName', 'StartDate (YYYY-MM-DD)', 'MonthlyPaymentAmount', 'CustomerGroupName (Optional)'],
-      ['John Doe', '2024-01-15', '1000', 'Friends Circle'],
-      ['Jane Smith', '2024-02-01', '500', ''],
+      ['CustomerName', 'StartDate (YYYY-MM-DD)', 'MonthlyPaymentAmount', 'CustomerGroupName (Optional)', 'CustomerPhone (Optional)', 'CustomerAddress (Optional)'],
+      ['John Doe', '2024-01-15', '1000', 'Friends Circle', '9988776655', '123 Main St, Anytown'],
+      ['Jane Smith', '2024-02-01', '500', '', '1122334455', ''],
     ];
     const csvString = arrayToCSV(sampleData);
     downloadCSV(csvString, 'sample_new_scheme_import.csv');
@@ -236,7 +236,7 @@ export default function DataManagementPage() {
       }
 
       const { headers, rows } = parseCSV(text);
-      const expectedHeaders = ['CustomerName', 'StartDate (YYYY-MM-DD)', 'MonthlyPaymentAmount', 'CustomerGroupName (Optional)'];
+      const expectedHeaders = ['CustomerName', 'StartDate (YYYY-MM-DD)', 'MonthlyPaymentAmount', 'CustomerGroupName (Optional)', 'CustomerPhone (Optional)', 'CustomerAddress (Optional)'];
       const lcExpectedHeaders = expectedHeaders.map(h => h.toLowerCase());
       const lcHeaders = headers.map(h => h.toLowerCase());
 
@@ -258,9 +258,12 @@ export default function DataManagementPage() {
         const startDateStr = row[1]?.trim();
         const monthlyPaymentAmountStr = row[2]?.trim();
         const customerGroupName = row[3]?.trim() || undefined;
+        const customerPhone = row[4]?.trim() || undefined;
+        const customerAddress = row[5]?.trim() || undefined;
+
 
         if (!customerName || !startDateStr || !monthlyPaymentAmountStr) {
-          newMessages.push({ type: 'error', content: `Row ${rowNum}: Missing required fields. Skipping.` });
+          newMessages.push({ type: 'error', content: `Row ${rowNum}: Missing required fields (CustomerName, StartDate, MonthlyPaymentAmount). Skipping.` });
           errorCount++;
           continue;
         }
@@ -285,6 +288,8 @@ export default function DataManagementPage() {
             startDate: startDate.toISOString(),
             monthlyPaymentAmount,
             customerGroupName,
+            customerPhone,
+            customerAddress,
           });
           successCount++;
         } catch (err) {
@@ -309,9 +314,9 @@ export default function DataManagementPage() {
   const handleDownloadClosureSample = () => {
     const sampleData: any[][] = [
       ['SchemeID', 'MarkAsClosed (TRUE/FALSE)', 'ClosureDate (YYYY-MM-DD, Optional if MarkAsClosed=TRUE)'],
-      ['scheme-id-123', 'TRUE', '2024-07-20'],
-      ['scheme-id-456', 'TRUE', ''],
-      ['scheme-id-789', 'FALSE', ''],
+      ['SCHEME1', 'TRUE', '2024-07-20'], // Example: Use 6-char uppercase ID
+      ['SCHEME2', 'TRUE', ''],
+      ['SCHEME3', 'FALSE', ''],
     ];
     const csvString = arrayToCSV(sampleData);
     downloadCSV(csvString, 'sample_scheme_closure_import.csv');
@@ -356,7 +361,7 @@ export default function DataManagementPage() {
       }
 
       const dataToImport = rows.map(row => ({
-        SchemeID: row[0]?.trim(),
+        SchemeID: row[0]?.trim(), // Keep as is from CSV, mock-data will handle case if needed
         MarkAsClosed: row[1]?.trim().toUpperCase() as 'TRUE' | 'FALSE' | '',
         ClosureDate: row[2]?.trim(),
       }));
@@ -531,3 +536,4 @@ export default function DataManagementPage() {
     </div>
   );
 }
+

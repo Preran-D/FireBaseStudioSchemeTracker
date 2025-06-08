@@ -565,7 +565,7 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
 
     const scheme = getMockSchemeById(schemeId); // Get a fresh, calculated version
     if (!scheme) {
-      messages.push(`Row ${index + 2}: SchemeID "${schemeId}" not found. Skipping.`);
+      messages.push(`Row ${index + 2}: SchemeID "${schemeId.toUpperCase()}" not found. Skipping.`);
       errorCount++;
       return;
     }
@@ -582,14 +582,14 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
         });
         if (updatedScheme) {
             changed = true;
-            messages.push(`Row ${index + 2}: Scheme "${schemeId}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)} (Full Reconciliation).`);
+            messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)} (Full Reconciliation).`);
         } else {
-            messages.push(`Row ${index + 2}: Error closing scheme "${schemeId}".`);
+            messages.push(`Row ${index + 2}: Error closing scheme "${schemeId.toUpperCase()}".`);
             errorCount++; 
             return; 
         }
     } else if (row.MarkAsClosed?.toUpperCase() === 'TRUE' && scheme.status === 'Completed') {
-         messages.push(`Row ${index + 2}: Scheme "${schemeId}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
+         messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
          if (row.ClosureDate) {
             const newClosureDateISO = parseISO(row.ClosureDate.trim()).toISOString();
             const schemeToUpdate = MOCK_SCHEMES.find(s => s.id === schemeId); // get direct ref for update
@@ -604,9 +604,9 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
             }
          }
     } else if (row.MarkAsClosed?.toUpperCase() === 'FALSE') {
-      messages.push(`Row ${index + 2}: Re-opening schemes (MarkAsClosed=FALSE) is not currently supported for SchemeID "${schemeId}". No action taken.`);
+      messages.push(`Row ${index + 2}: Re-opening schemes (MarkAsClosed=FALSE) is not currently supported for SchemeID "${schemeId.toUpperCase()}". No action taken.`);
     } else {
-       messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeId}" (MarkAsClosed was not TRUE or FALSE).`);
+       messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeId.toUpperCase()}" (MarkAsClosed was not TRUE or FALSE).`);
     }
 
     if (changed) {
@@ -619,4 +619,5 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
 
   return { successCount, errorCount, messages };
 };
+
 
