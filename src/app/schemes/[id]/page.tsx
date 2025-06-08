@@ -17,7 +17,7 @@ import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart, LineChart } from "recharts"
 import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
@@ -300,13 +300,6 @@ export default function SchemeDetailsPage() {
             >
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
-            <Button 
-              size="sm"
-              onClick={() => openClosureDialogForSpecificScheme(scheme)}
-              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || scheme.status === 'Completed'}
-            >
-              <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
-            </Button>
           </div>
         </CardHeader>
       </Card>
@@ -341,7 +334,7 @@ export default function SchemeDetailsPage() {
                         </div>
                     </AccordionTrigger>
                     <AccordionContent className="p-0">
-                        <div className="border-t p-4">
+                        <div className="border-t p-4 space-y-4">
                             {s.status === 'Completed' ? (
                             <div className="text-sm">
                                 <p className="font-semibold">Scheme Completed</p>
@@ -350,10 +343,10 @@ export default function SchemeDetailsPage() {
                             </div>
                             ) : (
                             <>
-                                <div className="mb-4">
+                                <div className="flex justify-end">
                                     <Button 
                                       size="sm"
-                                      variant="outline"
+                                      variant="destructive"
                                       onClick={() => openClosureDialogForSpecificScheme(s)}
                                       disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || s.status === 'Completed'}
                                     >
@@ -478,7 +471,7 @@ export default function SchemeDetailsPage() {
                                 <XAxis dataKey="month" fontSize={10} />
                                 <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
                                 <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                                <Legend wrapperStyle={{fontSize: "10px"}} />
+                                <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
                             </RechartsBarChart>
@@ -494,7 +487,7 @@ export default function SchemeDetailsPage() {
                                 <XAxis dataKey="month" fontSize={10} />
                                 <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
                                 <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                                <Legend wrapperStyle={{fontSize: "10px"}}/>
+                                <ChartLegend content={<ChartLegendContent />} />
                                 <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
                                 <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
                             </LineChart>
@@ -534,7 +527,7 @@ export default function SchemeDetailsPage() {
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={(open) => {
             if (!open) {
                 setIsCloseSchemeAlertOpen(false);
-                if (!isClosingSchemeProcess) { // Only reset if not actively processing
+                if (!isClosingSchemeProcess) { 
                     setSchemeToCloseInDialog(null);
                 }
             }
@@ -648,3 +641,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+
