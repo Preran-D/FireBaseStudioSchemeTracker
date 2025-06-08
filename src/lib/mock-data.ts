@@ -417,3 +417,30 @@ export const deleteMockGroup = (groupName: string): boolean => {
   });
   return changed;
 };
+
+export const getUniqueGroupNames = (): string[] => {
+  const groupNames = new Set<string>();
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerGroupName) {
+      groupNames.add(scheme.customerGroupName);
+    }
+  });
+  return Array.from(groupNames).sort((a, b) => a.localeCompare(b));
+};
+
+export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  MOCK_SCHEMES[schemeIndex].customerGroupName = newGroupName ? newGroupName.trim() : undefined;
+  
+  // Recalculate status and totals as group change might affect some logic, though not directly for scheme status
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  scheme.status = getSchemeStatus(scheme);
+  const totals = calculateSchemeTotals(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
+};
+
