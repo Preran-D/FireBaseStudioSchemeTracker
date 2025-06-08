@@ -15,7 +15,7 @@ import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, get
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm'; 
+import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,14 +30,21 @@ import { formatISO, parseISO, isWithinInterval, startOfDay, endOfDay } from 'dat
 interface TransactionRow extends Payment {
   customerName: string;
   customerGroupName?: string;
-  schemeStartDate: string; 
+  schemeStartDate: string;
+}
+
+interface TransactionsOnDate {
+  date: string; // YYYY-MM-DD
+  formattedDate: string;
+  transactions: TransactionRow[];
+  totalAmountOnDate: number;
 }
 
 interface GroupedTransactionDisplay {
   groupName: string;
-  transactions: TransactionRow[];
-  totalAmount: number;
-  customerNames: string[]; 
+  datesWithTransactions: TransactionsOnDate[];
+  totalAmountInGroup: number;
+  customerNames: string[];
 }
 
 interface DateRange {
@@ -69,14 +76,14 @@ export default function TransactionsPage() {
 
     const transactions = loadedSchemes.flatMap(scheme =>
       scheme.payments
-        .filter(p => p.status === 'Paid' && p.amountPaid && p.paymentDate) 
+        .filter(p => p.status === 'Paid' && p.amountPaid && p.paymentDate)
         .map(payment => ({
           ...payment,
           customerName: scheme.customerName,
           customerGroupName: scheme.customerGroupName,
           schemeStartDate: scheme.startDate,
         }))
-    ).sort((a,b) => new Date(b.paymentDate!).getTime() - new Date(a.paymentDate!).getTime()); 
+    ).sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime());
     setAllFlatTransactions(transactions);
   }, []);
 
@@ -87,12 +94,10 @@ export default function TransactionsPage() {
   const { groupedDisplayData, individualDisplayData } = useMemo(() => {
     let filteredTransactions = allFlatTransactions;
 
-    // Filter by Date Range
     if (dateRange.from || dateRange.to) {
       filteredTransactions = filteredTransactions.filter(transaction => {
         if (!transaction.paymentDate) return false;
         const paymentDateTime = parseISO(transaction.paymentDate);
-        
         const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
         const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
 
@@ -108,8 +113,7 @@ export default function TransactionsPage() {
         return true;
       });
     }
-    
-    // Filter by Search Term
+
     if (searchTerm) {
       filteredTransactions = filteredTransactions.filter(transaction =>
         transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -119,34 +123,65 @@ export default function TransactionsPage() {
       );
     }
 
-    const groupsMap = new Map<string, GroupedTransactionDisplay>();
+    const groupsMapTemp = new Map<string, {
+      customerNames: Set<string>;
+      totalAmountInGroup: number;
+      transactionsByDateMap: Map<string, { transactionsOnDate: TransactionRow[]; totalAmountOnDate: number }>;
+    }>();
     const individuals: TransactionRow[] = [];
 
     filteredTransactions.forEach(transaction => {
       if (transaction.customerGroupName) {
-        let groupEntry = groupsMap.get(transaction.customerGroupName);
+        let groupEntry = groupsMapTemp.get(transaction.customerGroupName);
         if (!groupEntry) {
-          groupEntry = { 
-            groupName: transaction.customerGroupName, 
-            transactions: [], 
-            totalAmount: 0, 
-            customerNames: [] 
+          groupEntry = {
+            customerNames: new Set(),
+            totalAmountInGroup: 0,
+            transactionsByDateMap: new Map(),
           };
+          groupsMapTemp.set(transaction.customerGroupName, groupEntry);
         }
-        groupEntry.transactions.push(transaction);
-        groupEntry.totalAmount += transaction.amountPaid || 0;
-        if (!groupEntry.customerNames.includes(transaction.customerName)) {
-          groupEntry.customerNames.push(transaction.customerName);
+
+        groupEntry.customerNames.add(transaction.customerName);
+        groupEntry.totalAmountInGroup += transaction.amountPaid || 0;
+
+        const paymentDateKey = transaction.paymentDate ? formatISO(parseISO(transaction.paymentDate), { representation: 'date' }) : 'UnknownDate';
+        let dateEntry = groupEntry.transactionsByDateMap.get(paymentDateKey);
+        if (!dateEntry) {
+          dateEntry = { transactionsOnDate: [], totalAmountOnDate: 0 };
+          groupEntry.transactionsByDateMap.set(paymentDateKey, dateEntry);
         }
-        groupsMap.set(transaction.customerGroupName, groupEntry);
+        dateEntry.transactionsOnDate.push(transaction);
+        dateEntry.totalAmountOnDate += transaction.amountPaid || 0;
+
       } else {
         individuals.push(transaction);
       }
     });
-    
-    return { 
-      groupedDisplayData: Array.from(groupsMap.values()), 
-      individualDisplayData: individuals 
+
+    const finalGroupedDisplayData: GroupedTransactionDisplay[] = Array.from(groupsMapTemp.entries()).map(
+      ([groupName, data]) => {
+        const datesWithTransactionsArray: TransactionsOnDate[] = Array.from(data.transactionsByDateMap.entries())
+          .map(([dateISO, dateData]) => ({
+            date: dateISO,
+            formattedDate: dateISO === 'UnknownDate' ? 'Unknown Date' : formatDate(dateISO),
+            transactions: dateData.transactionsOnDate.sort((a,b) => a.customerName.localeCompare(b.customerName)),
+            totalAmountOnDate: dateData.totalAmountOnDate,
+          }))
+          .sort((a,b) => (b.date === 'UnknownDate' ? -1 : a.date === 'UnknownDate' ? 1 : parseISO(b.date).getTime() - parseISO(a.date).getTime()));
+
+        return {
+          groupName,
+          datesWithTransactions: datesWithTransactionsArray,
+          totalAmountInGroup: data.totalAmountInGroup,
+          customerNames: Array.from(data.customerNames).sort(),
+        };
+      }
+    ).sort((a,b) => a.groupName.localeCompare(b.groupName));
+
+    return {
+      groupedDisplayData: finalGroupedDisplayData,
+      individualDisplayData: individuals
     };
   }, [allFlatTransactions, searchTerm, dateRange]);
 
@@ -156,7 +191,7 @@ export default function TransactionsPage() {
     const updatedScheme = editMockPaymentDetails(selectedPaymentForEdit.schemeId, selectedPaymentForEdit.id, data);
     if (updatedScheme) {
       toast({ title: 'Payment Updated', description: `Payment for ${selectedPaymentForEdit.customerName} updated successfully.` });
-      loadData(); 
+      loadData();
     } else {
       toast({ title: 'Error', description: 'Failed to update payment.', variant: 'destructive' });
     }
@@ -170,7 +205,7 @@ export default function TransactionsPage() {
     const updatedScheme = deleteMockPayment(paymentToDelete.schemeId, paymentToDelete.id);
     if (updatedScheme) {
       toast({ title: 'Payment Deleted', description: `Payment record for ${paymentToDelete.customerName} (Month ${paymentToDelete.monthNumber}) has been removed.` });
-      loadData(); 
+      loadData();
     } else {
       toast({ title: 'Error', description: 'Failed to delete payment.', variant: 'destructive' });
     }
@@ -323,13 +358,13 @@ export default function TransactionsPage() {
                 <h2 className="text-lg font-semibold mb-2">Grouped Transactions</h2>
                 <Accordion type="multiple" className="w-full">
                   {groupedDisplayData.map((group) => (
-                    <AccordionItem value={group.groupName} key={group.groupName}>
-                      <AccordionTrigger className="p-3 hover:bg-muted/80 text-left rounded-md border mb-1 data-[state=open]:bg-muted/50">
+                    <AccordionItem value={group.groupName} key={group.groupName} className="mb-2 border rounded-md overflow-hidden">
+                      <AccordionTrigger className="p-3 hover:bg-muted/80 text-left data-[state=open]:bg-muted/50 data-[state=open]:border-b">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-1">
                           <span className="font-semibold text-base text-primary">Group: {group.groupName}</span>
                           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
-                            <span>{group.transactions.length} recorded payment(s)</span>
-                            <span className="font-medium">Group Total (filtered): {formatCurrency(group.totalAmount)}</span>
+                            <span>{group.datesWithTransactions.reduce((sum, d) => sum + d.transactions.length, 0)} recorded payment(s)</span>
+                            <span className="font-medium">Group Total (filtered): {formatCurrency(group.totalAmountInGroup)}</span>
                             {group.customerNames.length > 0 && (
                               <span className="truncate max-w-xs">
                                 Involving: {group.customerNames.join(', ')}
@@ -338,8 +373,28 @@ export default function TransactionsPage() {
                           </div>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="pt-0 pb-2 px-1">
-                        {renderTransactionTable(group.transactions, true)}
+                      <AccordionContent className="pt-0 pb-2 px-1 bg-background">
+                        {group.datesWithTransactions.length > 0 ? (
+                          <Accordion type="multiple" className="w-full px-2 py-2 space-y-1">
+                            {group.datesWithTransactions.map((dateItem) => (
+                              <AccordionItem value={`${group.groupName}-${dateItem.date}`} key={`${group.groupName}-${dateItem.date}`} className="border rounded-md overflow-hidden">
+                                <AccordionTrigger className="p-2.5 text-sm hover:bg-muted/60 data-[state=open]:bg-muted/40 data-[state=open]:border-b">
+                                  <div className="flex justify-between items-center w-full">
+                                    <span>Date: {dateItem.formattedDate}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {dateItem.transactions.length} payment(s) totaling {formatCurrency(dateItem.totalAmountOnDate)}
+                                    </span>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-0 pb-1 px-0.5">
+                                  {renderTransactionTable(dateItem.transactions, true)}
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                        ) : (
+                          <p className="p-4 text-center text-sm text-muted-foreground">No transactions for this group on the selected dates/filters.</p>
+                        )}
                       </AccordionContent>
                     </AccordionItem>
                   ))}
@@ -353,12 +408,11 @@ export default function TransactionsPage() {
                 {renderTransactionTable(individualDisplayData, false)}
               </div>
             )}
-            
+
           </CardContent>
         </Card>
       </div>
 
-      {/* Edit Payment Dialog */}
       {selectedPaymentForEdit && (
         <Dialog open={!!selectedPaymentForEdit} onOpenChange={(open) => !open && setSelectedPaymentForEdit(null)}>
           <DialogContent>
@@ -376,7 +430,6 @@ export default function TransactionsPage() {
         </Dialog>
       )}
 
-      {/* Delete Payment Confirmation Dialog */}
       {paymentToDelete && (
         <AlertDialog open={!!paymentToDelete} onOpenChange={(open) => !open && setPaymentToDelete(null)}>
           <AlertDialogContent>
@@ -400,4 +453,5 @@ export default function TransactionsPage() {
     </>
   );
 }
+
     
