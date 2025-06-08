@@ -1,34 +1,49 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart, TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles } from 'lucide-react';
+import { BarChart, TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
-import { getMockSchemes } from '@/lib/mock-data';
+import { getMockSchemes, recordNextDuePaymentsForCustomer } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { useToast } from '@/hooks/use-toast';
-import { isPast, parseISO, differenceInDays, isFuture } from 'date-fns';
+import { isPast, parseISO, differenceInDays, isFuture, formatISO } from 'date-fns';
+import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
 
+interface CustomerWithRecordablePayments {
+  customerName: string;
+  schemes: Scheme[];
+  recordablePaymentCount: number;
+}
 
 export default function DashboardPage() {
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const { toast } = useToast();
+  const [isBatchRecording, setIsBatchRecording] = useState(false);
+  const [selectedCustomerForBatch, setSelectedCustomerForBatch] = useState<CustomerWithRecordablePayments | null>(null);
 
-  useEffect(() => {
+
+  const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
+      s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
       const totals = calculateSchemeTotals(s);
-      const status = getSchemeStatus(s);
-      const paymentsWithStatus = s.payments.map(p => ({ ...p, status: getPaymentStatus(p, s.startDate) }));
-      return { ...s, ...totals, status, payments: paymentsWithStatus };
+      const status = getSchemeStatus(s); // Recalculate scheme status after payment statuses
+      return { ...s, ...totals, status };
     });
     setSchemes(loadedSchemesInitial);
+    return loadedSchemesInitial;
+  }, []);
+
+
+  useEffect(() => {
+    const loadedSchemesInitial = loadSchemesData();
 
     const allPaymentsWithContext = loadedSchemesInitial.flatMap(scheme =>
       scheme.payments.map(payment => ({
@@ -43,7 +58,8 @@ export default function DashboardPage() {
         getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && 
         differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && 
         differenceInDays(parseISO(p.dueDate), new Date()) >= 0
-      );
+      )
+      .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
     
     if (upcomingDueSoon.length > 0) {
       toast({
@@ -53,7 +69,10 @@ export default function DashboardPage() {
       });
     }
     
-    const allOverdueGlobal = allPaymentsWithContext.filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue');
+    const allOverdueGlobal = allPaymentsWithContext
+      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
+      .sort((a,b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
+
     if (allOverdueGlobal.length > 0) {
       toast({
         title: "Overdue Payment Alert",
@@ -62,12 +81,13 @@ export default function DashboardPage() {
       });
     }
 
-  }, [toast]);
+  }, [toast, loadSchemesData]);
 
   const summaryStats = useMemo(() => {
     const activeSchemes = schemes.filter(s => s.status === 'Active' || s.status === 'Overdue');
-    const totalCollected = activeSchemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+    const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0); // All schemes for total collected
     const totalExpectedFromActive = activeSchemes.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected,0) ,0);
+    
     const totalOverdueAmount = schemes
       .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
       .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
@@ -108,6 +128,56 @@ export default function DashboardPage() {
       .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime())
       .slice(0, 5);
   }, [schemes]);
+
+  const customersWithRecordablePayments = useMemo(() => {
+    const customersMap = new Map<string, { schemes: Scheme[], recordablePaymentCount: number }>();
+    schemes.forEach(scheme => {
+      if (scheme.status === 'Active' || scheme.status === 'Overdue') {
+        let hasRecordablePaymentForThisScheme = false;
+        for (let i = 0; i < scheme.payments.length; i++) {
+          const payment = scheme.payments[i];
+          if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
+            let allPreviousPaid = true;
+            for (let j = 0; j < i; j++) {
+              if (getPaymentStatus(scheme.payments[j], scheme.startDate) !== 'Paid') {
+                allPreviousPaid = false;
+                break;
+              }
+            }
+            if (allPreviousPaid) {
+              hasRecordablePaymentForThisScheme = true;
+              break;
+            }
+          }
+        }
+        if (hasRecordablePaymentForThisScheme) {
+          const customerEntry = customersMap.get(scheme.customerName) || { schemes: [], recordablePaymentCount: 0 };
+          customerEntry.schemes.push(scheme);
+          customerEntry.recordablePaymentCount += 1; // Counts schemes with at least one recordable, not total payments
+          customersMap.set(scheme.customerName, customerEntry);
+        }
+      }
+    });
+    return Array.from(customersMap.entries()).map(([customerName, data]) => ({
+      customerName,
+      ...data,
+    }));
+  }, [schemes]);
+
+  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[] }) => {
+    if (!selectedCustomerForBatch) return;
+    setIsBatchRecording(true);
+    const result = recordNextDuePaymentsForCustomer(selectedCustomerForBatch.customerName, details);
+    
+    toast({
+      title: "Batch Payment Processed",
+      description: `Recorded ${result.paymentsRecordedCount} payment(s) for ${selectedCustomerForBatch.customerName}, totaling ${formatCurrency(result.totalRecordedAmount)}.`,
+    });
+    
+    setSelectedCustomerForBatch(null);
+    setIsBatchRecording(false);
+    loadSchemesData(); // Refresh data
+  };
 
 
   return (
@@ -168,6 +238,53 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+       <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <PackageCheck className="h-5 w-5 text-primary" />
+            Batch Payment Actions
+          </CardTitle>
+          <CardDescription>Quickly record next due payments for customers with multiple active schemes.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {customersWithRecordablePayments.length > 0 ? (
+            <div className="space-y-3">
+              {customersWithRecordablePayments.map(customer => (
+                <div key={customer.customerName} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50">
+                  <div>
+                    <p className="font-medium">{customer.customerName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {customer.recordablePaymentCount} scheme(s) with next payment due.
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setSelectedCustomerForBatch(customer)}
+                    disabled={isBatchRecording}
+                  >
+                    <Edit className="mr-2 h-4 w-4" /> Record Batch
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No customers currently eligible for batch payment recording.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {selectedCustomerForBatch && (
+        <BatchRecordPaymentDialog
+          customerName={selectedCustomerForBatch.customerName}
+          customerSchemes={selectedCustomerForBatch.schemes}
+          isOpen={!!selectedCustomerForBatch}
+          onClose={() => setSelectedCustomerForBatch(null)}
+          onSubmit={handleBatchRecordSubmit}
+          isLoading={isBatchRecording}
+        />
+      )}
 
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
@@ -281,5 +398,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

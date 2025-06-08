@@ -34,6 +34,7 @@ const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmoun
       if (index === 0) { // First month paid
         return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const, modeOfPayment: ['Card'] as PaymentMode[] };
       }
+      // Make month 2 overdue by not paying it, and month 3 pending
       return p;
     });
   } else if (customerName.includes("Completed Scheme")) { // For "Completed Scheme"
@@ -49,7 +50,7 @@ const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmoun
     status: 'Upcoming', // temporary
   };
   
-  scheme.status = getSchemeStatus(scheme);
+  scheme.status = getSchemeStatus(scheme); // Recalculate scheme status based on updated payment statuses
   const totals = calculateSchemeTotals(scheme);
   scheme = { ...scheme, ...totals };
 
@@ -97,16 +98,22 @@ export const addMockScheme = (newSchemeData: Omit<Scheme, 'id' | 'payments' | 's
     durationMonths: 12,
   };
   const payments = generatePaymentsForScheme(baseScheme);
-  let scheme: Scheme = { ...baseScheme, payments, status: 'Upcoming' };
+  let scheme: Scheme = { ...baseScheme, payments, status: 'Upcoming' }; // Initial status
+  
+  // Recalculate statuses
+  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   scheme.status = getSchemeStatus(scheme);
   const totals = calculateSchemeTotals(scheme);
   scheme = { ...scheme, ...totals };
+  
   MOCK_SCHEMES.push(scheme);
   return JSON.parse(JSON.stringify(scheme));
 };
 
-interface UpdatePaymentPayload extends Partial<Omit<Payment, 'id' | 'schemeId' | 'monthNumber' | 'dueDate' | 'amountExpected' | 'status'>> {
-  // only amountPaid, paymentDate, modeOfPayment are expected
+interface UpdatePaymentPayload {
+  amountPaid?: number;
+  paymentDate?: string;
+  modeOfPayment?: PaymentMode[];
 }
 
 export const updateMockSchemePayment = (schemeId: string, paymentId: string, paymentDetails: UpdatePaymentPayload): Scheme | undefined => {
@@ -117,22 +124,24 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
-  // Merge new details
-  const updatedPayment = { ...scheme.payments[paymentIndex], ...paymentDetails };
+  const originalPayment = scheme.payments[paymentIndex];
+  const updatedPayment = { 
+    ...originalPayment, 
+    amountPaid: paymentDetails.amountPaid ?? originalPayment.amountPaid,
+    paymentDate: paymentDetails.paymentDate ?? originalPayment.paymentDate,
+    modeOfPayment: paymentDetails.modeOfPayment ?? originalPayment.modeOfPayment,
+  };
 
   if (updatedPayment.amountPaid && updatedPayment.amountPaid >= updatedPayment.amountExpected) {
     updatedPayment.status = 'Paid';
     if(!updatedPayment.paymentDate) updatedPayment.paymentDate = formatISO(new Date());
-  } else if (updatedPayment.amountPaid === undefined || updatedPayment.amountPaid === null || updatedPayment.amountPaid <= 0) {
-    // If payment is effectively removed or zeroed out
-    updatedPayment.amountPaid = undefined;
-    updatedPayment.paymentDate = undefined;
-    updatedPayment.modeOfPayment = undefined;
-    // Status will be recalculated by getPaymentStatus
+  } else {
+     // Status will be recalculated by getPaymentStatus below
+     // If amount paid is less than expected, or removed, it's not 'Paid'.
   }
   scheme.payments[paymentIndex] = updatedPayment;
   
-  // Recalculate payment statuses and scheme status/totals
+  // Recalculate ALL payment statuses for the scheme, then scheme status and totals
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   scheme.status = getSchemeStatus(scheme);
   const totals = calculateSchemeTotals(scheme);
@@ -149,23 +158,21 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
-  // Apply updates
   scheme.payments[paymentIndex] = {
     ...scheme.payments[paymentIndex],
     ...details,
   };
   
-  // If amountPaid is provided and it's enough, mark as Paid
   if (details.amountPaid && details.amountPaid >= scheme.payments[paymentIndex].amountExpected) {
     scheme.payments[paymentIndex].status = 'Paid';
-    if(!details.paymentDate) scheme.payments[paymentIndex].paymentDate = formatISO(new Date()); // Default payment date if not provided
+    if(!details.paymentDate && !scheme.payments[paymentIndex].paymentDate) {
+      scheme.payments[paymentIndex].paymentDate = formatISO(new Date());
+    }
   } else if (details.amountPaid !== undefined && details.amountPaid < scheme.payments[paymentIndex].amountExpected) {
-     // If partially paid or less than expected, it's not 'Paid' for status calculation purposes (unless business logic changes)
-     // The getPaymentStatus will handle if it's Pending/Overdue based on due date
+    // Let getPaymentStatus handle it
   }
 
 
-  // Recalculate all statuses and totals
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   scheme.status = getSchemeStatus(scheme);
   const totals = calculateSchemeTotals(scheme);
@@ -182,15 +189,13 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
-  // Revert payment details
   scheme.payments[paymentIndex].amountPaid = undefined;
   scheme.payments[paymentIndex].paymentDate = undefined;
   scheme.payments[paymentIndex].modeOfPayment = undefined;
   
-  // Recalculate statuses and totals
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
-  scheme.status = getSchemeStatus(scheme); // Recalculate scheme status
-  const totals = calculateSchemeTotals(scheme); // Recalculate totals
+  scheme.status = getSchemeStatus(scheme);
+  const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
   
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
@@ -202,7 +207,65 @@ export const closeMockScheme = (schemeId: string): Scheme | undefined => {
   if (schemeIndex === -1) return undefined;
 
   MOCK_SCHEMES[schemeIndex].status = 'Completed';
+  // Ensure all payments are marked paid before closing might be a good idea in real app
   const totals = calculateSchemeTotals(MOCK_SCHEMES[schemeIndex]);
   MOCK_SCHEMES[schemeIndex] = { ...MOCK_SCHEMES[schemeIndex], ...totals };
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
 }
+
+export const recordNextDuePaymentsForCustomer = (
+  customerName: string,
+  paymentDetails: { paymentDate: string; modeOfPayment: PaymentMode[] }
+): {
+  totalRecordedAmount: number;
+  paymentsRecordedCount: number;
+  recordedPaymentsInfo: Array<{ schemeId: string; monthNumber: number; amount: number }>;
+} => {
+  let totalRecordedAmount = 0;
+  let paymentsRecordedCount = 0;
+  const recordedPaymentsInfo: Array<{ schemeId: string; monthNumber: number; amount: number }> = [];
+
+  MOCK_SCHEMES.forEach((scheme, schemeIdx) => {
+    if (scheme.customerName === customerName && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
+      let nextRecordablePaymentIndex = -1;
+      for (let i = 0; i < scheme.payments.length; i++) {
+        const currentPayment = scheme.payments[i];
+        if (getPaymentStatus(currentPayment, scheme.startDate) !== 'Paid') {
+          let allPreviousPaid = true;
+          for (let j = 0; j < i; j++) {
+            if (getPaymentStatus(scheme.payments[j], scheme.startDate) !== 'Paid') {
+              allPreviousPaid = false;
+              break;
+            }
+          }
+          if (allPreviousPaid) {
+            nextRecordablePaymentIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (nextRecordablePaymentIndex !== -1) {
+        const paymentToRecord = scheme.payments[nextRecordablePaymentIndex];
+        const updatedPayment = updateMockSchemePayment(scheme.id, paymentToRecord.id, {
+          amountPaid: paymentToRecord.amountExpected,
+          paymentDate: paymentDetails.paymentDate,
+          modeOfPayment: paymentDetails.modeOfPayment,
+        });
+
+        if (updatedPayment) { // updateMockSchemePayment returns the updated scheme or undefined
+          // The MOCK_SCHEMES array is updated by reference within updateMockSchemePayment
+          totalRecordedAmount += paymentToRecord.amountExpected;
+          paymentsRecordedCount++;
+          recordedPaymentsInfo.push({
+            schemeId: scheme.id,
+            monthNumber: paymentToRecord.monthNumber,
+            amount: paymentToRecord.amountExpected,
+          });
+        }
+      }
+    }
+  });
+
+  return { totalRecordedAmount, paymentsRecordedCount, recordedPaymentsInfo };
+};

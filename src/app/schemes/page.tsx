@@ -28,6 +28,8 @@ export default function SchemesPage() {
   useEffect(() => {
     const loadedSchemes = getMockSchemes().map(s => {
       const totals = calculateSchemeTotals(s);
+      // Ensure payment statuses are up-to-date before getting scheme status
+      s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
       const status = getSchemeStatus(s);
       return { ...s, ...totals, status };
     });
