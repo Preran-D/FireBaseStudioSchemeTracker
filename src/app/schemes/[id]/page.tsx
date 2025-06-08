@@ -54,6 +54,8 @@ export default function SchemeDetailsPage() {
   const [closureDate, setClosureDate] = useState<Date | undefined>(new Date());
   const [closureType, setClosureType] = useState<'full_reconciliation' | 'partial_closure'>('full_reconciliation');
   const [closureModeOfPayment, setClosureModeOfPayment] = useState<PaymentMode[]>(['Cash']);
+  const [schemeToCloseInDialog, setSchemeToCloseInDialog] = useState<Scheme | null>(null);
+
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   const [isAssignGroupDialogOpen, setIsAssignGroupDialogOpen] = useState(false);
@@ -71,7 +73,7 @@ export default function SchemeDetailsPage() {
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
         const status = getSchemeStatus(fetchedScheme); 
         setScheme({ ...fetchedScheme, ...totals, status });
-        setActiveAccordionItem(fetchedScheme.id); // Ensure the main scheme is active
+        setActiveAccordionItem(fetchedScheme.id); 
 
         const allCustomerSchemes = getMockSchemes()
           .filter(s => s.customerName === fetchedScheme.customerName)
@@ -106,10 +108,6 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
-      if (activeAccordionItem === updatedSchemeFromMock.id) {
-        // If the updated scheme was the one active in accordion, ensure its visuals refresh
-        // by potentially re-evaluating schemeForVisuals or if its directly based on allSchemesForThisCustomer
-      }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
@@ -118,16 +116,17 @@ export default function SchemeDetailsPage() {
     setIsRecordingPayment(false);
   };
   
-  const handleOpenCloseSchemeDialog = () => {
-    if (!scheme || scheme.status === 'Completed') return;
-    setClosureDate(scheme.closureDate ? parseISO(scheme.closureDate) : startOfDay(new Date()));
+  const handleOpenCloseSchemeDialog = (targetScheme: Scheme) => {
+    if (targetScheme.status === 'Completed') return;
+    setSchemeToCloseInDialog(targetScheme);
+    setClosureDate(targetScheme.closureDate ? parseISO(targetScheme.closureDate) : startOfDay(new Date()));
     setClosureType('full_reconciliation'); 
     setClosureModeOfPayment(['Cash']); 
     setIsCloseSchemeAlertOpen(true);
   };
 
   const handleConfirmCloseScheme = () => {
-    if(!scheme || !closureDate) return;
+    if(!schemeToCloseInDialog || !closureDate) return;
     if(closureType === 'full_reconciliation' && closureModeOfPayment.length === 0) {
         toast({ title: 'Mode of Payment Required', description: 'Please select at least one mode of payment for full reconciliation.', variant: 'destructive' });
         return;
@@ -140,19 +139,20 @@ export default function SchemeDetailsPage() {
         modeOfPayment: closureType === 'full_reconciliation' ? closureModeOfPayment : undefined,
     };
 
-    const closedSchemeResult = closeMockScheme(scheme.id, closureOptions);
+    const closedSchemeResult = closeMockScheme(schemeToCloseInDialog.id, closureOptions);
 
     if(closedSchemeResult) {
       setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
-      if(scheme.id === closedSchemeResult.id) {
+      if(scheme && scheme.id === closedSchemeResult.id) { // If the main scheme was the one closed
         setScheme(closedSchemeResult);
       }
-      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme has been updated.` });
+      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.substring(0,8)}) has been updated.` });
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
     }
     setIsCloseSchemeAlertOpen(false);
     setIsClosingSchemeProcess(false);
+    setSchemeToCloseInDialog(null);
   }
 
   const handleAssignGroupSubmit = (updatedSchemeId: string, groupName?: string) => {
@@ -241,7 +241,10 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
+    // Use the instance of the scheme from the allSchemesForThisCustomer array for checking,
+    // as it will have the most up-to-date payment statuses from any recent operations.
     const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
+
     for (let i = 0; i < payment.monthNumber - 1; i++) {
       if (getPaymentStatus(schemeToCheck.payments[i], schemeToCheck.startDate) !== 'Paid') {
         return false;
@@ -274,6 +277,7 @@ export default function SchemeDetailsPage() {
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
               Primary Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
+              {scheme.customerGroupName && (<><br/>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link></>)}
               {scheme.status === 'Completed' && scheme.closureDate && (<><br/>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
@@ -294,14 +298,13 @@ export default function SchemeDetailsPage() {
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
             {scheme.status !== 'Completed' && (
-              <Button onClick={handleOpenCloseSchemeDialog} disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup} size="sm">
-                {isClosingSchemeProcess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
+              <Button onClick={() => handleOpenCloseSchemeDialog(scheme)} disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup} size="sm">
+                {isClosingSchemeProcess && schemeToCloseInDialog?.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
                 Close Scheme
               </Button>
             )}
           </div>
         </CardHeader>
-        {/* Main scheme details (monthly, duration, etc.) could go here if desired, or rely on accordion for all */}
       </Card>
 
       {allSchemesForThisCustomer.length > 0 && (
@@ -342,62 +345,77 @@ export default function SchemeDetailsPage() {
                             <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
                         </div>
                         ) : (
-                        <div className="overflow-x-auto">
-                            <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
-                            <Table>
-                            <TableHeader>
-                                <TableRow>
-                                <TableHead>Month</TableHead>
-                                <TableHead>Due Date</TableHead>
-                                <TableHead>Expected</TableHead>
-                                <TableHead>Paid Amount</TableHead>
-                                <TableHead>Payment Date</TableHead>
-                                <TableHead>Mode(s)</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {s.payments.map((payment) => (
-                                <TableRow key={payment.id}>
-                                    <TableCell>{payment.monthNumber}</TableCell>
-                                    <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                                    <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
-                                    <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
-                                    <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                                    <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
-                                    <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
-                                    <TableCell className="text-right">
-                                    {isPaymentRecordable(payment, s) ? (
-                                        <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
-                                            <DollarSign className="mr-1 h-4 w-4" /> Record
-                                            </Button>
-                                        </DialogTrigger>
-                                        {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
-                                            <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
-                                                <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
-                                            </DialogHeader>
-                                            <RecordPaymentForm
-                                                payment={selectedPaymentForRecord}
-                                                onSubmit={handleRecordPayment}
-                                                isLoading={isRecordingPayment}
-                                            />
-                                            </DialogContent>
+                        <>
+                            <div className="overflow-x-auto">
+                                <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
+                                <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                    <TableHead>Month</TableHead>
+                                    <TableHead>Due Date</TableHead>
+                                    <TableHead>Expected</TableHead>
+                                    <TableHead>Paid Amount</TableHead>
+                                    <TableHead>Payment Date</TableHead>
+                                    <TableHead>Mode(s)</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {s.payments.map((payment) => (
+                                    <TableRow key={payment.id}>
+                                        <TableCell>{payment.monthNumber}</TableCell>
+                                        <TableCell>{formatDate(payment.dueDate)}</TableCell>
+                                        <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
+                                        <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
+                                        <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                                        <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
+                                        <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
+                                        <TableCell className="text-right">
+                                        {isPaymentRecordable(payment, s) ? (
+                                            <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
+                                                <DollarSign className="mr-1 h-4 w-4" /> Record
+                                                </Button>
+                                            </DialogTrigger>
+                                            {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
+                                                <DialogContent>
+                                                <DialogHeader>
+                                                    <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
+                                                    <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
+                                                </DialogHeader>
+                                                <RecordPaymentForm
+                                                    payment={selectedPaymentForRecord}
+                                                    onSubmit={handleRecordPayment}
+                                                    isLoading={isRecordingPayment}
+                                                />
+                                                </DialogContent>
+                                            )}
+                                            </Dialog>
+                                        ) : (
+                                            (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
                                         )}
-                                        </Dialog>
-                                    ) : (
-                                        (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
-                                    )}
-                                    </TableCell>
-                                </TableRow>
-                                ))}
-                            </TableBody>
-                            </Table>
-                        </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    ))}
+                                </TableBody>
+                                </Table>
+                            </div>
+                            {s.status !== 'Completed' && (
+                                <div className="mt-4 text-right">
+                                    <Button 
+                                      onClick={() => handleOpenCloseSchemeDialog(s)} 
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={isClosingSchemeProcess}
+                                    >
+                                      {isClosingSchemeProcess && schemeToCloseInDialog?.id === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
+                                      Close This Scheme
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                         )}
                     </div>
                   </AccordionContent>
@@ -510,11 +528,20 @@ export default function SchemeDetailsPage() {
       )}
 
 
-      {isCloseSchemeAlertOpen && scheme && (
-        <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={setIsCloseSchemeAlertOpen}>
+      {isCloseSchemeAlertOpen && schemeToCloseInDialog && (
+        <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={(open) => {
+            if (!open) {
+                setIsCloseSchemeAlertOpen(false);
+                // Only reset schemeToCloseInDialog if process is not running, to avoid race conditions
+                if (!isClosingSchemeProcess) {
+                    setSchemeToCloseInDialog(null);
+                }
+            }
+        }}>
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Scheme Closure for {scheme.customerName}</AlertDialogTitle>
+              <AlertDialogTitle>Confirm Scheme Closure for {schemeToCloseInDialog.customerName}</AlertDialogTitle>
+               <AlertDialogDescription>Scheme ID: {schemeToCloseInDialog.id.substring(0,8)}...</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4 py-2">
                 <div>
@@ -524,6 +551,7 @@ export default function SchemeDetailsPage() {
                         value={closureType}
                         onValueChange={(value: 'full_reconciliation' | 'partial_closure') => setClosureType(value)}
                         className="mt-1 space-y-1"
+                        disabled={isClosingSchemeProcess}
                     >
                         <div className="flex items-center space-x-2">
                         <RadioGroupItem value="full_reconciliation" id="full_reconciliation" />
@@ -550,6 +578,7 @@ export default function SchemeDetailsPage() {
                                     checked ? [...prev, mode] : prev.filter(m => m !== mode)
                                 );
                                 }}
+                                disabled={isClosingSchemeProcess}
                             />
                             <Label htmlFor={`closure-mop-${mode}`} className="font-normal">{mode}</Label>
                             </div>
@@ -567,6 +596,7 @@ export default function SchemeDetailsPage() {
                             id="closure-date"
                             variant={'outline'}
                             className={cn('w-full justify-start text-left font-normal mt-1', !closureDate && 'text-muted-foreground')}
+                            disabled={isClosingSchemeProcess}
                         >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {closureDate ? formatDate(closureDate.toISOString()) : <span>Pick a date</span>}
@@ -577,7 +607,7 @@ export default function SchemeDetailsPage() {
                             mode="single"
                             selected={closureDate}
                             onSelect={setClosureDate}
-                            disabled={(date) => date > new Date() || date < parseISO(scheme.startDate) }
+                            disabled={(date) => date > new Date() || (schemeToCloseInDialog?.startDate ? date < parseISO(schemeToCloseInDialog.startDate) : false) }
                             initialFocus
                         />
                         </PopoverContent>
@@ -592,7 +622,7 @@ export default function SchemeDetailsPage() {
                 </AlertDialogDescription>
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setIsCloseSchemeAlertOpen(false)} disabled={isClosingSchemeProcess}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={() => { setIsCloseSchemeAlertOpen(false); setSchemeToCloseInDialog(null);}} disabled={isClosingSchemeProcess}>Cancel</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleConfirmCloseScheme} 
                 disabled={isClosingSchemeProcess || !closureDate || (closureType === 'full_reconciliation' && closureModeOfPayment.length === 0)}
@@ -608,7 +638,7 @@ export default function SchemeDetailsPage() {
         <AssignGroupDialog
           isOpen={isAssignGroupDialogOpen}
           onClose={() => setIsAssignGroupDialogOpen(false)}
-          scheme={scheme}
+          scheme={scheme} // Assign group dialog should still work on the main scheme
           existingGroupNames={existingGroupNames}
           onSubmit={handleAssignGroupSubmit}
           isLoading={isUpdatingGroup}
