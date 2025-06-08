@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CheckCircle, Edit, AlertCircle, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
@@ -108,6 +109,10 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
+      // Update schemeForVisuals if the active accordion item was the one updated
+      if (activeAccordionItem === updatedSchemeFromMock.id) {
+        // This will trigger a re-render of visuals if they depend on schemeForVisuals
+      }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
@@ -116,7 +121,7 @@ export default function SchemeDetailsPage() {
     setIsRecordingPayment(false);
   };
   
-  const handleOpenCloseSchemeDialog = (targetScheme: Scheme) => {
+  const openClosureDialogForScheme = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Completed') return;
     setSchemeToCloseInDialog(targetScheme);
     setClosureDate(targetScheme.closureDate ? parseISO(targetScheme.closureDate) : startOfDay(new Date()));
@@ -143,8 +148,11 @@ export default function SchemeDetailsPage() {
 
     if(closedSchemeResult) {
       setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
-      if(scheme && scheme.id === closedSchemeResult.id) { // If the main scheme was the one closed
+      if(scheme && scheme.id === closedSchemeResult.id) { 
         setScheme(closedSchemeResult);
+      }
+      if (activeAccordionItem === closedSchemeResult.id) {
+        // Visuals will update if they depend on schemeForVisuals which uses activeAccordionItem
       }
       toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.substring(0,8)}) has been updated.` });
     } else {
@@ -241,8 +249,6 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
-    // Use the instance of the scheme from the allSchemesForThisCustomer array for checking,
-    // as it will have the most up-to-date payment statuses from any recent operations.
     const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
 
     for (let i = 0; i < payment.monthNumber - 1; i++) {
@@ -263,6 +269,10 @@ export default function SchemeDetailsPage() {
     queryParams.append('monthlyPaymentAmount', scheme.monthlyPaymentAmount.toString());
     router.push(`/schemes/new?${queryParams.toString()}`);
   };
+
+  const closableSchemes = useMemo(() => {
+    return allSchemesForThisCustomer.filter(s => s.status !== 'Completed');
+  }, [allSchemesForThisCustomer]);
 
 
   if (isLoading || !scheme) {
@@ -297,12 +307,30 @@ export default function SchemeDetailsPage() {
             >
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
-            {scheme.status !== 'Completed' && (
-              <Button onClick={() => handleOpenCloseSchemeDialog(scheme)} disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup} size="sm">
-                {isClosingSchemeProcess && schemeToCloseInDialog?.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
-                Close Scheme
-              </Button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  size="sm"
+                  disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || closableSchemes.length === 0}
+                >
+                  <FileCheck2 className="mr-2 h-4 w-4" /> Close Scheme...
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {closableSchemes.length > 0 ? (
+                  closableSchemes.map(sToClose => (
+                    <DropdownMenuItem 
+                      key={sToClose.id} 
+                      onSelect={() => openClosureDialogForScheme(sToClose)}
+                    >
+                      Close ID: {sToClose.id.substring(0,8)}... (Starts: {formatDate(sToClose.startDate)})
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled>No schemes to close for {scheme.customerName}</DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardHeader>
       </Card>
@@ -402,19 +430,7 @@ export default function SchemeDetailsPage() {
                                 </TableBody>
                                 </Table>
                             </div>
-                            {s.status !== 'Completed' && (
-                                <div className="mt-4 text-right">
-                                    <Button 
-                                      onClick={() => handleOpenCloseSchemeDialog(s)} 
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={isClosingSchemeProcess}
-                                    >
-                                      {isClosingSchemeProcess && schemeToCloseInDialog?.id === s.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
-                                      Close This Scheme
-                                    </Button>
-                                </div>
-                            )}
+                            {/* Removed individual "Close This Scheme" button from here */}
                         </>
                         )}
                     </div>
@@ -532,7 +548,6 @@ export default function SchemeDetailsPage() {
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={(open) => {
             if (!open) {
                 setIsCloseSchemeAlertOpen(false);
-                // Only reset schemeToCloseInDialog if process is not running, to avoid race conditions
                 if (!isClosingSchemeProcess) {
                     setSchemeToCloseInDialog(null);
                 }
@@ -638,7 +653,7 @@ export default function SchemeDetailsPage() {
         <AssignGroupDialog
           isOpen={isAssignGroupDialogOpen}
           onClose={() => setIsAssignGroupDialogOpen(false)}
-          scheme={scheme} // Assign group dialog should still work on the main scheme
+          scheme={scheme}
           existingGroupNames={existingGroupNames}
           onSubmit={handleAssignGroupSubmit}
           isLoading={isUpdatingGroup}
@@ -647,4 +662,3 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
-
