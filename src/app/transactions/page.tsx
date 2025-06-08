@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Edit, Trash2, Filter, MoreHorizontal, Eye, Loader2 } from 'lucide-react';
+import { Edit, Trash2, Filter, MoreHorizontal, Eye, Loader2, CalendarIcon, X } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, editMockPaymentDetails, deleteMockPayment } from '@/lib/mock-data';
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -22,6 +22,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { formatISO, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 
 
 interface TransactionRow extends Payment {
@@ -37,11 +40,17 @@ interface GroupedTransactionDisplay {
   customerNames: string[]; 
 }
 
+interface DateRange {
+  from: Date | undefined;
+  to: Date | undefined;
+}
+
 
 export default function TransactionsPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
   const [allFlatTransactions, setAllFlatTransactions] = useState<TransactionRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState<TransactionRow | null>(null);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<TransactionRow | null>(null);
@@ -76,17 +85,44 @@ export default function TransactionsPage() {
   }, [loadData]);
 
   const { groupedDisplayData, individualDisplayData } = useMemo(() => {
-    const filtered = allFlatTransactions.filter(transaction =>
-      transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.customerGroupName && transaction.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      transaction.schemeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.modeOfPayment && transaction.modeOfPayment.some(mode => mode.toLowerCase().includes(searchTerm.toLowerCase())))
-    );
+    let filteredTransactions = allFlatTransactions;
+
+    // Filter by Date Range
+    if (dateRange.from || dateRange.to) {
+      filteredTransactions = filteredTransactions.filter(transaction => {
+        if (!transaction.paymentDate) return false;
+        const paymentDateTime = parseISO(transaction.paymentDate);
+        
+        const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
+        const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
+
+        if (fromDate && toDate) {
+          return isWithinInterval(paymentDateTime, { start: fromDate, end: toDate });
+        }
+        if (fromDate) {
+          return paymentDateTime >= fromDate;
+        }
+        if (toDate) {
+          return paymentDateTime <= toDate;
+        }
+        return true;
+      });
+    }
+    
+    // Filter by Search Term
+    if (searchTerm) {
+      filteredTransactions = filteredTransactions.filter(transaction =>
+        transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.customerGroupName && transaction.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        transaction.schemeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.modeOfPayment && transaction.modeOfPayment.some(mode => mode.toLowerCase().includes(searchTerm.toLowerCase())))
+      );
+    }
 
     const groupsMap = new Map<string, GroupedTransactionDisplay>();
     const individuals: TransactionRow[] = [];
 
-    filtered.forEach(transaction => {
+    filteredTransactions.forEach(transaction => {
       if (transaction.customerGroupName) {
         let groupEntry = groupsMap.get(transaction.customerGroupName);
         if (!groupEntry) {
@@ -112,7 +148,7 @@ export default function TransactionsPage() {
       groupedDisplayData: Array.from(groupsMap.values()), 
       individualDisplayData: individuals 
     };
-  }, [allFlatTransactions, searchTerm]);
+  }, [allFlatTransactions, searchTerm, dateRange]);
 
   const handleEditPaymentSubmit = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
     if (!selectedPaymentForEdit) return;
@@ -140,6 +176,11 @@ export default function TransactionsPage() {
     }
     setPaymentToDelete(null);
     setIsDeletingPayment(false);
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setDateRange({ from: undefined, to: undefined });
   };
 
   const renderTransactionTable = (transactions: TransactionRow[], isGroupedTable: boolean = false) => (
@@ -208,14 +249,66 @@ export default function TransactionsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Transaction History</CardTitle>
-            <CardDescription>View and manage all recorded payments. Search by customer, group, scheme ID, or payment mode.</CardDescription>
-            <div className="mt-4 flex flex-col sm:flex-row gap-4">
+            <CardDescription>View and manage all recorded payments. Filter by text or date range.</CardDescription>
+            <div className="mt-4 flex flex-col sm:flex-row gap-4 items-start sm:items-end">
               <Input
-                placeholder="Filter transactions..."
+                placeholder="Filter by customer, group, scheme ID, mode..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-md"
               />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-xs text-muted-foreground">From Date:</span>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={'outline'}
+                            className={cn('w-full sm:w-[150px] justify-start text-left font-normal', !dateRange.from && 'text-muted-foreground')}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange.from ? formatDate(dateRange.from.toISOString()) : <span>Pick a date</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                        <Calendar
+                            mode="single"
+                            selected={dateRange.from}
+                            onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                     <span className="text-xs text-muted-foreground">To Date:</span>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={'outline'}
+                            className={cn('w-full sm:w-[150px] justify-start text-left font-normal', !dateRange.to && 'text-muted-foreground')}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {dateRange.to ? formatDate(dateRange.to.toISOString()) : <span>Pick a date</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                        <Calendar
+                            mode="single"
+                            selected={dateRange.to}
+                            onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                            disabled={(date) => dateRange.from ? date < dateRange.from : false}
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+              </div>
+              {(searchTerm || dateRange.from || dateRange.to) && (
+                <Button variant="ghost" onClick={clearAllFilters} size="sm">
+                  <X className="mr-2 h-4 w-4" /> Clear Filters
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
