@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Download, FileUp, FileSpreadsheet, Loader2, AlertTriangle } from 'lucide-react';
-import { getMockSchemes, addMockScheme, getUniqueGroupNames } from '@/lib/mock-data';
+import { Download, FileUp, FileSpreadsheet, Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { getMockSchemes, addMockScheme } from '@/lib/mock-data';
 import type { Scheme, Payment } from '@/types/scheme';
 import { arrayToCSV, downloadCSV, parseCSV } from '@/lib/csvUtils';
-import { formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
+import { formatDate, formatCurrency, getPaymentStatus, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
 import { isValid, parse } from 'date-fns';
 
 interface ImportMessage {
@@ -22,6 +22,7 @@ export default function DataManagementPage() {
   const { toast } = useToast();
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const [isExportingTransactions, setIsExportingTransactions] = useState(false);
+  const [isExportingComprehensive, setIsExportingComprehensive] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importMessages, setImportMessages] = useState<ImportMessage[]>([]);
@@ -64,14 +65,14 @@ export default function DataManagementPage() {
       schemes.forEach(scheme => {
         scheme.payments.forEach(payment => {
           const paymentStatus = getPaymentStatus(payment, scheme.startDate);
-          if (paymentStatus === 'Paid' && payment.paymentDate && payment.amountPaid !== undefined) { // Ensure amountPaid is defined
+          if (paymentStatus === 'Paid' && payment.paymentDate && payment.amountPaid !== undefined) {
             paidTransactions.push([
               scheme.customerName,
               scheme.id,
               scheme.customerGroupName || 'N/A',
               payment.monthNumber,
               formatDate(payment.paymentDate),
-              payment.amountPaid, // Directly use the number for "amount only"
+              payment.amountPaid,
               payment.modeOfPayment?.join(' | ') || 'N/A'
             ]);
           }
@@ -93,6 +94,60 @@ export default function DataManagementPage() {
     }
     setIsExportingTransactions(false);
   };
+
+  const handleExportComprehensiveReport = () => {
+    setIsExportingComprehensive(true);
+    try {
+      const schemes = getMockSchemes(); // Fetches schemes with updated statuses and totals
+      const reportData: any[][] = [[
+        'Customer Name', 'Customer Group Name', 'Scheme ID', 'Scheme Start Date', 
+        'Scheme Monthly Amount', 'Scheme Duration (Months)', 'Overall Scheme Status',
+        'Payment Month #', 'Payment Due Date', 'Actual Payment Date', 
+        'Amount Expected', 'Amount Paid', 'Individual Payment Status', 'Mode of Payment'
+      ]];
+
+      schemes.forEach(scheme => {
+        // Recalculate status and totals just in case, though getMockSchemes should handle it
+        const currentSchemeStatus = getSchemeStatus(scheme);
+        const totals = calculateSchemeTotals(scheme);
+
+        scheme.payments.forEach(payment => {
+          const currentPaymentStatus = getPaymentStatus(payment, scheme.startDate);
+          reportData.push([
+            scheme.customerName,
+            scheme.customerGroupName || 'N/A',
+            scheme.id,
+            formatDate(scheme.startDate),
+            scheme.monthlyPaymentAmount,
+            scheme.durationMonths,
+            currentSchemeStatus,
+            payment.monthNumber,
+            formatDate(payment.dueDate),
+            payment.paymentDate ? formatDate(payment.paymentDate) : 'N/A',
+            payment.amountExpected,
+            payment.amountPaid !== undefined ? payment.amountPaid : 'N/A',
+            currentPaymentStatus,
+            payment.modeOfPayment?.join(' | ') || 'N/A'
+          ]);
+        });
+      });
+
+      if (reportData.length <= 1) {
+        toast({ title: 'No Data', description: 'No data found to export for the comprehensive report.' });
+        setIsExportingComprehensive(false);
+        return;
+      }
+
+      const csvString = arrayToCSV(reportData);
+      downloadCSV(csvString, 'comprehensive_customer_report.csv');
+      toast({ title: 'Success', description: 'Comprehensive customer report exported successfully.' });
+    } catch (error) {
+      console.error('Error exporting comprehensive report:', error);
+      toast({ title: 'Error', description: 'Failed to export comprehensive report.', variant: 'destructive' });
+    }
+    setIsExportingComprehensive(false);
+  };
+
 
   const handleDownloadSample = () => {
     const sampleData: any[][] = [
@@ -190,10 +245,10 @@ export default function DataManagementPage() {
       }
       
       newMessages.unshift({ type: 'info', content: `Import finished. ${successCount} schemes imported successfully. ${errorCount} rows had errors.` });
-      setImportMessages(prev => [...prev.slice(0,1), ...newMessages]); // Keep first "Starting import..." message if exists
+      setImportMessages(prev => [...prev.slice(0,1), ...newMessages]);
       toast({ title: 'Import Complete', description: `${successCount} schemes imported. ${errorCount} errors.`});
       setIsImporting(false);
-      setSelectedFile(null); // Reset file input
+      setSelectedFile(null); 
     };
 
     reader.onerror = () => {
@@ -218,14 +273,28 @@ export default function DataManagementPage() {
           </CardTitle>
           <CardDescription>Download your application data in CSV format.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Button onClick={handleExportCustomers} disabled={isExportingCustomers || isImporting}>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Button 
+            onClick={handleExportCustomers} 
+            disabled={isExportingCustomers || isImporting || isExportingTransactions || isExportingComprehensive}
+          >
             {isExportingCustomers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
             Export Customer List (CSV)
           </Button>
-          <Button onClick={handleExportTransactions} disabled={isExportingTransactions || isImporting}>
+          <Button 
+            onClick={handleExportTransactions} 
+            disabled={isExportingTransactions || isImporting || isExportingCustomers || isExportingComprehensive}
+          >
             {isExportingTransactions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
             Export Paid Transactions (CSV)
+          </Button>
+          <Button 
+            onClick={handleExportComprehensiveReport} 
+            disabled={isExportingComprehensive || isImporting || isExportingCustomers || isExportingTransactions}
+            className="sm:col-span-2 lg:col-span-1"
+          >
+            {isExportingComprehensive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+            Export Comprehensive Report (CSV)
           </Button>
         </CardContent>
       </Card>
@@ -240,7 +309,11 @@ export default function DataManagementPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <Button variant="outline" onClick={handleDownloadSample} disabled={isImporting}>
+            <Button 
+              variant="outline" 
+              onClick={handleDownloadSample} 
+              disabled={isImporting || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
+            >
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               Download Sample Import File (CSV)
             </Button>
@@ -252,11 +325,14 @@ export default function DataManagementPage() {
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              disabled={isImporting}
+              disabled={isImporting || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
               className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
             />
           </div>
-          <Button onClick={handleImportSchemes} disabled={isImporting || !selectedFile}>
+          <Button 
+            onClick={handleImportSchemes} 
+            disabled={isImporting || !selectedFile || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
+          >
             {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
             Import Schemes from CSV
           </Button>
