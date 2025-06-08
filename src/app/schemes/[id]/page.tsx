@@ -9,8 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { CheckCircle, Edit, AlertCircle, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter } from 'lucide-react';
+import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -57,13 +56,11 @@ export default function SchemeDetailsPage() {
   const [closureModeOfPayment, setClosureModeOfPayment] = useState<PaymentMode[]>(['Cash']);
   const [schemeToCloseInDialog, setSchemeToCloseInDialog] = useState<Scheme | null>(null);
 
-
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   const [isAssignGroupDialogOpen, setIsAssignGroupDialogOpen] = useState(false);
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   
   const [activeAccordionItem, setActiveAccordionItem] = useState<string | undefined>(schemeIdFromUrl);
-
 
   const loadSchemeData = useCallback(() => {
     if (schemeIdFromUrl) {
@@ -109,7 +106,7 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
-      // Update schemeForVisuals if the active accordion item was the one updated
+      // If the active accordion item was the one updated, schemeForVisuals will update automatically
       if (activeAccordionItem === updatedSchemeFromMock.id) {
         // This will trigger a re-render of visuals if they depend on schemeForVisuals
       }
@@ -121,7 +118,7 @@ export default function SchemeDetailsPage() {
     setIsRecordingPayment(false);
   };
   
-  const openClosureDialogForScheme = (targetScheme: Scheme) => {
+  const openClosureDialogForSpecificScheme = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Completed') return;
     setSchemeToCloseInDialog(targetScheme);
     setClosureDate(targetScheme.closureDate ? parseISO(targetScheme.closureDate) : startOfDay(new Date()));
@@ -249,6 +246,7 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
+    // Ensure we are checking against the potentially updated version of the scheme from allSchemesForThisCustomer
     const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
 
     for (let i = 0; i < payment.monthNumber - 1; i++) {
@@ -269,11 +267,6 @@ export default function SchemeDetailsPage() {
     queryParams.append('monthlyPaymentAmount', scheme.monthlyPaymentAmount.toString());
     router.push(`/schemes/new?${queryParams.toString()}`);
   };
-
-  const closableSchemes = useMemo(() => {
-    return allSchemesForThisCustomer.filter(s => s.status !== 'Completed');
-  }, [allSchemesForThisCustomer]);
-
 
   if (isLoading || !scheme) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -307,140 +300,134 @@ export default function SchemeDetailsPage() {
             >
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  size="sm"
-                  disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || closableSchemes.length === 0}
-                >
-                  <FileCheck2 className="mr-2 h-4 w-4" /> Close Scheme...
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {closableSchemes.length > 0 ? (
-                  closableSchemes.map(sToClose => (
-                    <DropdownMenuItem 
-                      key={sToClose.id} 
-                      onSelect={() => openClosureDialogForScheme(sToClose)}
-                    >
-                      Close ID: {sToClose.id.substring(0,8)}... (Starts: {formatDate(sToClose.startDate)})
-                    </DropdownMenuItem>
-                  ))
-                ) : (
-                  <DropdownMenuItem disabled>No schemes to close for {scheme.customerName}</DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button 
+              size="sm"
+              onClick={() => openClosureDialogForSpecificScheme(scheme)}
+              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || scheme.status === 'Completed'}
+            >
+              <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
+            </Button>
           </div>
         </CardHeader>
       </Card>
-
-      {allSchemesForThisCustomer.length > 0 && (
-        <Card>
-          <CardHeader>
+      
+      <Card>
+        <CardHeader>
             <CardTitle className="font-headline">All Schemes Enrolled by {scheme.customerName}</CardTitle>
             <CardDescription>View and manage payment schedules for all schemes associated with this customer.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion 
-                type="single" 
-                collapsible 
-                className="w-full space-y-3" 
-                value={activeAccordionItem} 
-                onValueChange={setActiveAccordionItem}
-            >
-              {allSchemesForThisCustomer.map((s) => (
-                <AccordionItem value={s.id} key={s.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
-                  <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
-                    <div className="flex justify-between items-center w-full">
-                      <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
-                        <SchemeStatusBadge status={s.status} />
-                        {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
-                      </div>
-                      <div className="text-xs text-muted-foreground text-right">
-                        <span>Started: {formatDate(s.startDate)}</span><br/>
-                        <span>Monthly: {formatCurrency(s.monthlyPaymentAmount)}</span>
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="p-0">
-                    <div className="border-t p-4">
-                        {s.status === 'Completed' ? (
-                        <div className="text-sm">
-                            <p className="font-semibold">Scheme Completed</p>
-                            {s.closureDate && <p>Closed on: {formatDate(s.closureDate)}</p>}
-                            <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
+        </CardHeader>
+        <CardContent>
+            {allSchemesForThisCustomer.length > 0 ? (
+                <Accordion 
+                    type="single" 
+                    collapsible 
+                    className="w-full space-y-3" 
+                    value={activeAccordionItem} 
+                    onValueChange={setActiveAccordionItem}
+                >
+                {allSchemesForThisCustomer.map((s) => (
+                    <AccordionItem value={s.id} key={s.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
+                    <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
+                        <div className="flex justify-between items-center w-full">
+                        <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
+                            <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
+                            <SchemeStatusBadge status={s.status} />
+                            {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                         </div>
-                        ) : (
-                        <>
-                            <div className="overflow-x-auto">
-                                <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
-                                <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                    <TableHead>Month</TableHead>
-                                    <TableHead>Due Date</TableHead>
-                                    <TableHead>Expected</TableHead>
-                                    <TableHead>Paid Amount</TableHead>
-                                    <TableHead>Payment Date</TableHead>
-                                    <TableHead>Mode(s)</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {s.payments.map((payment) => (
-                                    <TableRow key={payment.id}>
-                                        <TableCell>{payment.monthNumber}</TableCell>
-                                        <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                                        <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
-                                        <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
-                                        <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                                        <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
-                                        <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
-                                        <TableCell className="text-right">
-                                        {isPaymentRecordable(payment, s) ? (
-                                            <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
-                                                <DollarSign className="mr-1 h-4 w-4" /> Record
-                                                </Button>
-                                            </DialogTrigger>
-                                            {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
-                                                <DialogContent>
-                                                <DialogHeader>
-                                                    <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
-                                                    <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
-                                                </DialogHeader>
-                                                <RecordPaymentForm
-                                                    payment={selectedPaymentForRecord}
-                                                    onSubmit={handleRecordPayment}
-                                                    isLoading={isRecordingPayment}
-                                                />
-                                                </DialogContent>
-                                            )}
-                                            </Dialog>
-                                        ) : (
-                                            (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
-                                        )}
-                                        </TableCell>
-                                    </TableRow>
-                                    ))}
-                                </TableBody>
-                                </Table>
+                        <div className="text-xs text-muted-foreground text-right">
+                            <span>Started: {formatDate(s.startDate)}</span><br/>
+                            <span>Monthly: {formatCurrency(s.monthlyPaymentAmount)}</span>
+                        </div>
+                        </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="p-0">
+                        <div className="border-t p-4">
+                            {s.status === 'Completed' ? (
+                            <div className="text-sm">
+                                <p className="font-semibold">Scheme Completed</p>
+                                {s.closureDate && <p>Closed on: {formatDate(s.closureDate)}</p>}
+                                <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
                             </div>
-                            {/* Removed individual "Close This Scheme" button from here */}
-                        </>
-                        )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </CardContent>
-        </Card>
-      )}
+                            ) : (
+                            <>
+                                <div className="mb-4">
+                                    <Button 
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openClosureDialogForSpecificScheme(s)}
+                                      disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || s.status === 'Completed'}
+                                    >
+                                      <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
+                                    </Button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
+                                    <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                        <TableHead>Month</TableHead>
+                                        <TableHead>Due Date</TableHead>
+                                        <TableHead>Expected</TableHead>
+                                        <TableHead>Paid Amount</TableHead>
+                                        <TableHead>Payment Date</TableHead>
+                                        <TableHead>Mode(s)</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {s.payments.map((payment) => (
+                                        <TableRow key={payment.id}>
+                                            <TableCell>{payment.monthNumber}</TableCell>
+                                            <TableCell>{formatDate(payment.dueDate)}</TableCell>
+                                            <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
+                                            <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
+                                            <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                                            <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
+                                            <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
+                                            <TableCell className="text-right">
+                                            {isPaymentRecordable(payment, s) ? (
+                                                <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
+                                                    <DollarSign className="mr-1 h-4 w-4" /> Record
+                                                    </Button>
+                                                </DialogTrigger>
+                                                {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
+                                                    <DialogContent>
+                                                    <DialogHeader>
+                                                        <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
+                                                        <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
+                                                    </DialogHeader>
+                                                    <RecordPaymentForm
+                                                        payment={selectedPaymentForRecord}
+                                                        onSubmit={handleRecordPayment}
+                                                        isLoading={isRecordingPayment}
+                                                    />
+                                                    </DialogContent>
+                                                )}
+                                                </Dialog>
+                                            ) : (
+                                                (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
+                                            )}
+                                            </TableCell>
+                                        </TableRow>
+                                        ))}
+                                    </TableBody>
+                                    </Table>
+                                </div>
+                            </>
+                            )}
+                        </div>
+                    </AccordionContent>
+                    </AccordionItem>
+                ))}
+                </Accordion>
+            ) : (
+                <p className="text-center text-muted-foreground py-4">No schemes found for this customer.</p>
+            )}
+        </CardContent>
+      </Card>
       
       <Card>
         <CardHeader>
@@ -543,12 +530,11 @@ export default function SchemeDetailsPage() {
         </Card>
       )}
 
-
       {isCloseSchemeAlertOpen && schemeToCloseInDialog && (
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={(open) => {
             if (!open) {
                 setIsCloseSchemeAlertOpen(false);
-                if (!isClosingSchemeProcess) {
+                if (!isClosingSchemeProcess) { // Only reset if not actively processing
                     setSchemeToCloseInDialog(null);
                 }
             }
