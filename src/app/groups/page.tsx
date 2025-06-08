@@ -3,8 +3,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Users2, Edit, Trash2, DollarSign, Users, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Users2, Edit, Trash2, DollarSign, Eye, Loader2, MoreHorizontal, PlusCircle, Filter } from 'lucide-react';
 import type { GroupDetail } from '@/types/scheme';
 import { getGroupDetails, updateMockGroupName, deleteMockGroup, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
@@ -13,11 +15,13 @@ import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymen
 import { EditGroupNameDialog } from '@/components/dialogs/EditGroupNameDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { formatCurrency } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState<GroupDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [selectedGroupForBatch, setSelectedGroupForBatch] = useState<GroupDetail | null>(null);
   const [isBatchRecording, setIsBatchRecording] = useState(false);
@@ -88,6 +92,9 @@ export default function GroupsPage() {
     setIsDeletingGroup(false);
   };
 
+  const filteredGroups = groups.filter(group => 
+    group.groupName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (isLoading && groups.length === 0) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -99,74 +106,97 @@ export default function GroupsPage() {
         <h1 className="text-2xl font-headline font-semibold">Customer Groups</h1>
         <Button asChild>
           <Link href="/schemes/new">
-            <Users className="mr-2 h-4 w-4" /> Add Scheme (to create/assign groups)
+            <PlusCircle className="mr-2 h-4 w-4" /> Create Scheme & Assign Group
           </Link>
         </Button>
       </div>
 
-      {groups.length === 0 && !isLoading ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No Groups Found</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              No customer groups have been created yet. You can assign or create groups when adding a new scheme.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {groups.map((group) => (
-            <Card key={group.groupName} className="flex flex-col">
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2">
-                  <Users2 className="h-5 w-5 text-primary" />
-                  {group.groupName}
-                </CardTitle>
-                <CardDescription>
-                  {group.customerNames.length} customer(s) across {group.totalSchemesInGroup} scheme(s).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm flex-grow">
-                <p><strong>Customers:</strong> {group.customerNames.join(', ') || 'N/A'}</p>
-                <p><strong>Recordable Schemes:</strong> {group.recordableSchemeCount} scheme(s) with next payment due.</p>
-              </CardContent>
-              <CardFooter className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setSelectedGroupForBatch(group)} 
-                  disabled={group.recordableSchemeCount === 0 || isBatchRecording || isEditingName || isDeletingGroup}
-                  className="w-full sm:w-auto"
-                >
-                  <DollarSign className="mr-2 h-4 w-4" /> Record Payments
-                </Button>
-                <div className="flex gap-2 w-full sm:w-auto">
-                 <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => setGroupToEdit(group)}
-                    disabled={isBatchRecording || isEditingName || isDeletingGroup}
-                    className="flex-1"
-                  >
-                    <Edit className="mr-2 h-4 w-4" /> Edit
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => setGroupToDelete(group)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-1"
-                    disabled={isBatchRecording || isEditingName || isDeletingGroup}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Group Overview</CardTitle>
+          <CardDescription>Manage and track all customer groups. Groups are created when adding schemes.</CardDescription>
+          <div className="mt-4">
+            <Input
+              placeholder="Filter by group name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredGroups.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <p>No groups match your filter{searchTerm && groups.length > 0 ? '' : ' or no groups exist yet'}.</p>
+              {groups.length === 0 && !isLoading && (
+                <p className="text-sm">
+                  You can create groups by assigning a "Customer Group Name" when
+                  <Button variant="link" asChild className="p-1"><Link href="/schemes/new">adding a new scheme</Link></Button>.
+                </p>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Group Name</TableHead>
+                  <TableHead className="text-center">Customers</TableHead>
+                  <TableHead className="text-center">Total Schemes</TableHead>
+                  <TableHead className="text-center">Recordable Schemes</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredGroups.map((group) => (
+                  <TableRow key={group.groupName}>
+                    <TableCell className="font-medium">{group.groupName}</TableCell>
+                    <TableCell className="text-center">{group.customerNames.length}</TableCell>
+                    <TableCell className="text-center">{group.totalSchemesInGroup}</TableCell>
+                    <TableCell className="text-center">{group.recordableSchemeCount}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => setSelectedGroupForBatch(group)} 
+                          disabled={group.recordableSchemeCount === 0 || isBatchRecording || isEditingName || isDeletingGroup}
+                        >
+                          <DollarSign className="mr-2 h-4 w-4" /> Record
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                               <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="flex items-center">
+                                <Eye className="mr-2 h-4 w-4" /> View Details
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setGroupToEdit(group)} disabled={isBatchRecording || isEditingName || isDeletingGroup}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit Name
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => setGroupToDelete(group)} 
+                              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                              disabled={isBatchRecording || isEditingName || isDeletingGroup}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete Group
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {selectedGroupForBatch && (
         <BatchRecordPaymentDialog
@@ -193,10 +223,10 @@ export default function GroupsPage() {
          <AlertDialog open={!!groupToDelete} onOpenChange={(open) => !open && setGroupToDelete(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Delete Group</AlertDialogTitle>
+              <AlertDialogTitle>Confirm Delete Group Association</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete the group "{groupToDelete.groupName}"? 
-                This will remove the group association from all its schemes. Schemes and customers will not be deleted.
+                Are you sure you want to remove the group association for "{groupToDelete.groupName}"? 
+                This will remove the group name from all associated schemes. Schemes and customers themselves will not be deleted.
                 This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -204,7 +234,7 @@ export default function GroupsPage() {
               <AlertDialogCancel onClick={() => setGroupToDelete(null)} disabled={isDeletingGroup}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteGroupConfirm} disabled={isDeletingGroup} className="bg-destructive hover:bg-destructive/90">
                 {isDeletingGroup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Group
+                Remove Association
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
