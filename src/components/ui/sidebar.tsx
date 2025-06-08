@@ -521,7 +521,7 @@ const sidebarMenuButtonVariants = cva(
 )
 
 const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
+  HTMLElement, // Changed from HTMLButtonElement
   React.ComponentProps<"button"> & {
     asChild?: boolean
     isActive?: boolean
@@ -746,5 +746,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-    
