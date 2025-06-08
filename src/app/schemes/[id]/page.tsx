@@ -40,11 +40,11 @@ export default function SchemeDetailsPage() {
     if (schemeId) {
       const fetchedScheme = getMockSchemeById(schemeId);
       if (fetchedScheme) {
+        // Ensure correct status calculation based on manual closure possibility
         const totals = calculateSchemeTotals(fetchedScheme);
-        let status = getSchemeStatus(fetchedScheme);
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
-        // Re-check status after payment statuses are updated
-        status = getSchemeStatus(fetchedScheme);
+        // The status from getMockSchemeById should already respect manual 'Completed'
+        const status = getSchemeStatus(fetchedScheme); 
         setScheme({ ...fetchedScheme, ...totals, status });
       }
       setIsLoading(false);
@@ -60,14 +60,18 @@ export default function SchemeDetailsPage() {
   }, [scheme]);
 
   const handleRecordPayment = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
-    if (!selectedPaymentForRecord || !scheme) return;
+    if (!selectedPaymentForRecord || !scheme || scheme.status === 'Completed') {
+      if(scheme?.status === 'Completed') {
+        toast({ title: 'Action Denied', description: 'Cannot record payment for a completed scheme.', variant: 'destructive' });
+      }
+      return;
+    }
     setIsRecordingPayment(true);
     const updatedScheme = updateMockSchemePayment(scheme.id, selectedPaymentForRecord.id, data);
     if (updatedScheme) {
       const totals = calculateSchemeTotals(updatedScheme);
-      let status = getSchemeStatus(updatedScheme);
       updatedScheme.payments.forEach(p => p.status = getPaymentStatus(p, updatedScheme.startDate));
-      status = getSchemeStatus(updatedScheme); // Re-check
+      const status = getSchemeStatus(updatedScheme);
       setScheme({ ...updatedScheme, ...totals, status });
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} recorded successfully.` });
     } else {
@@ -78,15 +82,21 @@ export default function SchemeDetailsPage() {
   };
   
   const handleCloseScheme = () => {
-    if(!scheme) return;
+    if(!scheme || scheme.status === 'Completed') return;
     setIsClosingScheme(true);
-    const closedScheme = closeMockScheme(scheme.id);
-    if(closedScheme) {
-      const totals = calculateSchemeTotals(closedScheme);
-      const status = getSchemeStatus(closedScheme);
-      closedScheme.payments.forEach(p => p.status = getPaymentStatus(p, closedScheme.startDate));
-      setScheme({ ...closedScheme, ...totals, status });
-      toast({ title: 'Scheme Closed', description: `${scheme.customerName}'s scheme has been marked as completed.` });
+    const closedSchemeResult = closeMockScheme(scheme.id);
+    if(closedSchemeResult) {
+      // Fetch the latest version of the scheme after closing
+      const refreshedScheme = getMockSchemeById(scheme.id);
+      if (refreshedScheme) {
+        setScheme(refreshedScheme);
+         toast({ title: 'Scheme Closed', description: `${refreshedScheme.customerName}'s scheme has been marked as completed on ${formatDate(refreshedScheme.closureDate)}. All pending payments marked as paid.` });
+      } else {
+        // Fallback if somehow scheme not found after closing (should not happen with mock data)
+         toast({ title: 'Scheme Closed', description: `Scheme ${scheme.id} marked as completed.` });
+         // Manually update local state as a fallback
+         setScheme(prev => prev ? {...prev, status: 'Completed', closureDate: new Date().toISOString()} : null);
+      }
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
     }
@@ -124,13 +134,13 @@ export default function SchemeDetailsPage() {
     cumulativeExpected: { label: "Cumulative Expected", color: "hsl(var(--chart-5))" },
   }
 
-  const isPaymentRecordable = (payment: Payment, scheme: Scheme): boolean => {
-    if (scheme.status === 'Completed' || payment.status === 'Paid') {
+  const isPaymentRecordable = (payment: Payment, currentScheme: Scheme): boolean => {
+    if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
     // Check if all previous payments are paid
     for (let i = 0; i < payment.monthNumber - 1; i++) {
-      if (scheme.payments[i].status !== 'Paid') {
+      if (currentScheme.payments[i].status !== 'Paid') {
         return false;
       }
     }
@@ -159,28 +169,25 @@ export default function SchemeDetailsPage() {
     );
   }
 
-  const canCloseScheme = scheme.status !== 'Completed' && scheme.payments.every(p => p.status === 'Paid' || (p.status !== 'Paid' && isPast(parseISO(p.dueDate))));
-
-
   return (
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
-            <CardDescription>Scheme ID: {scheme.id} <br/> Started on {formatDate(scheme.startDate)}</CardDescription>
+            <CardDescription>
+              Scheme ID: {scheme.id} <br/> Started on {formatDate(scheme.startDate)}
+              {scheme.status === 'Completed' && scheme.closureDate && (
+                <><br/>Closed on: {formatDate(scheme.closureDate)}</>
+              )}
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0">
             <SchemeStatusBadge status={scheme.status} />
-            {canCloseScheme && (
+            {scheme.status !== 'Completed' && (
               <Button onClick={handleCloseScheme} disabled={isClosingScheme} size="sm">
                 {isClosingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
                 Close Scheme
-              </Button>
-            )}
-             {scheme.status === 'Completed' && (
-              <Button variant="outline" size="sm" disabled>
-                <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Scheme Closed
               </Button>
             )}
           </div>
@@ -230,7 +237,7 @@ export default function SchemeDetailsPage() {
                         <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
                         <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
                         <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                        <TableCell>{payment.modeOfPayment?.join(', ') || '-'}</TableCell>
+                        <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
                         <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, scheme.startDate)} /></TableCell>
                         <TableCell className="text-right">
                           {isPaymentRecordable(payment, scheme) ? (
@@ -328,7 +335,9 @@ export default function SchemeDetailsPage() {
             <Card>
                 <CardHeader>
                     <CardTitle className="font-headline">Scheme Completion Summary</CardTitle>
-                    <CardDescription>Overview of the completed scheme for {scheme.customerName}.</CardDescription>
+                    <CardDescription>Overview of the completed scheme for {scheme.customerName}. 
+                        {scheme.closureDate && ` Closed on ${formatDate(scheme.closureDate)}.`}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 border rounded-lg bg-green-50 dark:bg-green-900/20">
@@ -348,7 +357,8 @@ export default function SchemeDetailsPage() {
                         </div>
                     </div>
                     
-                    <p>This scheme, initiated on <strong>{formatDate(scheme.startDate)}</strong>, has concluded successfully. All {scheme.durationMonths} payments have been recorded, amounting to a total of <strong>{formatCurrency(scheme.totalCollected || 0)}</strong>.</p>
+                    <p>This scheme, initiated on <strong>{formatDate(scheme.startDate)}</strong>, has concluded. 
+                    All {scheme.durationMonths} payments have been recorded (or accounted for upon closure), amounting to a total of <strong>{formatCurrency(scheme.totalCollected || 0)}</strong>.</p>
                     
                      <div className="mt-6">
                         <h4 className="font-semibold mb-2">Final Payment Overview</h4>

@@ -10,7 +10,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number | undefined | null, currency: string = 'INR'): string {
-  if (amount === undefined || amount === null || isNaN(amount)) return 'N/A'; // Added NaN check
+  if (amount === undefined || amount === null || isNaN(amount)) return 'N/A';
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(amount);
 }
 
@@ -18,7 +18,7 @@ export function formatDate(dateString: string | undefined | null, dateFormat: st
   if (!dateString) return 'N/A';
   try {
     const parsed = parseISO(dateString);
-    if (isNaN(parsed.getTime())) return 'Invalid Date'; // Check if date is valid
+    if (isNaN(parsed.getTime())) return 'Invalid Date';
     return format(parsed, dateFormat);
   } catch (error) {
     return 'Invalid Date';
@@ -38,65 +38,63 @@ export function getPaymentStatus(payment: Payment, schemeStartDate: string): Pay
     return 'Paid';
   }
   
-  // If the scheme itself hasn't started, all its payments are 'Upcoming'.
   if (isFuture(startOfDay(parseISO(schemeStartDate)))) {
     return 'Upcoming';
   }
 
-  if (isPast(dueDate)) { // No need to check payment.status !== 'Paid' here, as the first if handles 'Paid'
+  if (isPast(dueDate)) { 
     return 'Overdue';
   }
   
-  // If due date is today or in the future, and not paid, it's 'Pending' or 'Upcoming'
-  // For simplicity, if not paid and not overdue, consider it 'Pending'.
-  // A more nuanced 'Upcoming' could be for payments > N days away, but 'Pending' works for now.
   return 'Pending';
 }
 
 
-export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'status'>): Payment[] {
+export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'status' | 'closureDate'>): Payment[] {
   const payments: Payment[] = [];
   for (let i = 1; i <= scheme.durationMonths; i++) {
     const dueDate = calculateDueDate(scheme.startDate, i);
-    const paymentBase: Payment = { // Define base structure for type safety
+    const paymentBase: Payment = { 
       id: `${scheme.id}-month-${i}`,
       schemeId: scheme.id,
       monthNumber: i,
       dueDate: dueDate,
       amountExpected: scheme.monthlyPaymentAmount,
-      status: 'Upcoming', // Initial status, will be refined by getPaymentStatus
-      // amountPaid, paymentDate, modeOfPayment will be undefined initially
+      status: 'Upcoming', 
     };
     payments.push(paymentBase);
   }
-  // Update status for initial payments based on current date and scheme start date
   payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   return payments;
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
-  // First, ensure all payment statuses within the scheme are up-to-date
+  // If a scheme is explicitly marked 'Completed' (e.g. via manual closure), that status persists.
+  if (scheme.status === 'Completed') {
+    return 'Completed';
+  }
+
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
-  const today = startOfDay(new Date());
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));
 
   if (isFuture(schemeStartDate)) return 'Upcoming';
 
-  const allPaymentsMade = scheme.payments.every(p => p.status === 'Paid');
-  if (allPaymentsMade) return 'Completed';
-
+  // Check for overdue payments only if not already 'Completed'
   const hasOverduePayment = scheme.payments.some(p => p.status === 'Overdue');
   if (hasOverduePayment) return 'Overdue';
   
-  // If scheme duration has passed and not all payments made, it's effectively Overdue from a scheme perspective.
+  const allPaymentsEffectivelyMade = scheme.payments.every(p => p.status === 'Paid');
+  // If scheme duration has passed and not all payments made and not marked completed, it's Overdue.
   const lastPayment = scheme.payments[scheme.payments.length - 1];
-  if (lastPayment && isPast(startOfDay(parseISO(lastPayment.dueDate))) && !allPaymentsMade) {
+  if (lastPayment && isPast(startOfDay(parseISO(lastPayment.dueDate))) && !allPaymentsEffectivelyMade) {
     return 'Overdue';
   }
-
+  
+  // If not upcoming, not overdue, and not explicitly completed, it's active.
   return 'Active';
 }
+
 
 export function calculateSchemeTotals(scheme: Scheme): Partial<Scheme> {
   const totalCollected = scheme.payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);

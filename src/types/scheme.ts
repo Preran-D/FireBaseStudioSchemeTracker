@@ -1,6 +1,6 @@
 
 export type PaymentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Upcoming';
-export type PaymentMode = 'Card' | 'Cash' | 'UPI';
+export type PaymentMode = 'Card' | 'Cash' | 'UPI' | 'System Closure';
 
 export interface Payment {
   id: string;
@@ -24,6 +24,7 @@ export interface Scheme {
   monthlyPaymentAmount: number;
   durationMonths: 12;
   status: SchemeStatus;
+  closureDate?: string; // ISO Date string, set when scheme is manually closed
   payments: Payment[];
   // Calculated fields (optional, can be derived)
   totalCollected?: number;

@@ -6,16 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Download, FileUp, FileSpreadsheet, Loader2, AlertTriangle, FileText } from 'lucide-react';
-import { getMockSchemes, addMockScheme } from '@/lib/mock-data';
+import { Download, FileUp, FileSpreadsheet, Loader2, AlertTriangle, FileText, Activity } from 'lucide-react'; // Added Activity for new report
+import { getMockSchemes, addMockScheme, importSchemeClosureUpdates } from '@/lib/mock-data';
 import type { Scheme, Payment } from '@/types/scheme';
 import { arrayToCSV, downloadCSV, parseCSV } from '@/lib/csvUtils';
 import { formatDate, formatCurrency, getPaymentStatus, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
-import { isValid, parse } from 'date-fns';
+import { isValid, parse, formatISO } from 'date-fns';
 
 interface ImportMessage {
   type: 'success' | 'error' | 'info';
   content: string;
+}
+
+interface ImportResult {
+  successCount: number;
+  errorCount: number;
+  messages: string[];
 }
 
 export default function DataManagementPage() {
@@ -23,9 +29,16 @@ export default function DataManagementPage() {
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const [isExportingTransactions, setIsExportingTransactions] = useState(false);
   const [isExportingComprehensive, setIsExportingComprehensive] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [importMessages, setImportMessages] = useState<ImportMessage[]>([]);
+  const [isExportingSchemeStatus, setIsExportingSchemeStatus] = useState(false);
+  
+  const [isImportingSchemes, setIsImportingSchemes] = useState(false);
+  const [selectedSchemeImportFile, setSelectedSchemeImportFile] = useState<File | null>(null);
+  const [schemeImportMessages, setSchemeImportMessages] = useState<ImportMessage[]>([]);
+
+  const [isImportingClosures, setIsImportingClosures] = useState(false);
+  const [selectedClosureImportFile, setSelectedClosureImportFile] = useState<File | null>(null);
+  const [closureImportMessages, setClosureImportMessages] = useState<ImportMessage[]>([]);
+
 
   const handleExportCustomers = () => {
     setIsExportingCustomers(true);
@@ -72,7 +85,7 @@ export default function DataManagementPage() {
               scheme.customerGroupName || 'N/A',
               payment.monthNumber,
               formatDate(payment.paymentDate),
-              payment.amountPaid,
+              payment.amountPaid || '',
               payment.modeOfPayment?.join(' | ') || 'N/A'
             ]);
           }
@@ -98,16 +111,15 @@ export default function DataManagementPage() {
   const handleExportComprehensiveReport = () => {
     setIsExportingComprehensive(true);
     try {
-      const schemes = getMockSchemes(); // Fetches schemes with updated statuses and totals
+      const schemes = getMockSchemes(); 
       const reportData: any[][] = [[
         'Customer Name', 'Customer Group Name', 'Scheme ID', 'Scheme Start Date', 
-        'Scheme Monthly Amount', 'Scheme Duration (Months)', 'Overall Scheme Status',
+        'Scheme Monthly Amount', 'Scheme Duration (Months)', 'Overall Scheme Status', 'Scheme Closure Date',
         'Payment Month #', 'Payment Due Date', 'Actual Payment Date', 
         'Amount Expected', 'Amount Paid', 'Individual Payment Status', 'Mode of Payment'
       ]];
 
       schemes.forEach(scheme => {
-        // Recalculate status and totals just in case, though getMockSchemes should handle it
         const currentSchemeStatus = getSchemeStatus(scheme);
         const totals = calculateSchemeTotals(scheme);
 
@@ -121,6 +133,7 @@ export default function DataManagementPage() {
             scheme.monthlyPaymentAmount,
             scheme.durationMonths,
             currentSchemeStatus,
+            scheme.closureDate ? formatDate(scheme.closureDate) : 'N/A',
             payment.monthNumber,
             formatDate(payment.dueDate),
             payment.paymentDate ? formatDate(payment.paymentDate) : 'N/A',
@@ -148,41 +161,77 @@ export default function DataManagementPage() {
     setIsExportingComprehensive(false);
   };
 
+  const handleExportSchemeStatusReport = () => {
+    setIsExportingSchemeStatus(true);
+    try {
+      const schemes = getMockSchemes();
+      const reportData: any[][] = [[
+        'Customer Name', 'Scheme ID', 'Scheme Start Date', 'Monthly Amount', 
+        'Payments Made Count', 'Scheme Status', 'Scheme Closure Date'
+      ]];
 
-  const handleDownloadSample = () => {
+      schemes.forEach(scheme => {
+        reportData.push([
+          scheme.customerName,
+          scheme.id,
+          formatDate(scheme.startDate),
+          scheme.monthlyPaymentAmount,
+          scheme.paymentsMadeCount || 0,
+          scheme.status,
+          scheme.closureDate ? formatDate(scheme.closureDate) : 'N/A'
+        ]);
+      });
+      
+      if (reportData.length <= 1) {
+        toast({ title: 'No Data', description: 'No schemes found to export for the status report.' });
+        setIsExportingSchemeStatus(false);
+        return;
+      }
+
+      const csvString = arrayToCSV(reportData);
+      downloadCSV(csvString, 'scheme_status_report.csv');
+      toast({ title: 'Success', description: 'Scheme status report exported successfully.' });
+
+    } catch (error) {
+      console.error('Error exporting scheme status report:', error);
+      toast({ title: 'Error', description: 'Failed to export scheme status report.', variant: 'destructive' });
+    }
+    setIsExportingSchemeStatus(false);
+  };
+
+  const handleDownloadNewSchemeSample = () => {
     const sampleData: any[][] = [
       ['CustomerName', 'StartDate (YYYY-MM-DD)', 'MonthlyPaymentAmount', 'CustomerGroupName (Optional)'],
       ['John Doe', '2024-01-15', '1000', 'Friends Circle'],
       ['Jane Smith', '2024-02-01', '500', ''],
-      ['Mike Brown', '2023-12-20', '1500', 'Office Team'],
     ];
     const csvString = arrayToCSV(sampleData);
-    downloadCSV(csvString, 'sample_scheme_import.csv');
+    downloadCSV(csvString, 'sample_new_scheme_import.csv');
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSchemeImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      setSelectedFile(event.target.files[0]);
-      setImportMessages([]);
+      setSelectedSchemeImportFile(event.target.files[0]);
+      setSchemeImportMessages([]);
     } else {
-      setSelectedFile(null);
+      setSelectedSchemeImportFile(null);
     }
   };
 
-  const handleImportSchemes = async () => {
-    if (!selectedFile) {
-      toast({ title: 'No File', description: 'Please select a CSV file to import.', variant: 'destructive' });
+  const handleImportNewSchemes = async () => {
+    if (!selectedSchemeImportFile) {
+      toast({ title: 'No File', description: 'Please select a CSV file to import new schemes.', variant: 'destructive' });
       return;
     }
-    setIsImporting(true);
-    setImportMessages([{ type: 'info', content: `Starting import from ${selectedFile.name}...` }]);
+    setIsImportingSchemes(true);
+    setSchemeImportMessages([{ type: 'info', content: `Starting import from ${selectedSchemeImportFile.name}...` }]);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       if (!text) {
-        setImportMessages(prev => [...prev, { type: 'error', content: 'File is empty or could not be read.' }]);
-        setIsImporting(false);
+        setSchemeImportMessages(prev => [...prev, { type: 'error', content: 'File is empty or could not be read.' }]);
+        setIsImportingSchemes(false);
         return;
       }
 
@@ -192,8 +241,8 @@ export default function DataManagementPage() {
       const lcHeaders = headers.map(h => h.toLowerCase());
 
       if (!lcExpectedHeaders.every((h, i) => lcHeaders[i] === h)) {
-         setImportMessages(prev => [...prev, { type: 'error', content: `CSV headers do not match the expected format. Expected: ${expectedHeaders.join(', ')}` }]);
-         setIsImporting(false);
+         setSchemeImportMessages(prev => [...prev, { type: 'error', content: `CSV headers do not match. Expected: ${expectedHeaders.join(', ')}` }]);
+         setIsImportingSchemes(false);
          return;
       }
       
@@ -203,7 +252,7 @@ export default function DataManagementPage() {
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const rowNum = i + 2; // CSV row number (1-indexed headers + 1)
+        const rowNum = i + 2; 
         
         const customerName = row[0]?.trim();
         const startDateStr = row[1]?.trim();
@@ -211,21 +260,21 @@ export default function DataManagementPage() {
         const customerGroupName = row[3]?.trim() || undefined;
 
         if (!customerName || !startDateStr || !monthlyPaymentAmountStr) {
-          newMessages.push({ type: 'error', content: `Row ${rowNum}: Missing required fields (CustomerName, StartDate, MonthlyPaymentAmount). Skipping.` });
+          newMessages.push({ type: 'error', content: `Row ${rowNum}: Missing required fields. Skipping.` });
           errorCount++;
           continue;
         }
         
         const startDate = parse(startDateStr, 'yyyy-MM-dd', new Date());
         if (!isValid(startDate)) {
-          newMessages.push({ type: 'error', content: `Row ${rowNum}: Invalid StartDate format for '${customerName}'. Expected YYYY-MM-DD. Skipping.` });
+          newMessages.push({ type: 'error', content: `Row ${rowNum}: Invalid StartDate for '${customerName}'. Skipping.` });
           errorCount++;
           continue;
         }
 
         const monthlyPaymentAmount = parseFloat(monthlyPaymentAmountStr);
         if (isNaN(monthlyPaymentAmount) || monthlyPaymentAmount <= 0) {
-          newMessages.push({ type: 'error', content: `Row ${rowNum}: Invalid MonthlyPaymentAmount for '${customerName}'. Must be a positive number. Skipping.` });
+          newMessages.push({ type: 'error', content: `Row ${rowNum}: Invalid MonthlyPaymentAmount for '${customerName}'. Skipping.` });
           errorCount++;
           continue;
         }
@@ -244,22 +293,91 @@ export default function DataManagementPage() {
         }
       }
       
-      newMessages.unshift({ type: 'info', content: `Import finished. ${successCount} schemes imported successfully. ${errorCount} rows had errors.` });
-      setImportMessages(prev => [...prev.slice(0,1), ...newMessages]);
-      toast({ title: 'Import Complete', description: `${successCount} schemes imported. ${errorCount} errors.`});
-      setIsImporting(false);
-      setSelectedFile(null); 
+      newMessages.unshift({ type: 'info', content: `Import finished. ${successCount} schemes imported. ${errorCount} errors.` });
+      setSchemeImportMessages(prev => [...prev.slice(0,1), ...newMessages]);
+      toast({ title: 'Import Complete', description: `${successCount} new schemes imported. ${errorCount} errors.`});
+      setIsImportingSchemes(false);
+      setSelectedSchemeImportFile(null); 
     };
-
     reader.onerror = () => {
-      setImportMessages(prev => [...prev, { type: 'error', content: 'Error reading the file.'}]);
-      toast({ title: 'File Read Error', description: 'Could not read the selected file.', variant: 'destructive' });
-      setIsImporting(false);
+      setSchemeImportMessages(prev => [...prev, { type: 'error', content: 'Error reading the file.'}]);
+      setIsImportingSchemes(false);
     };
-
-    reader.readAsText(selectedFile);
+    reader.readAsText(selectedSchemeImportFile);
   };
 
+  const handleDownloadClosureSample = () => {
+    const sampleData: any[][] = [
+      ['SchemeID', 'MarkAsClosed (TRUE/FALSE)', 'ClosureDate (YYYY-MM-DD, Optional if MarkAsClosed=TRUE)'],
+      ['scheme-id-123', 'TRUE', '2024-07-20'],
+      ['scheme-id-456', 'TRUE', ''],
+      ['scheme-id-789', 'FALSE', ''],
+    ];
+    const csvString = arrayToCSV(sampleData);
+    downloadCSV(csvString, 'sample_scheme_closure_import.csv');
+  };
+
+  const handleClosureImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedClosureImportFile(event.target.files[0]);
+      setClosureImportMessages([]);
+    } else {
+      setSelectedClosureImportFile(null);
+    }
+  };
+
+  const handleImportSchemeClosures = async () => {
+    if (!selectedClosureImportFile) {
+      toast({ title: 'No File', description: 'Please select a CSV file to import scheme closures.', variant: 'destructive' });
+      return;
+    }
+    setIsImportingClosures(true);
+    setClosureImportMessages([{ type: 'info', content: `Starting closure import from ${selectedClosureImportFile.name}...` }]);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      if (!text) {
+        setClosureImportMessages(prev => [...prev, { type: 'error', content: 'File is empty or could not be read.' }]);
+        setIsImportingClosures(false);
+        return;
+      }
+
+      const { headers, rows } = parseCSV(text);
+      const expectedHeaders = ['SchemeID', 'MarkAsClosed (TRUE/FALSE)', 'ClosureDate (YYYY-MM-DD, Optional if MarkAsClosed=TRUE)'];
+      const lcExpectedHeaders = expectedHeaders.map(h => h.toLowerCase());
+      const lcHeaders = headers.map(h => h.toLowerCase().trim());
+
+
+      if (!lcExpectedHeaders.every((h, i) => lcHeaders[i] === h)) {
+         setClosureImportMessages(prev => [...prev, { type: 'error', content: `CSV headers do not match. Expected: ${expectedHeaders.join(', ')}` }]);
+         setIsImportingClosures(false);
+         return;
+      }
+
+      const dataToImport = rows.map(row => ({
+        SchemeID: row[0]?.trim(),
+        MarkAsClosed: row[1]?.trim().toUpperCase() as 'TRUE' | 'FALSE' | '',
+        ClosureDate: row[2]?.trim(),
+      }));
+      
+      const result: ImportResult = importSchemeClosureUpdates(dataToImport);
+      
+      const newMessages: ImportMessage[] = result.messages.map(msg => ({ type: msg.includes('Error') || msg.includes('Missing') || msg.includes('not found') ? 'error' : 'info', content: msg }));
+      newMessages.unshift({ type: 'info', content: `Closure import finished. ${result.successCount} schemes updated. ${result.errorCount} rows had errors/were skipped.` });
+      setClosureImportMessages(prev => [...prev.slice(0,1), ...newMessages]);
+      toast({ title: 'Closure Import Complete', description: `${result.successCount} schemes updated. ${result.errorCount} errors.`});
+      setIsImportingClosures(false);
+      setSelectedClosureImportFile(null); 
+    };
+    reader.onerror = () => {
+      setClosureImportMessages(prev => [...prev, { type: 'error', content: 'Error reading the file.'}]);
+      setIsImportingClosures(false);
+    };
+    reader.readAsText(selectedClosureImportFile);
+  };
+
+  const anyOperationInProgress = isExportingCustomers || isExportingTransactions || isExportingComprehensive || isExportingSchemeStatus || isImportingSchemes || isImportingClosures;
 
   return (
     <div className="flex flex-col gap-8">
@@ -273,87 +391,143 @@ export default function DataManagementPage() {
           </CardTitle>
           <CardDescription>Download your application data in CSV format.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
           <Button 
             onClick={handleExportCustomers} 
-            disabled={isExportingCustomers || isImporting || isExportingTransactions || isExportingComprehensive}
+            disabled={anyOperationInProgress}
           >
             {isExportingCustomers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Customer List (CSV)
+            Export Customer List
           </Button>
           <Button 
             onClick={handleExportTransactions} 
-            disabled={isExportingTransactions || isImporting || isExportingCustomers || isExportingComprehensive}
+            disabled={anyOperationInProgress}
           >
             {isExportingTransactions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Paid Transactions (CSV)
+            Export Paid Transactions
           </Button>
           <Button 
             onClick={handleExportComprehensiveReport} 
-            disabled={isExportingComprehensive || isImporting || isExportingCustomers || isExportingTransactions}
-            className="sm:col-span-2 lg:col-span-1"
+            disabled={anyOperationInProgress}
+            className="sm:col-span-1"
           >
             {isExportingComprehensive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-            Export Comprehensive Report (CSV)
+            Export Comprehensive Report
           </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2">
-            <FileUp className="h-5 w-5 text-primary" />
-            Import Schemes
-          </CardTitle>
-          <CardDescription>Import multiple schemes at once using a CSV file. Download the sample file for the correct format.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div>
-            <Button 
-              variant="outline" 
-              onClick={handleDownloadSample} 
-              disabled={isImporting || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
-            >
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Download Sample Import File (CSV)
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="csv-import" className="text-sm font-medium">Upload CSV File</label>
-            <Input
-              id="csv-import"
-              type="file"
-              accept=".csv"
-              onChange={handleFileChange}
-              disabled={isImporting || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
-              className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-            />
-          </div>
           <Button 
-            onClick={handleImportSchemes} 
-            disabled={isImporting || !selectedFile || isExportingCustomers || isExportingTransactions || isExportingComprehensive}
+            onClick={handleExportSchemeStatusReport} 
+            disabled={anyOperationInProgress}
+            className="sm:col-span-1"
           >
-            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
-            Import Schemes from CSV
+            {isExportingSchemeStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
+            Export Scheme Status Report
           </Button>
-
-          {importMessages.length > 0 && (
-            <div className="mt-4 space-y-2 p-4 border rounded-md max-h-60 overflow-y-auto bg-muted/50">
-              <h4 className="font-semibold text-sm">Import Log:</h4>
-              {importMessages.map((msg, index) => (
-                <div key={index} className={`text-xs flex items-start gap-2 ${
-                  msg.type === 'success' ? 'text-green-700 dark:text-green-400' :
-                  msg.type === 'error' ? 'text-destructive' :
-                  'text-muted-foreground'
-                }`}>
-                  {msg.type === 'error' && <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
-                  <span>{msg.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2">
+              <FileUp className="h-5 w-5 text-primary" />
+              Import New Schemes
+            </CardTitle>
+            <CardDescription>Import multiple new schemes using a CSV file.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadNewSchemeSample} 
+                disabled={anyOperationInProgress}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Download New Schemes Sample (CSV)
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="new-scheme-import" className="text-sm font-medium">Upload CSV File</label>
+              <Input
+                id="new-scheme-import"
+                type="file"
+                accept=".csv"
+                onChange={handleSchemeImportFileChange}
+                disabled={anyOperationInProgress}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              />
+            </div>
+            <Button 
+              onClick={handleImportNewSchemes} 
+              disabled={anyOperationInProgress || !selectedSchemeImportFile}
+            >
+              {isImportingSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+              Import New Schemes
+            </Button>
+            {schemeImportMessages.length > 0 && (
+              <div className="mt-4 space-y-2 p-3 border rounded-md max-h-48 overflow-y-auto bg-muted/50 text-xs">
+                <h4 className="font-semibold">Import Log:</h4>
+                {schemeImportMessages.map((msg, index) => (
+                  <div key={index} className={`flex items-start gap-1.5 ${ msg.type === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {msg.type === 'error' && <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
+                    <span>{msg.content}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2">
+              <FileUp className="h-5 w-5 text-primary" />
+              Import Scheme Closure Updates
+            </CardTitle>
+            <CardDescription>Update existing schemes to 'Completed' status using a CSV file.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadClosureSample} 
+                disabled={anyOperationInProgress}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Download Closure Sample (CSV)
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="closure-import" className="text-sm font-medium">Upload CSV File</label>
+              <Input
+                id="closure-import"
+                type="file"
+                accept=".csv"
+                onChange={handleClosureImportFileChange}
+                disabled={anyOperationInProgress}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+              />
+            </div>
+            <Button 
+              onClick={handleImportSchemeClosures} 
+              disabled={anyOperationInProgress || !selectedClosureImportFile}
+            >
+              {isImportingClosures ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+              Import Scheme Closures
+            </Button>
+             {closureImportMessages.length > 0 && (
+              <div className="mt-4 space-y-2 p-3 border rounded-md max-h-48 overflow-y-auto bg-muted/50 text-xs">
+                <h4 className="font-semibold">Import Log:</h4>
+                {closureImportMessages.map((msg, index) => (
+                  <div key={index} className={`flex items-start gap-1.5 ${ msg.type === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {msg.type === 'error' && <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
+                    <span>{msg.content}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
