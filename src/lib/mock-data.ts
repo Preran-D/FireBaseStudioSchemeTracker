@@ -7,12 +7,12 @@ const createScheme = (
   customerName: string, 
   startDate: Date, 
   monthlyPaymentAmount: number,
-  customerGroupName?: string // Added customerGroupName
+  customerGroupName?: string 
 ): Scheme => {
   const baseScheme: Omit<Scheme, 'payments' | 'status'> = {
     id: generateId(),
     customerName,
-    customerGroupName, // Assign group name
+    customerGroupName, 
     startDate: formatISO(startDate),
     monthlyPaymentAmount,
     durationMonths: 12,
@@ -20,7 +20,6 @@ const createScheme = (
   
   let payments = generatePaymentsForScheme(baseScheme);
   
-  // Simulate some payments for mock data
   if (customerName.includes("Alice Wonderland") && monthlyPaymentAmount === 1000) { 
     payments = payments.map((p, index) => {
       if (index < 3) { 
@@ -35,15 +34,14 @@ const createScheme = (
       }
       return p;
     });
-  } else if (customerName.includes("Diana Prince")) { // Overdue Payer
+  } else if (customerName.includes("Diana Prince")) { 
      payments = payments.map((p, index) => {
       if (index === 0) { 
         return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const, modeOfPayment: ['Card'] as PaymentMode[] };
       }
-      // Month 2 (index 1) remains unpaid for overdue testing
       return p;
     });
-  } else if (customerName.includes("Edward Scissorhands")) { // Completed Scheme
+  } else if (customerName.includes("Edward Scissorhands")) { 
     payments = payments.map(p => ({ ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const, modeOfPayment: ['Cash'] as PaymentMode[] }));
   }
 
@@ -65,7 +63,7 @@ const createScheme = (
 export let MOCK_SCHEMES: Scheme[] = [
   createScheme('Alice Wonderland', subMonths(new Date(), 4), 1000, "Smith Family"),
   createScheme('Active Customer', subMonths(new Date(), 4), 1000, "Smith Family"),
-  createScheme('Active Customer', subMonths(new Date(), 1), 500, "Smith Family"), // Second scheme for Active Customer
+  createScheme('Active Customer', subMonths(new Date(), 1), 500, "Smith Family"), 
   createScheme('Bob The Builder', subMonths(new Date(), 2), 800, "Smith Family"),
   createScheme('Charlie Brown', addMonths(new Date(), 1), 1500, "Office Buddies"),
   createScheme('Diana Prince', subMonths(new Date(), 5), 500, "Smith Family"), 
@@ -76,7 +74,6 @@ export let MOCK_SCHEMES: Scheme[] = [
   createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family"), 
 ];
 
-// Ensure "Almost Done" (Fiona Gallagher) has most payments made
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
 if (fionaSchemeIdx !== -1) {
   MOCK_SCHEMES[fionaSchemeIdx].payments = MOCK_SCHEMES[fionaSchemeIdx].payments.map((p, index) => {
@@ -294,7 +291,7 @@ export const recordNextDuePaymentsForCustomer = (
 
 export const recordNextDuePaymentsForCustomerGroup = (
   groupName: string,
-  paymentDetails: { paymentDate: string; modeOfPayment: PaymentMode[] }
+  paymentDetails: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord?: string[] }
 ): {
   totalRecordedAmount: number;
   paymentsRecordedCount: number;
@@ -309,6 +306,11 @@ export const recordNextDuePaymentsForCustomerGroup = (
     .filter(({ scheme }) => scheme.customerGroupName === groupName && (scheme.status === 'Active' || scheme.status === 'Overdue'));
 
   schemesInGroupIndices.forEach(({ scheme, index: schemeGlobalIndex }) => {
+      // If schemeIdsToRecord is provided, only process if current scheme.id is in the list
+      if (paymentDetails.schemeIdsToRecord && paymentDetails.schemeIdsToRecord.length > 0 && !paymentDetails.schemeIdsToRecord.includes(scheme.id)) {
+        return; // Skip this scheme if it's not selected for recording
+      }
+
       let nextRecordablePaymentIndex = -1;
       for (let i = 0; i < scheme.payments.length; i++) {
         const currentPayment = scheme.payments[i];
@@ -434,7 +436,6 @@ export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Sche
 
   MOCK_SCHEMES[schemeIndex].customerGroupName = newGroupName ? newGroupName.trim() : undefined;
   
-  // Recalculate status and totals as group change might affect some logic, though not directly for scheme status
   const scheme = MOCK_SCHEMES[schemeIndex];
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   scheme.status = getSchemeStatus(scheme);
@@ -443,4 +444,3 @@ export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Sche
 
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
 };
-

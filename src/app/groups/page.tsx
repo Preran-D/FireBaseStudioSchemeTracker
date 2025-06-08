@@ -43,7 +43,7 @@ export default function GroupsPage() {
     loadGroups();
   }, [loadGroups]);
 
-  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[] }) => {
+  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[]; schemeIdsToRecord: string[] }) => {
     if (!selectedGroupForBatch) return;
     setIsBatchRecording(true);
     const result = recordNextDuePaymentsForCustomerGroup(selectedGroupForBatch.groupName, details);

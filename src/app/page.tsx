@@ -5,10 +5,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2, Users2 } from 'lucide-react'; // Added Users2 for group icon
+import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2, Users2 } from 'lucide-react'; 
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
-import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; // Changed to recordNextDuePaymentsForCustomerGroup
+import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; 
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
@@ -19,8 +19,8 @@ import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymen
 
 interface GroupWithRecordablePayments {
   groupName: string;
-  schemes: Scheme[]; // All schemes belonging to this group
-  recordableSchemeCount: number; // Number of schemes in this group that have a next payment due
+  schemes: Scheme[]; 
+  recordableSchemeCount: number; 
 }
 
 export default function DashboardPage() {
@@ -135,7 +135,6 @@ export default function DashboardPage() {
     schemes.forEach(scheme => {
       if (scheme.customerGroupName && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         let hasRecordablePaymentForThisScheme = false;
-        // Check if *this specific scheme* has a next recordable payment
         for (let i = 0; i < scheme.payments.length; i++) {
           const payment = scheme.payments[i];
           if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -153,25 +152,26 @@ export default function DashboardPage() {
           }
         }
 
+        // Add scheme to group for dialog context, even if not immediately recordable by count
+        const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], recordableSchemeCount: 0 };
+        groupEntry.schemes.push(scheme); 
+
         if (hasRecordablePaymentForThisScheme) {
-          const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], recordableSchemeCount: 0 };
-          groupEntry.schemes.push(scheme); // Add the scheme to the group's list of schemes
-          groupEntry.recordableSchemeCount += 1; // Increment count of schemes in this group that have a payment due
-          groupsMap.set(scheme.customerGroupName, groupEntry);
+          groupEntry.recordableSchemeCount += 1; 
         }
+        groupsMap.set(scheme.customerGroupName, groupEntry);
       }
     });
     
     return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
       groupName,
       ...data,
-    }));
+    })).filter(g => g.recordableSchemeCount > 0); // Only show groups with >0 recordable for button
   }, [schemes]);
 
-  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[] }) => {
+  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[]; schemeIdsToRecord: string[] }) => {
     if (!selectedGroupForBatch) return;
     setIsBatchRecording(true);
-    // Call the new function for group batch payment
     const result = recordNextDuePaymentsForCustomerGroup(selectedGroupForBatch.groupName, details);
     
     toast({
@@ -247,7 +247,7 @@ export default function DashboardPage() {
        <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
-            <Users2 className="h-5 w-5 text-primary" /> {/* Changed icon */}
+            <Users2 className="h-5 w-5 text-primary" /> 
             Batch Payment Actions (By Customer Group)
           </CardTitle>
           <CardDescription>Quickly record next due payments for all eligible schemes within a customer group.</CardDescription>
@@ -283,7 +283,7 @@ export default function DashboardPage() {
       {selectedGroupForBatch && (
         <BatchRecordPaymentDialog
           groupDisplayName={selectedGroupForBatch.groupName}
-          schemesInGroup={selectedGroupForBatch.schemes} // Pass all schemes of the group
+          schemesInGroup={selectedGroupForBatch.schemes} 
           isOpen={!!selectedGroupForBatch}
           onClose={() => setSelectedGroupForBatch(null)}
           onSubmit={handleBatchRecordSubmit}
