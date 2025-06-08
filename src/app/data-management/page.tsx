@@ -64,14 +64,14 @@ export default function DataManagementPage() {
       schemes.forEach(scheme => {
         scheme.payments.forEach(payment => {
           const paymentStatus = getPaymentStatus(payment, scheme.startDate);
-          if (paymentStatus === 'Paid' && payment.paymentDate && payment.amountPaid) {
+          if (paymentStatus === 'Paid' && payment.paymentDate && payment.amountPaid !== undefined) { // Ensure amountPaid is defined
             paidTransactions.push([
               scheme.customerName,
               scheme.id,
               scheme.customerGroupName || 'N/A',
               payment.monthNumber,
               formatDate(payment.paymentDate),
-              formatCurrency(payment.amountPaid, ''), // amount only
+              payment.amountPaid, // Directly use the number for "amount only"
               payment.modeOfPayment?.join(' | ') || 'N/A'
             ]);
           }
