@@ -277,26 +277,9 @@ export default function SchemeDetailsPage() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full px-3 py-1 h-auto text-xs"
-                onClick={() => {
-                  setActiveAccordionItem(scheme.id);
-                  setTimeout(() => {
-                    const element = document.getElementById(scheme.id + "-accordion");
-                    if (element) {
-                      element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                  }, 100);
-                }}
-              >
-                ID: {scheme.id.toUpperCase()}
-              </Button>
-            </div>
+            <CardTitle className="font-headline text-2xl mb-1">{scheme.customerName}</CardTitle>
             <CardDescription>
+              ID: {scheme.id.toUpperCase()}<br/>
               Phone: {scheme.customerPhone || 'N/A'}<br/>
               Address: {scheme.customerAddress || 'N/A'}<br/>
               {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
@@ -660,4 +643,3 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
-
