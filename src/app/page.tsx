@@ -22,34 +22,42 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const loadedSchemes = getMockSchemes().map(s => {
+    const loadedSchemesInitial = getMockSchemes().map(s => {
       const totals = calculateSchemeTotals(s);
       const status = getSchemeStatus(s);
-      // Ensure payment statuses are also correctly initialized
       const paymentsWithStatus = s.payments.map(p => ({ ...p, status: getPaymentStatus(p, s.startDate) }));
       return { ...s, ...totals, status, payments: paymentsWithStatus };
     });
-    setSchemes(loadedSchemes);
+    setSchemes(loadedSchemesInitial);
 
-    // Mock notifications
-    const upcomingPayments = loadedSchemes.flatMap(s => s.payments)
-      .filter(p => getPaymentStatus(p, s.startDate) === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && differenceInDays(parseISO(p.dueDate), new Date()) >= 0);
+    const allPaymentsWithContext = loadedSchemesInitial.flatMap(scheme =>
+      scheme.payments.map(payment => ({
+        ...payment,
+        schemeStartDate: scheme.startDate,
+        customerName: scheme.customerName,
+      }))
+    );
+
+    const upcomingDueSoon = allPaymentsWithContext
+      .filter(p => 
+        getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && 
+        differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && 
+        differenceInDays(parseISO(p.dueDate), new Date()) >= 0
+      );
     
-    if (upcomingPayments.length > 0) {
-      const scheme = loadedSchemes.find(s => s.id === upcomingPayments[0].schemeId);
+    if (upcomingDueSoon.length > 0) {
       toast({
         title: "Upcoming Payment Reminder",
-        description: `Payment for ${scheme?.customerName} is due on ${formatDate(upcomingPayments[0].dueDate)}. Amount: ${formatCurrency(upcomingPayments[0].amountExpected)}`,
+        description: `Payment for ${upcomingDueSoon[0].customerName} is due on ${formatDate(upcomingDueSoon[0].dueDate)}. Amount: ${formatCurrency(upcomingDueSoon[0].amountExpected)}`,
         variant: "default",
       });
     }
     
-    const overduePayments = loadedSchemes.flatMap(s => s.payments).filter(p => getPaymentStatus(p, s.startDate) === 'Overdue');
-    if (overduePayments.length > 0) {
-       const scheme = loadedSchemes.find(s => s.id === overduePayments[0].schemeId);
+    const allOverdueGlobal = allPaymentsWithContext.filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue');
+    if (allOverdueGlobal.length > 0) {
       toast({
         title: "Overdue Payment Alert",
-        description: `Payment for ${scheme?.customerName} was due on ${formatDate(overduePayments[0].dueDate)}. Amount: ${formatCurrency(overduePayments[0].amountExpected)}`,
+        description: `Payment for ${allOverdueGlobal[0].customerName} was due on ${formatDate(allOverdueGlobal[0].dueDate)}. Amount: ${formatCurrency(allOverdueGlobal[0].amountExpected)}`,
         variant: "destructive",
       });
     }
@@ -173,7 +181,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 20, left:10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value, 'INR').replace('₹', '')} />
+                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
                     <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={80} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent />} />
