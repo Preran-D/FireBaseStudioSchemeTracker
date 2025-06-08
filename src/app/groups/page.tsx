@@ -4,8 +4,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Users2, Edit, Trash2, DollarSign, ListChecks, Users, Loader2 } from 'lucide-react';
-import type { GroupDetail, Scheme } from '@/types/scheme';
+import { Users2, Edit, Trash2, DollarSign, Users, Loader2 } from 'lucide-react';
+import type { GroupDetail } from '@/types/scheme';
 import { getGroupDetails, updateMockGroupName, deleteMockGroup, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -213,4 +213,3 @@ export default function GroupsPage() {
     </div>
   );
 }
-
