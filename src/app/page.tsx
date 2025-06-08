@@ -69,8 +69,8 @@ export default function DashboardPage() {
     const totalCollected = activeSchemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
     const totalExpectedFromActive = activeSchemes.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected,0) ,0);
     const totalOverdueAmount = schemes
-      .flatMap(s => s.payments)
-      .filter(p => getPaymentStatus(p, s.startDate) === 'Overdue')
+      .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
+      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
       .reduce((sum, p) => sum + p.amountExpected, 0);
       
     return {
