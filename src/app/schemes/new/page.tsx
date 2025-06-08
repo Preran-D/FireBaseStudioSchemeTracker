@@ -17,7 +17,7 @@ import { formatISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 // This type should align with the form values, including customerGroupName
-type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths' | 'customerGroupName'> & {
+type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & { // Removed customerGroupName from Omit
   customerGroupName?: string;
   monthlyPaymentAmount: number; // Ensure this is number
 };
@@ -147,7 +147,7 @@ export default function NewSchemePage() {
               <AlertDialogDescription>
                 A customer named '{formDataForConfirmation.customerName}' already exists. 
                 Do you want to create a new scheme for this customer?
-                {formDataForConfirmation.customerGroupName && ` (Group: ${formDataForConfirmation.customerGroupName})`}
+                {formDataForConfirmation.customerGroupName && ` This new scheme will be part of group: ${formDataForConfirmation.customerGroupName}.`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
