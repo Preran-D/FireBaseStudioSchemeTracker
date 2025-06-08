@@ -18,7 +18,7 @@ import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart, LineChart } from "recharts"
 import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -96,9 +96,11 @@ export default function SchemeDetailsPage() {
     const updatedSchemeFromMock = updateMockSchemePayment(selectedPaymentForRecord.schemeIdToUpdate, selectedPaymentForRecord.id, data);
     
     if (updatedSchemeFromMock) {
+      // Update the scheme in the allSchemesForThisCustomer list
       setAllSchemesForThisCustomer(prevAll => 
         prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s)
       );
+      // If the updated scheme is the main scheme being viewed, update it as well
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
@@ -192,7 +194,8 @@ export default function SchemeDetailsPage() {
     };
   }, [allSchemesForThisCustomer]);
 
-  const paymentChartData = useMemo(() => {
+  // These charts are for the MAIN scheme being viewed (from URL)
+  const paymentChartDataForMainScheme = useMemo(() => {
     if (!scheme) return [];
     return scheme.payments.map(p => ({
       month: `M${p.monthNumber}`,
@@ -201,7 +204,7 @@ export default function SchemeDetailsPage() {
     }));
   }, [scheme]);
 
-  const cumulativePaymentData = useMemo(() => {
+  const cumulativePaymentDataForMainScheme = useMemo(() => {
     if (!scheme) return [];
     let cumulativePaid = 0;
     let cumulativeExpected = 0;
@@ -250,7 +253,7 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Currently Viewing Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
+              Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
               {scheme.status === 'Completed' && scheme.closureDate && (<><br/>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
@@ -300,7 +303,7 @@ export default function SchemeDetailsPage() {
                   <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
                     <div className="flex justify-between items-center w-full">
                       <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">Scheme ID: {s.id.substring(0,8)}...</span>
+                        <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
                         <SchemeStatusBadge status={s.status} />
                         {s.id === scheme.id && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                       </div>
@@ -320,7 +323,7 @@ export default function SchemeDetailsPage() {
                         </div>
                         ) : (
                         <div className="overflow-x-auto">
-                            <p className="text-sm font-semibold mb-2">Payment Schedule</p>
+                            <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
                             <Table>
                             <TableHeader>
                                 <TableRow>
@@ -356,7 +359,7 @@ export default function SchemeDetailsPage() {
                                             <DialogContent>
                                             <DialogHeader>
                                                 <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
-                                                <CardDescription>Scheme ID: {s.id.substring(0,8)}...</CardDescription>
+                                                <CardDescription>Scheme ID: {s.id.substring(0,8)}... (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
                                             </DialogHeader>
                                             <RecordPaymentForm
                                                 payment={selectedPaymentForRecord}
@@ -367,7 +370,7 @@ export default function SchemeDetailsPage() {
                                         )}
                                         </Dialog>
                                     ) : (
-                                        (payment.status === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
+                                        (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
                                     )}
                                     </TableCell>
                                 </TableRow>
@@ -387,8 +390,8 @@ export default function SchemeDetailsPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><ListFilter className="h-5 w-5 text-primary" />Overall Customer Summary</CardTitle>
-          <CardDescription>Aggregate financial overview for {scheme.customerName} across all enrolled schemes.</CardDescription>
+            <CardTitle className="font-headline flex items-center gap-2"><ListFilter className="h-5 w-5 text-primary" />Overall Customer Summary for {scheme.customerName}</CardTitle>
+            <CardDescription>Aggregate financial overview across all enrolled schemes.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div className="p-3 border rounded-md bg-muted/30"><strong>Total Schemes:</strong> {customerSummaryStats.totalSchemesCount}</div>
@@ -401,8 +404,7 @@ export default function SchemeDetailsPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Current Scheme</CardTitle>
-            <CardDescription>Detailed charts for the scheme: {scheme.id.substring(0,8)}... </CardDescription>
+            <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Current Scheme (ID: {scheme.id.substring(0,8)}...)</CardTitle>
         </CardHeader>
         <CardContent>
              <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -429,7 +431,7 @@ export default function SchemeDetailsPage() {
                     <h3 className="text-sm font-semibold mb-1">Monthly Payments</h3>
                     <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
                         <ResponsiveContainer>
-                        <RechartsBarChart data={paymentChartData}>
+                        <RechartsBarChart data={paymentChartDataForMainScheme}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="month" fontSize={10} />
                             <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
@@ -445,7 +447,7 @@ export default function SchemeDetailsPage() {
                     <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
                     <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
                         <ResponsiveContainer>
-                        <LineChart data={cumulativePaymentData}>
+                        <LineChart data={cumulativePaymentDataForMainScheme}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="month" fontSize={10} />
                             <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
@@ -592,3 +594,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+
