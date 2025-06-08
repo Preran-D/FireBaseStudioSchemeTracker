@@ -28,16 +28,17 @@ export default function AppLayout({ children }: PropsWithChildren) {
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <Link href={item.href} legacyBehavior passHref>
-                  <SidebarMenuButton 
-                    asChild 
-                    tooltip={{ children: item.label, className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }} 
+                <Link href={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={{ children: item.label, className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }}
                     className="justify-start"
                   >
-                    <a>
+                    {/* Wrap icon and label in a single span for Slot */}
+                    <span>
                       <item.icon className="size-4" />
                       <span>{item.label}</span>
-                    </a>
+                    </span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -47,8 +48,8 @@ export default function AppLayout({ children }: PropsWithChildren) {
         <SidebarFooter className="p-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                tooltip={{ children: 'Settings', className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }} 
+              <SidebarMenuButton
+                tooltip={{ children: 'Settings', className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }}
                 className="justify-start"
               >
                 <Settings className="size-4" />
@@ -56,8 +57,8 @@ export default function AppLayout({ children }: PropsWithChildren) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                tooltip={{ children: 'Log Out', className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }} 
+              <SidebarMenuButton
+                tooltip={{ children: 'Log Out', className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }}
                 className="justify-start"
               >
                 <LogOut className="size-4" />
