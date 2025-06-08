@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle, PieChart, Eye } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes } from '@/lib/mock-data';
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
@@ -19,8 +20,11 @@ import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, LineChart, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
 import Link from 'next/link';
-import { isPast, parseISO } from 'date-fns';
+import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
 
 
 export default function SchemeDetailsPage() {
@@ -33,17 +37,18 @@ export default function SchemeDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<Payment | null>(null);
-  const [isClosingScheme, setIsClosingScheme] = useState(false);
+  
+  const [isClosingSchemeProcess, setIsClosingSchemeProcess] = useState(false);
+  const [isCloseSchemeAlertOpen, setIsCloseSchemeAlertOpen] = useState(false);
+  const [closureDate, setClosureDate] = useState<Date | undefined>(new Date());
 
 
   useEffect(() => {
     if (schemeId) {
       const fetchedScheme = getMockSchemeById(schemeId);
       if (fetchedScheme) {
-        // Ensure correct status calculation based on manual closure possibility
         const totals = calculateSchemeTotals(fetchedScheme);
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
-        // The status from getMockSchemeById should already respect manual 'Completed'
         const status = getSchemeStatus(fetchedScheme); 
         setScheme({ ...fetchedScheme, ...totals, status });
       }
@@ -81,26 +86,30 @@ export default function SchemeDetailsPage() {
     setIsRecordingPayment(false);
   };
   
-  const handleCloseScheme = () => {
-    if(!scheme || scheme.status === 'Completed') return;
-    setIsClosingScheme(true);
-    const closedSchemeResult = closeMockScheme(scheme.id);
+  const handleOpenCloseSchemeDialog = () => {
+    if (!scheme || scheme.status === 'Completed') return;
+    setClosureDate(scheme.closureDate ? parseISO(scheme.closureDate) : startOfDay(new Date()));
+    setIsCloseSchemeAlertOpen(true);
+  };
+
+  const handleConfirmCloseScheme = () => {
+    if(!scheme || !closureDate) return;
+    setIsClosingSchemeProcess(true);
+    const closedSchemeResult = closeMockScheme(scheme.id, formatISO(closureDate));
     if(closedSchemeResult) {
-      // Fetch the latest version of the scheme after closing
       const refreshedScheme = getMockSchemeById(scheme.id);
       if (refreshedScheme) {
         setScheme(refreshedScheme);
          toast({ title: 'Scheme Closed', description: `${refreshedScheme.customerName}'s scheme has been marked as completed on ${formatDate(refreshedScheme.closureDate)}. All pending payments marked as paid.` });
       } else {
-        // Fallback if somehow scheme not found after closing (should not happen with mock data)
          toast({ title: 'Scheme Closed', description: `Scheme ${scheme.id} marked as completed.` });
-         // Manually update local state as a fallback
-         setScheme(prev => prev ? {...prev, status: 'Completed', closureDate: new Date().toISOString()} : null);
+         setScheme(prev => prev ? {...prev, status: 'Completed', closureDate: formatISO(closureDate)} : null);
       }
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
     }
-    setIsClosingScheme(false);
+    setIsCloseSchemeAlertOpen(false);
+    setIsClosingSchemeProcess(false);
   }
 
   const paymentChartData = useMemo(() => {
@@ -138,7 +147,6 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
-    // Check if all previous payments are paid
     for (let i = 0; i < payment.monthNumber - 1; i++) {
       if (currentScheme.payments[i].status !== 'Paid') {
         return false;
@@ -185,8 +193,8 @@ export default function SchemeDetailsPage() {
           <div className="flex items-center gap-2 mt-2 sm:mt-0">
             <SchemeStatusBadge status={scheme.status} />
             {scheme.status !== 'Completed' && (
-              <Button onClick={handleCloseScheme} disabled={isClosingScheme} size="sm">
-                {isClosingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
+              <Button onClick={handleOpenCloseSchemeDialog} disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen} size="sm">
+                {isClosingSchemeProcess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
                 Close Scheme
               </Button>
             )}
@@ -430,6 +438,50 @@ export default function SchemeDetailsPage() {
              <p className="text-muted-foreground">No other schemes found for this customer.</p>
            </CardContent>
          </Card>
+      )}
+
+      {isCloseSchemeAlertOpen && scheme && (
+        <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={setIsCloseSchemeAlertOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Scheme Closure for {scheme.customerName}</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will mark the scheme as 'Completed'. All pending payments will be marked as fully paid as of the selected closure date. This action cannot be easily undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="grid gap-2 py-2">
+                <Label htmlFor="closure-date">Closure Date</Label>
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        id="closure-date"
+                        variant={'outline'}
+                        className={cn('w-full justify-start text-left font-normal', !closureDate && 'text-muted-foreground')}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {closureDate ? formatDate(closureDate.toISOString()) : <span>Pick a date</span>}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                    <Calendar
+                        mode="single"
+                        selected={closureDate}
+                        onSelect={setClosureDate}
+                        disabled={(date) => date > new Date() || date < parseISO(scheme.startDate) }
+                        initialFocus
+                    />
+                    </PopoverContent>
+                </Popover>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setIsCloseSchemeAlertOpen(false)} disabled={isClosingSchemeProcess}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmCloseScheme} disabled={isClosingSchemeProcess || !closureDate}>
+                {isClosingSchemeProcess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm Closure
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
