@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'; // Correct import for App Router
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SchemeForm } from '@/components/forms/SchemeForm';
 import type { Scheme } from '@/types/scheme';
-import { addMockScheme, updateMockSchemePayment } from '@/lib/mock-data';
+import { addMockScheme, updateMockSchemePayment, getMockSchemes } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -16,16 +16,22 @@ import { Loader2 } from 'lucide-react';
 import { formatISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
+type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'>;
+
 export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  
+  const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
   const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
   const [firstPaymentAmount, setFirstPaymentAmount] = useState<string>('');
 
-  const handleSubmit = (data: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'>) => {
-    setIsLoading(true); // For initial scheme creation
+  const [isCustomerExistsAlertOpen, setIsCustomerExistsAlertOpen] = useState(false);
+  const [formDataForConfirmation, setFormDataForConfirmation] = useState<NewSchemeFormData | null>(null);
+
+  const proceedWithSchemeCreation = (data: NewSchemeFormData) => {
+    setIsLoading(true); // For scheme creation process
     try {
       const newScheme = addMockScheme(data);
       setNewlyCreatedScheme(newScheme);
@@ -36,16 +42,40 @@ export default function NewSchemePage() {
         title: 'Scheme Created',
         description: `Scheme for ${newScheme.customerName} created. You can now record the first payment.`,
       });
-      setIsAlertOpen(true);
-      setIsLoading(false); // Scheme creation done, form is no longer loading
+      setIsFirstPaymentAlertOpen(true);
+      setIsLoading(false); // Scheme creation done
     } catch (error) {
       toast({
-        title: 'Error',
+        title: 'Error Creating Scheme',
         description: 'Failed to create scheme. Please try again.',
         variant: 'destructive',
       });
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = (data: NewSchemeFormData) => {
+    setIsLoading(true); // Initial loading for form submission/check
+    const allSchemes = getMockSchemes();
+    const customerExists = allSchemes.some(
+      (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
+    );
+
+    if (customerExists) {
+      setFormDataForConfirmation(data);
+      setIsCustomerExistsAlertOpen(true);
+      setIsLoading(false); // Stop form loading, wait for dialog
+    } else {
+      proceedWithSchemeCreation(data);
+    }
+  };
+
+  const handleCustomerExistsConfirmation = () => {
+    if (formDataForConfirmation) {
+      proceedWithSchemeCreation(formDataForConfirmation);
+    }
+    setIsCustomerExistsAlertOpen(false);
+    setFormDataForConfirmation(null);
   };
 
   const handleRecordFirstPayment = () => {
@@ -54,7 +84,7 @@ export default function NewSchemePage() {
     const amountToPay = parseFloat(firstPaymentAmount);
     if (isNaN(amountToPay) || amountToPay <= 0) {
         toast({ title: 'Invalid Amount', description: 'Please enter a valid positive amount for the payment.', variant: 'destructive'});
-        return; // Don't proceed if amount is invalid
+        return;
     }
     
     setIsLoading(true); // Indicate processing for payment recording
@@ -62,7 +92,7 @@ export default function NewSchemePage() {
     const firstPayment = newlyCreatedScheme.payments[0];
     const updatedScheme = updateMockSchemePayment(newlyCreatedScheme.id, firstPayment.id, {
       amountPaid: amountToPay,
-      paymentDate: formatISO(new Date()), // Record as today
+      paymentDate: formatISO(new Date()),
     });
 
     if (updatedScheme) {
@@ -70,14 +100,14 @@ export default function NewSchemePage() {
     } else {
       toast({ title: 'Payment Recording Failed', description: 'Could not record the first payment.', variant: 'destructive' });
     }
-    setIsAlertOpen(false);
+    setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
     setIsLoading(false); 
   };
 
   const handleSkipFirstPayment = () => {
     if (!newlyCreatedScheme) return;
-    setIsAlertOpen(false);
+    setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
     setIsLoading(false); 
   };
@@ -91,23 +121,45 @@ export default function NewSchemePage() {
             <CardDescription>Enter the details for the new customer scheme.</CardDescription>
           </CardHeader>
           <CardContent>
-            <SchemeForm onSubmit={handleSubmit} isLoading={isLoading} />
+            <SchemeForm onSubmit={handleSubmit} isLoading={isLoading && !isCustomerExistsAlertOpen && !isFirstPaymentAlertOpen} />
           </CardContent>
         </Card>
       </div>
 
+      {/* Customer Exists Confirmation Dialog */}
+      {formDataForConfirmation && (
+        <AlertDialog open={isCustomerExistsAlertOpen} onOpenChange={setIsCustomerExistsAlertOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Customer Exists</AlertDialogTitle>
+              <AlertDialogDescription>
+                A customer named '{formDataForConfirmation.customerName}' already exists. 
+                Do you want to create a new scheme for this customer?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setIsCustomerExistsAlertOpen(false);
+                setFormDataForConfirmation(null);
+              }}>Cancel / Change Name</AlertDialogCancel>
+              <AlertDialogAction onClick={handleCustomerExistsConfirmation}>
+                Yes, Create Scheme
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* First Payment Dialog */}
       {newlyCreatedScheme && newlyCreatedScheme.payments.length > 0 && (
         <AlertDialog 
-            open={isAlertOpen} 
+            open={isFirstPaymentAlertOpen} 
             onOpenChange={(open) => {
-                if (!open && newlyCreatedScheme) { // Dialog dismissed (e.g. Esc, click outside)
-                    // Only navigate if not already handled by button clicks
-                    // Check if still loading (which means a button action is in progress)
-                    if (!isLoading) {
+                if (!open && newlyCreatedScheme) {
+                    if (!isLoading) { // isLoading here refers to payment recording
                          handleSkipFirstPayment();
                     }
                 }
-                // setIsAlertOpen(open); // Not strictly needed if we always navigate
             }}
         >
           <AlertDialogContent>
@@ -130,8 +182,8 @@ export default function NewSchemePage() {
                 placeholder={`e.g., ${newlyCreatedScheme.payments[0].amountExpected}`}
                 disabled={isLoading}
               />
-              {parseFloat(firstPaymentAmount) > 0 && parseFloat(firstPaymentAmount) % 500 !== 0 && newlyCreatedScheme.payments[0].amountExpected % 500 !== 0 && (
-                 <p className="text-xs text-muted-foreground">Consider amounts in multiples of 500 for simpler tracking, if appropriate for this scheme.</p>
+              {parseFloat(firstPaymentAmount) > 0 && parseFloat(firstPaymentAmount) !== newlyCreatedScheme.payments[0].amountExpected && newlyCreatedScheme.monthlyPaymentAmount % 500 !== 0 && (
+                 <p className="text-xs text-muted-foreground">Consider amounts in multiples of 500 INR for simpler tracking, if appropriate for this scheme type.</p>
                )}
             </div>
             <AlertDialogFooter>
