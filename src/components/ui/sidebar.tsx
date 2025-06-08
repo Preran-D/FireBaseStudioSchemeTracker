@@ -4,14 +4,14 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft, X } from "lucide-react" // Added X for potential direct use if needed
+import { PanelLeft, X } from "lucide-react" 
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet" // Removed SheetHeader, SheetTitle imports
+import { Sheet, SheetContent } from "@/components/ui/sheet" 
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -188,7 +188,6 @@ const Sidebar = React.forwardRef<
     }
 
     if (isMobile) {
-      // Removed {...divProps} from <Sheet>
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile}>
           <SheetContent
@@ -201,9 +200,8 @@ const Sidebar = React.forwardRef<
               } as React.CSSProperties
             }
             side={side}
-            aria-label="Main Menu" // Added aria-label for accessibility
+            aria-label="Main Menu" 
           >
-            {/* <SheetTitle className="sr-only">Main Menu</SheetTitle> */} {/* Removed SheetTitle */}
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>
@@ -218,7 +216,7 @@ const Sidebar = React.forwardRef<
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
         data-side={side}
-        {...divProps} // Spread remaining divProps here for the desktop wrapper
+        {...divProps} 
       >
         <div
           className={cn(
@@ -239,7 +237,6 @@ const Sidebar = React.forwardRef<
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l"
-            // className prop for Sidebar is applied to the outer div above, not this inner fixed div
           )}
         >
           <div
