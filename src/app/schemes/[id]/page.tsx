@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle, PieChart, Eye } from 'lucide-react';
-import type { Scheme, Payment } from '@/types/scheme';
+import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
@@ -41,8 +41,10 @@ export default function SchemeDetailsPage() {
       const fetchedScheme = getMockSchemeById(schemeId);
       if (fetchedScheme) {
         const totals = calculateSchemeTotals(fetchedScheme);
-        const status = getSchemeStatus(fetchedScheme);
+        let status = getSchemeStatus(fetchedScheme);
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
+        // Re-check status after payment statuses are updated
+        status = getSchemeStatus(fetchedScheme);
         setScheme({ ...fetchedScheme, ...totals, status });
       }
       setIsLoading(false);
@@ -57,14 +59,15 @@ export default function SchemeDetailsPage() {
     );
   }, [scheme]);
 
-  const handleRecordPayment = (data: { paymentDate: string; amountPaid: number }) => {
+  const handleRecordPayment = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
     if (!selectedPaymentForRecord || !scheme) return;
     setIsRecordingPayment(true);
     const updatedScheme = updateMockSchemePayment(scheme.id, selectedPaymentForRecord.id, data);
     if (updatedScheme) {
       const totals = calculateSchemeTotals(updatedScheme);
-      const status = getSchemeStatus(updatedScheme);
+      let status = getSchemeStatus(updatedScheme);
       updatedScheme.payments.forEach(p => p.status = getPaymentStatus(p, updatedScheme.startDate));
+      status = getSchemeStatus(updatedScheme); // Re-check
       setScheme({ ...updatedScheme, ...totals, status });
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} recorded successfully.` });
     } else {
@@ -121,6 +124,20 @@ export default function SchemeDetailsPage() {
     cumulativeExpected: { label: "Cumulative Expected", color: "hsl(var(--chart-5))" },
   }
 
+  const isPaymentRecordable = (payment: Payment, scheme: Scheme): boolean => {
+    if (scheme.status === 'Completed' || payment.status === 'Paid') {
+      return false;
+    }
+    // Check if all previous payments are paid
+    for (let i = 0; i < payment.monthNumber - 1; i++) {
+      if (scheme.payments[i].status !== 'Paid') {
+        return false;
+      }
+    }
+    return true;
+  };
+
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -142,7 +159,7 @@ export default function SchemeDetailsPage() {
     );
   }
 
-  const canCloseScheme = scheme.status === 'Active' && scheme.payments.every(p => p.status === 'Paid' || isPast(parseISO(p.dueDate)));
+  const canCloseScheme = scheme.status !== 'Completed' && scheme.payments.every(p => p.status === 'Paid' || (p.status !== 'Paid' && isPast(parseISO(p.dueDate))));
 
 
   return (
@@ -155,7 +172,7 @@ export default function SchemeDetailsPage() {
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0">
             <SchemeStatusBadge status={scheme.status} />
-            {canCloseScheme && scheme.status !== 'Completed' && (
+            {canCloseScheme && (
               <Button onClick={handleCloseScheme} disabled={isClosingScheme} size="sm">
                 {isClosingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-2 h-4 w-4" />}
                 Close Scheme
@@ -200,6 +217,7 @@ export default function SchemeDetailsPage() {
                       <TableHead>Expected</TableHead>
                       <TableHead>Paid Amount</TableHead>
                       <TableHead>Payment Date</TableHead>
+                      <TableHead>Mode(s)</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -212,9 +230,10 @@ export default function SchemeDetailsPage() {
                         <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
                         <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
                         <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                        <TableCell>{payment.modeOfPayment?.join(', ') || '-'}</TableCell>
                         <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, scheme.startDate)} /></TableCell>
                         <TableCell className="text-right">
-                          {getPaymentStatus(payment, scheme.startDate) !== 'Paid' && scheme.status !== 'Completed' && (
+                          {isPaymentRecordable(payment, scheme) ? (
                             <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord(payment)}>
@@ -234,8 +253,9 @@ export default function SchemeDetailsPage() {
                                 </DialogContent>
                               )}
                             </Dialog>
+                          ) : (
+                            payment.status === 'Paid' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
                           )}
-                           {getPaymentStatus(payment, scheme.startDate) === 'Paid' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />}
                         </TableCell>
                       </TableRow>
                     ))}

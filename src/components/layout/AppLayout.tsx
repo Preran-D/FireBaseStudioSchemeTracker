@@ -3,14 +3,16 @@ import type { PropsWithChildren } from 'react';
 import { SideContextWrapper, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, CircleDollarSign } from 'lucide-react';
+import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, CircleDollarSign, Repeat } from 'lucide-react'; // Added Repeat for Transactions
 import { AppLogo } from '@/components/shared/AppLogo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { SheetHeader, SheetTitle } from '@/components/ui/sheet'; // For mobile sidebar accessibility
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
+  { href: '/transactions', label: 'Transactions', icon: Repeat }, // Added Transactions
   { href: '/reports', label: 'Reports', icon: FileText },
 ];
 
@@ -18,6 +20,9 @@ export default function AppLayout({ children }: PropsWithChildren) {
   return (
     <SideContextWrapper defaultOpen>
       <Sidebar collapsible="icon" variant="sidebar" className="border-r">
+        <SheetHeader className="sr-only">
+          <SheetTitle>Main Menu</SheetTitle>
+        </SheetHeader>
         <SidebarHeader className="p-4">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             <AppLogo className="size-7 text-primary group-data-[collapsible=icon]:size-6" />
@@ -34,8 +39,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
                     tooltip={{ children: item.label, className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border" }}
                     className="justify-start"
                   >
-                    {/* Wrap icon and label in a single span for Slot */}
-                    <span>
+                    <span className="flex items-center gap-2">
                       <item.icon className="size-4" />
                       <span>{item.label}</span>
                     </span>

@@ -1,4 +1,6 @@
+
 export type PaymentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Upcoming';
+export type PaymentMode = 'Card' | 'Cash' | 'UPI';
 
 export interface Payment {
   id: string;
@@ -9,6 +11,7 @@ export interface Payment {
   amountExpected: number;
   amountPaid?: number;
   status: PaymentStatus;
+  modeOfPayment?: PaymentMode[];
 }
 
 export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming';
