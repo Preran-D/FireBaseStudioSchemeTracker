@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SchemeForm } from '@/components/forms/SchemeForm';
 import type { Scheme } from '@/types/scheme';
@@ -13,18 +13,28 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { formatISO } from 'date-fns';
+import { formatISO, parseISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & {
+type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths' | 'closureDate'> & {
   customerGroupName?: string;
-  monthlyPaymentAmount: number;
+  monthlyPaymentAmount: number; // This is the type Zod expects after coercion
+};
+
+// This type matches the raw form state, where numbers might be strings from input fields
+type SchemeFormInitialValues = Omit<NewSchemeFormData, 'monthlyPaymentAmount' | 'startDate'> & {
+  monthlyPaymentAmount?: string | number; // Allow string for pre-fill
+  startDate?: Date;
+  groupOption?: 'none' | 'existing' | 'new';
+  existingGroupName?: string;
+  newGroupName?: string;
 };
 
 
 export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false); 
   const [isFormLoading, setIsFormLoading] = useState(false);
   
@@ -37,6 +47,39 @@ export default function NewSchemePage() {
   useEffect(() => {
     setExistingGroupNames(getUniqueGroupNames());
   }, []);
+
+  const formDefaultValues = useMemo(() => {
+    const customerNameParam = searchParams.get('customerName');
+    const groupNameParam = searchParams.get('customerGroupName');
+    const amountParam = searchParams.get('monthlyPaymentAmount');
+
+    let groupOption: 'none' | 'existing' | 'new' = 'none';
+    let existingGroupVal = '';
+    let newGroupVal = '';
+
+    if (groupNameParam) {
+        if (existingGroupNames.includes(groupNameParam)) {
+            groupOption = 'existing';
+            existingGroupVal = groupNameParam;
+        } else {
+            groupOption = 'new';
+            newGroupVal = groupNameParam;
+        }
+    } else {
+        groupOption = 'none';
+    }
+    
+    const initialValues: SchemeFormInitialValues = {
+        customerName: customerNameParam || '',
+        startDate: new Date(), // Always new date for new scheme
+        monthlyPaymentAmount: amountParam || '', // Keep as string from param
+        groupOption: groupOption,
+        existingGroupName: existingGroupVal,
+        newGroupName: newGroupVal,
+    };
+    return initialValues;
+  }, [searchParams, existingGroupNames]);
+
 
   const handleSubmit = (data: NewSchemeFormData) => {
     setIsFormLoading(true);
@@ -55,7 +98,7 @@ export default function NewSchemePage() {
     try {
       const newScheme = addMockScheme({
         customerName: data.customerName,
-        startDate: data.startDate,
+        startDate: data.startDate, // This is an ISO string from the form submission
         monthlyPaymentAmount: data.monthlyPaymentAmount,
         customerGroupName: data.customerGroupName,
       });
@@ -105,14 +148,12 @@ export default function NewSchemePage() {
     }
     setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
-    // setIsLoading(false); // Already handled by router push
   };
 
   const handleSkipFirstPayment = () => {
     if (!newlyCreatedScheme) return;
     setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
-    // setIsLoading(false); // Already handled by router push
   };
 
   return (
@@ -121,13 +162,17 @@ export default function NewSchemePage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
-            <CardDescription>Enter the details for the scheme. You can assign it to an existing group or create a new one. Multiple schemes can be created for the same customer.</CardDescription>
+            <CardDescription>
+              Enter the details for the scheme. You can assign it to an existing group, create a new one, or leave it ungrouped. 
+              Multiple schemes can be created for the same customer.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <SchemeForm 
               onSubmit={handleSubmit} 
               isLoading={isFormLoading} 
               existingGroupNames={existingGroupNames}
+              defaultValuesOverride={formDefaultValues}
             />
           </CardContent>
         </Card>
@@ -182,3 +227,4 @@ export default function NewSchemePage() {
     </>
   );
 }
+

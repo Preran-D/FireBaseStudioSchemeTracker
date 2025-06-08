@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useEffect } from 'react'; // Added useEffect
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -36,29 +37,73 @@ const schemeFormSchema = z.object({
   path: ['existingGroupName'], 
 });
 
+// This is the Zod-validated type
 type SchemeFormValues = z.infer<typeof schemeFormSchema>;
 
+// This type represents the raw values the form might hold or receive as defaults,
+// where numbers might be strings.
+type SchemeFormInputValues = Omit<SchemeFormValues, 'monthlyPaymentAmount' | 'startDate'> & {
+  monthlyPaymentAmount?: string | number;
+  startDate?: Date; // Date object for the picker
+};
+
+
 interface SchemeFormProps {
-  onSubmit: (data: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & { customerGroupName?: string }) => void;
-  initialData?: Partial<Scheme>;
+  onSubmit: (data: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths' | 'closureDate'> & { customerGroupName?: string }) => void;
+  initialData?: Partial<Scheme>; // For editing existing scheme
   isLoading?: boolean;
   existingGroupNames?: string[];
+  defaultValuesOverride?: Partial<SchemeFormInputValues>; // For pre-filling new scheme
 }
 
-export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupNames = [] }: SchemeFormProps) {
-  const form = useForm<SchemeFormValues>({
+export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupNames = [], defaultValuesOverride }: SchemeFormProps) {
+  
+  // Determine initial form values by prioritizing defaultValuesOverride, then initialData, then empty/defaults
+  const getResolvedDefaultValues = (): SchemeFormInputValues => {
+    if (defaultValuesOverride && Object.keys(defaultValuesOverride).length > 0) {
+      return {
+        customerName: defaultValuesOverride.customerName || '',
+        startDate: defaultValuesOverride.startDate || new Date(),
+        monthlyPaymentAmount: defaultValuesOverride.monthlyPaymentAmount ?? '',
+        groupOption: defaultValuesOverride.groupOption || (existingGroupNames.length > 0 ? 'none' : 'new'),
+        existingGroupName: defaultValuesOverride.existingGroupName || '',
+        newGroupName: defaultValuesOverride.newGroupName || '',
+      };
+    }
+    if (initialData) { // Editing existing scheme
+      return {
+        customerName: initialData.customerName || '',
+        startDate: initialData.startDate ? parseISO(initialData.startDate) : new Date(),
+        monthlyPaymentAmount: initialData.monthlyPaymentAmount ?? '',
+        groupOption: initialData.customerGroupName 
+          ? (existingGroupNames.includes(initialData.customerGroupName) ? 'existing' : 'new') 
+          : (existingGroupNames.length > 0 ? 'none' : 'new'),
+        existingGroupName: initialData.customerGroupName && existingGroupNames.includes(initialData.customerGroupName) ? initialData.customerGroupName : '',
+        newGroupName: initialData.customerGroupName && !existingGroupNames.includes(initialData.customerGroupName) ? initialData.customerGroupName : '',
+      };
+    }
+    // Default for a completely new, un-prefilled scheme
+    return {
+      customerName: '',
+      startDate: new Date(),
+      monthlyPaymentAmount: '',
+      groupOption: existingGroupNames.length > 0 ? 'none' : 'new',
+      existingGroupName: '',
+      newGroupName: '',
+    };
+  };
+  
+  const form = useForm<SchemeFormValues>({ // Use Zod validated type here
     resolver: zodResolver(schemeFormSchema),
-    defaultValues: {
-      customerName: initialData?.customerName || '',
-      startDate: initialData?.startDate ? parseISO(initialData.startDate) : new Date(),
-      monthlyPaymentAmount: initialData?.monthlyPaymentAmount ?? '',
-      groupOption: initialData?.customerGroupName 
-        ? (existingGroupNames.includes(initialData.customerGroupName) ? 'existing' : 'new') 
-        : (existingGroupNames.length > 0 ? 'none' : 'none'), // Default to 'none'
-      existingGroupName: initialData?.customerGroupName && existingGroupNames.includes(initialData.customerGroupName) ? initialData.customerGroupName : (existingGroupNames.length > 0 ? '' : undefined),
-      newGroupName: initialData?.customerGroupName && !existingGroupNames.includes(initialData.customerGroupName) ? initialData.customerGroupName : '',
-    },
+    defaultValues: getResolvedDefaultValues(),
   });
+  
+  useEffect(() => {
+    // Reset form if defaultValuesOverride or initialData changes.
+    // This ensures pre-filling works correctly when navigating
+    // to /new with query params or when initialData for editing is loaded.
+    form.reset(getResolvedDefaultValues());
+  }, [defaultValuesOverride, initialData, existingGroupNames, form.reset]); // form.reset is stable
 
   const groupOption = form.watch('groupOption');
 
@@ -72,8 +117,8 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
 
     onSubmit({
       customerName: values.customerName,
-      startDate: formatISO(values.startDate),
-      monthlyPaymentAmount: values.monthlyPaymentAmount,
+      startDate: formatISO(values.startDate), // startDate from form is Date object
+      monthlyPaymentAmount: values.monthlyPaymentAmount, // This is a number after Zod coercion
       customerGroupName: finalCustomerGroupName,
     });
   };
@@ -105,11 +150,10 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
                 <RadioGroup
                   onValueChange={(value) => {
                     field.onChange(value);
-                    // Reset other fields when option changes
                     if (value !== 'existing') form.setValue('existingGroupName', '');
                     if (value !== 'new') form.setValue('newGroupName', '');
                   }}
-                  defaultValue={field.value}
+                  value={field.value} // Controlled component
                   className="flex flex-col space-y-1"
                 >
                   <FormItem className="flex items-center space-x-3 space-y-0">
@@ -146,7 +190,10 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Select Existing Group</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select 
+                  onValueChange={field.onChange} 
+                  value={field.value || ""} // Controlled component
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a group" />
@@ -222,7 +269,17 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
             <FormItem>
               <FormLabel>Monthly Payment Amount (INR)</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="e.g., 1000" {...field} />
+                {/* The field value will be a number after Zod coercion for submission, 
+                    but react-hook-form stores it based on input (can be string).
+                    The input type="number" helps, but value can still be stringish.
+                    Zod's coerce.number() is key here. */}
+                <Input 
+                  type="number" 
+                  placeholder="e.g., 1000" 
+                  {...field} 
+                  onChange={event => field.onChange(event.target.value === '' ? undefined : event.target.value)} // Handle empty string for optional number
+                  value={field.value ?? ''} // Ensure value is string or number for input
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -235,3 +292,4 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
     </Form>
   );
 }
+

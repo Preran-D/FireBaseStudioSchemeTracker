@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation'; // Added useRouter
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ interface SelectedPaymentContext extends Payment {
 
 export default function SchemeDetailsPage() {
   const params = useParams();
-  const router = useRouter();
+  const router = useRouter(); // Initialized useRouter
   const { toast } = useToast();
   const schemeIdFromUrl = params.id as string;
 
@@ -96,11 +96,9 @@ export default function SchemeDetailsPage() {
     const updatedSchemeFromMock = updateMockSchemePayment(selectedPaymentForRecord.schemeIdToUpdate, selectedPaymentForRecord.id, data);
     
     if (updatedSchemeFromMock) {
-      // Update the scheme in the allSchemesForThisCustomer list
-      setAllSchemesForThisCustomer(prevAll => 
+       setAllSchemesForThisCustomer(prevAll => 
         prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s)
       );
-      // If the updated scheme is the main scheme being viewed, update it as well
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
@@ -194,7 +192,6 @@ export default function SchemeDetailsPage() {
     };
   }, [allSchemesForThisCustomer]);
 
-  // These charts are for the MAIN scheme being viewed (from URL)
   const paymentChartDataForMainScheme = useMemo(() => {
     if (!scheme) return [];
     return scheme.payments.map(p => ({
@@ -239,6 +236,17 @@ export default function SchemeDetailsPage() {
     return true;
   };
 
+  const handleAddNewSchemeForCustomer = () => {
+    if (!scheme) return;
+    const queryParams = new URLSearchParams();
+    queryParams.append('customerName', scheme.customerName);
+    if (scheme.customerGroupName) {
+      queryParams.append('customerGroupName', scheme.customerGroupName);
+    }
+    queryParams.append('monthlyPaymentAmount', scheme.monthlyPaymentAmount.toString());
+    router.push(`/schemes/new?${queryParams.toString()}`);
+  };
+
   if (isLoading || !scheme) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -253,16 +261,17 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
+              Viewing Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
               {scheme.status === 'Completed' && scheme.closureDate && (<><br/>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
-            <SchemeStatusBadge status={scheme.status} />
-             <Button asChild variant="outline" size="sm">
-                <Link href="/schemes/new">
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme for {scheme.customerName.split(' ')[0]}
-                </Link>
+            <Button 
+                onClick={handleAddNewSchemeForCustomer}
+                variant="outline" 
+                size="sm"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme for {scheme.customerName.split(' ')[0]}
             </Button>
             <Button 
               onClick={() => setIsAssignGroupDialogOpen(true)} 
@@ -303,7 +312,7 @@ export default function SchemeDetailsPage() {
                   <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
                     <div className="flex justify-between items-center w-full">
                       <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
+                        <span className="font-medium">Scheme ID: {s.id.substring(0,8)}...</span>
                         <SchemeStatusBadge status={s.status} />
                         {s.id === scheme.id && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                       </div>
