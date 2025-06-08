@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // Correct import for App Router
+import { useState, useEffect } from 'react'; // Added useEffect
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SchemeForm } from '@/components/forms/SchemeForm';
 import type { Scheme } from '@/types/scheme';
-import { addMockScheme, updateMockSchemePayment, getMockSchemes } from '@/lib/mock-data';
+import { addMockScheme, updateMockSchemePayment, getMockSchemes, getUniqueGroupNames } from '@/lib/mock-data'; // Added getUniqueGroupNames
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -16,10 +16,9 @@ import { Loader2 } from 'lucide-react';
 import { formatISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-// This type should align with the form values, including customerGroupName
-type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & { // Removed customerGroupName from Omit
+type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & {
   customerGroupName?: string;
-  monthlyPaymentAmount: number; // Ensure this is number
+  monthlyPaymentAmount: number; 
 };
 
 
@@ -27,6 +26,7 @@ export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false); // For form submission only
   
   const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
   const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
@@ -35,15 +35,21 @@ export default function NewSchemePage() {
   const [isCustomerExistsAlertOpen, setIsCustomerExistsAlertOpen] = useState(false);
   const [formDataForConfirmation, setFormDataForConfirmation] = useState<NewSchemeFormData | null>(null);
 
+  const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    setExistingGroupNames(getUniqueGroupNames());
+  }, []);
+
+
   const proceedWithSchemeCreation = (data: NewSchemeFormData) => {
-    setIsLoading(true); // For scheme creation process
+    setIsFormLoading(true); 
     try {
-      // Pass all data including customerGroupName to addMockScheme
       const newScheme = addMockScheme({
         customerName: data.customerName,
         startDate: data.startDate,
         monthlyPaymentAmount: data.monthlyPaymentAmount,
-        customerGroupName: data.customerGroupName,
+        customerGroupName: data.customerGroupName, 
       });
       setNewlyCreatedScheme(newScheme);
       if (newScheme.payments.length > 0) {
@@ -54,19 +60,19 @@ export default function NewSchemePage() {
         description: `Scheme for ${newScheme.customerName} ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
       });
       setIsFirstPaymentAlertOpen(true);
-      setIsLoading(false); // Scheme creation done
+      setIsFormLoading(false); 
     } catch (error) {
       toast({
         title: 'Error Creating Scheme',
         description: 'Failed to create scheme. Please try again.',
         variant: 'destructive',
       });
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
 
   const handleSubmit = (data: NewSchemeFormData) => {
-    setIsLoading(true); // Initial loading for form submission/check
+    setIsFormLoading(true); 
     const allSchemes = getMockSchemes();
     const customerExists = allSchemes.some(
       (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
@@ -75,7 +81,7 @@ export default function NewSchemePage() {
     if (customerExists) {
       setFormDataForConfirmation(data);
       setIsCustomerExistsAlertOpen(true);
-      setIsLoading(false); // Stop form loading, wait for dialog
+      setIsFormLoading(false); 
     } else {
       proceedWithSchemeCreation(data);
     }
@@ -98,13 +104,13 @@ export default function NewSchemePage() {
         return;
     }
     
-    setIsLoading(true); // Indicate processing for payment recording
+    setIsLoading(true); 
 
     const firstPayment = newlyCreatedScheme.payments[0];
     const updatedScheme = updateMockSchemePayment(newlyCreatedScheme.id, firstPayment.id, {
       amountPaid: amountToPay,
       paymentDate: formatISO(new Date()),
-      modeOfPayment: ['Cash'], // Default mode for now, can be expanded
+      modeOfPayment: ['Cash'], 
     });
 
     if (updatedScheme) {
@@ -130,15 +136,18 @@ export default function NewSchemePage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
-            <CardDescription>Enter the details for the new customer scheme, including an optional group name.</CardDescription>
+            <CardDescription>Enter the details for the new customer scheme. You can assign it to an existing group or create a new one.</CardDescription>
           </CardHeader>
           <CardContent>
-            <SchemeForm onSubmit={handleSubmit} isLoading={isLoading && !isCustomerExistsAlertOpen && !isFirstPaymentAlertOpen} />
+            <SchemeForm 
+              onSubmit={handleSubmit} 
+              isLoading={isFormLoading} 
+              existingGroupNames={existingGroupNames}
+            />
           </CardContent>
         </Card>
       </div>
 
-      {/* Customer Exists Confirmation Dialog */}
       {formDataForConfirmation && (
         <AlertDialog open={isCustomerExistsAlertOpen} onOpenChange={setIsCustomerExistsAlertOpen}>
           <AlertDialogContent>
@@ -163,13 +172,12 @@ export default function NewSchemePage() {
         </AlertDialog>
       )}
 
-      {/* First Payment Dialog */}
       {newlyCreatedScheme && newlyCreatedScheme.payments.length > 0 && (
         <AlertDialog 
             open={isFirstPaymentAlertOpen} 
             onOpenChange={(open) => {
                 if (!open && newlyCreatedScheme) {
-                    if (!isLoading) { // isLoading here refers to payment recording
+                    if (!isLoading) { 
                          handleSkipFirstPayment();
                     }
                 }
