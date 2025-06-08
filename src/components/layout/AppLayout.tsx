@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 import { SideContextWrapper, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, Repeat, Users2 } from 'lucide-react'; 
+import { Bell, LayoutDashboard, ListChecks, Settings, LogOut, Repeat, Users2, DatabaseZap, FileText } from 'lucide-react'; 
 import { AppLogo } from '@/components/shared/AppLogo';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -13,7 +13,7 @@ const navItems = [
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
   { href: '/transactions', label: 'Transactions', icon: Repeat }, 
   { href: '/groups', label: 'Groups', icon: Users2 },
-  { href: '/reports', label: 'Reports', icon: FileText },
+  { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
 export default function AppLayout({ children }: PropsWithChildren) {

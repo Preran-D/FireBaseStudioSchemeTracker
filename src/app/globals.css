@@ -9,87 +9,103 @@ body {
 
 @layer base {
   :root {
-    --background: 175 50% 92%; /* Light Cyan #E0F4F3 */
-    --foreground: 175 25% 30%; /* Dark Desaturated Cyan for text */
+    /* Cool Breeze Theme */
+    --background: 200 70% 95%; /* Light Sky Blue #E0F2FA */
+    --foreground: 210 25% 30%; /* Dark Slate Gray #3D4A5C */
 
-    --muted: 175 40% 85%;
-    --muted-foreground: 175 25% 40%;
+    --muted: 210 40% 88%; /* Lighter Slate Gray #D5DEE5 */
+    --muted-foreground: 210 25% 45%; /* Medium Slate Gray #5C6F88 */
 
-    --popover: 175 50% 98%;
-    --popover-foreground: 175 25% 30%;
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 210 25% 30%;
 
-    --card: 175 50% 98%; /* Slightly off-white card to stand out */
-    --card-foreground: 175 25% 30%;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 210 25% 30%;
 
-    --border: 175 30% 80%;
-    --input: 175 30% 85%;
+    --border: 210 20% 75%; /* #B3C1D1 */
+    --input: 210 20% 80%; /* #C0CCD9 */
 
-    --primary: 176 33% 53%; /* Desaturated Cyan #5FB3AC */
-    --primary-foreground: 176 30% 95%; /* Light color for text on primary */
+    --primary: 207 44% 49%; /* Steel Blue #4A80B0 */
+    --primary-foreground: 0 0% 100%; /* White */
 
-    --secondary: 175 40% 80%;
-    --secondary-foreground: 176 33% 43%;
+    --secondary: 210 30% 80%; /* Light Steel Blue #BECBDA */
+    --secondary-foreground: 210 25% 30%; /* Dark Slate Gray */
 
-    --accent: 276 46% 58%; /* Violet #9961C7 */
-    --accent-foreground: 276 50% 95%; /* Light color for text on accent */
+    --accent: 175 55% 45%; /* Teal #36A28B */
+    --accent-foreground: 0 0% 100%; /* White */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%; /* Bright Red #D92D20 */
+    --destructive-foreground: 0 0% 100%;
 
-    --ring: 276 46% 58%; /* Accent color for rings */
+    --ring: 207 44% 49%; /* Steel Blue for rings */
 
     --radius: 0.5rem;
 
+    /* Chart colors (can be adjusted to fit new theme) */
+    --chart-1: 207 44% 49%; /* Primary - Steel Blue */
+    --chart-2: 175 55% 45%; /* Accent - Teal */
+    --chart-3: 30 80% 60%; /* Orange/Coral */
+    --chart-4: 260 60% 65%; /* Purple */
+    --chart-5: 210 25% 50%; /* Mid Gray Blue */
+
     /* Sidebar specific theme */
-    --sidebar-background: 176 33% 48%; /* Slightly darker primary for sidebar */
-    --sidebar-foreground: 176 30% 95%;
-    --sidebar-primary: 176 30% 95%; /* For active/selected items in sidebar */
-    --sidebar-primary-foreground: 176 33% 48%;
-    --sidebar-accent: 176 33% 58%; /* Hover color */
-    --sidebar-accent-foreground: 176 30% 95%;
-    --sidebar-border: 176 33% 43%;
-    --sidebar-ring: 276 46% 58%;
+    --sidebar-background: 207 44% 40%; /* Darker Steel Blue #3C6B90 */
+    --sidebar-foreground: 210 20% 90%; /* Light Grey/White #DBE1E8 */
+    --sidebar-primary: 200 70% 95%;    /* Active item bg - Light Sky Blue (like main background) */
+    --sidebar-primary-foreground: 207 44% 49%; /* Active item text - Primary Steel Blue */
+    --sidebar-accent: 207 44% 45%;     /* Hover bg - Slightly lighter sidebar bg */
+    --sidebar-accent-foreground: 0 0% 100%; /* Hover text - White */
+    --sidebar-border: 207 44% 35%;     /* Border - Even darker Steel Blue */
+    --sidebar-ring: 175 55% 45%;       /* Ring - Teal */
   }
 
   .dark {
-    /* Dark theme adjustments - keeping it simple for now, can be expanded */
-    --background: 175 15% 10%;
-    --foreground: 175 30% 80%;
+    /* Dark theme adjustments */
+    --background: 210 25% 15%; /* Dark Slate Blue/Gray #1F2937 */
+    --foreground: 210 20% 85%; /* Light Gray #D1D5DB */
 
-    --muted: 175 15% 20%;
-    --muted-foreground: 175 30% 70%;
+    --muted: 210 25% 25%; /* #303D4F */
+    --muted-foreground: 210 20% 65%; /* #A0AEC0 */
 
-    --popover: 175 15% 15%;
-    --popover-foreground: 175 30% 80%;
+    --popover: 210 25% 20%; /* #283343 */
+    --popover-foreground: 210 20% 85%;
 
-    --card: 175 15% 15%;
-    --card-foreground: 175 30% 80%;
+    --card: 210 25% 20%;
+    --card-foreground: 210 20% 85%;
 
-    --border: 175 15% 25%;
-    --input: 175 15% 25%;
+    --border: 210 25% 35%; /* #4A5568 */
+    --input: 210 25% 35%;
 
-    --primary: 176 33% 53%;
-    --primary-foreground: 176 30% 95%;
+    --primary: 207 50% 60%; /* Brighter Steel Blue #63A0D4 */
+    --primary-foreground: 210 20% 98%; /* Almost White */
 
-    --secondary: 175 15% 25%;
-    --secondary-foreground: 176 33% 63%;
+    --secondary: 210 25% 30%; /* #3D4A5C */
+    --secondary-foreground: 210 20% 85%;
 
-    --accent: 276 46% 58%;
-    --accent-foreground: 276 50% 95%;
+    --accent: 175 60% 55%; /* Brighter Teal #4DCBB1 */
+    --accent-foreground: 210 20% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 65% 55%; /* Brighter Red #E64940 */
     --destructive-foreground: 0 0% 98%;
 
-    --ring: 276 46% 58%;
+    --ring: 207 50% 60%;
     
-    --sidebar-background: 176 25% 15%;
-    --sidebar-foreground: 176 30% 85%;
-    --sidebar-primary: 176 33% 53%;
-    --sidebar-primary-foreground: 176 30% 95%;
-    --sidebar-accent: 176 25% 25%;
-    --sidebar-accent-foreground: 176 30% 85%;
-    --sidebar-border: 176 25% 20%;
-    --sidebar-ring: 276 46% 58%;
+    /* Chart colors for dark theme */
+    --chart-1: 207 50% 60%;
+    --chart-2: 175 60% 55%;
+    --chart-3: 30 70% 65%;
+    --chart-4: 260 55% 70%;
+    --chart-5: 210 20% 60%;
+
+    /* Sidebar specific theme for dark mode */
+    --sidebar-background: 210 25% 10%; /* Very Dark Slate #121821 */
+    --sidebar-foreground: 210 20% 80%; /* #CBD5E0 */
+    --sidebar-primary: 207 50% 60%;    /* Active item bg - Brighter Steel Blue */
+    --sidebar-primary-foreground: 210 20% 98%; /* Active item text - Almost White */
+    --sidebar-accent: 210 25% 20%;     /* Hover bg - Darker than muted */
+    --sidebar-accent-foreground: 210 20% 90%; /* Hover text - Lighter Gray */
+    --sidebar-border: 210 25% 25%;     /* Border */
+    --sidebar-ring: 175 60% 55%;       /* Ring - Brighter Teal */
   }
 }
 
@@ -116,5 +132,3 @@ body {
     border-width: 0;
   }
 }
-
-    
