@@ -8,7 +8,7 @@ import { BarChart, TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, 
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
@@ -24,7 +24,9 @@ export default function DashboardPage() {
     const loadedSchemes = getMockSchemes().map(s => {
       const totals = calculateSchemeTotals(s);
       const status = getSchemeStatus(s);
-      return { ...s, ...totals, status };
+      // Ensure payment statuses are also correctly initialized
+      const paymentsWithStatus = s.payments.map(p => ({ ...p, status: getPaymentStatus(p, s.startDate) }));
+      return { ...s, ...totals, status, payments: paymentsWithStatus };
     });
     setSchemes(loadedSchemes);
 
