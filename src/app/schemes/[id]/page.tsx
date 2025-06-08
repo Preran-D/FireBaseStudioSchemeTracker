@@ -25,7 +25,10 @@ import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProg
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from '@/components/ui/checkbox';
 
+const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 
 export default function SchemeDetailsPage() {
   const params = useParams();
@@ -41,6 +44,8 @@ export default function SchemeDetailsPage() {
   const [isClosingSchemeProcess, setIsClosingSchemeProcess] = useState(false);
   const [isCloseSchemeAlertOpen, setIsCloseSchemeAlertOpen] = useState(false);
   const [closureDate, setClosureDate] = useState<Date | undefined>(new Date());
+  const [closureType, setClosureType] = useState<'full_reconciliation' | 'partial_closure'>('full_reconciliation');
+  const [closureModeOfPayment, setClosureModeOfPayment] = useState<PaymentMode[]>(['Cash']);
 
 
   useEffect(() => {
@@ -89,20 +94,35 @@ export default function SchemeDetailsPage() {
   const handleOpenCloseSchemeDialog = () => {
     if (!scheme || scheme.status === 'Completed') return;
     setClosureDate(scheme.closureDate ? parseISO(scheme.closureDate) : startOfDay(new Date()));
+    setClosureType('full_reconciliation'); // Default to full
+    setClosureModeOfPayment(['Cash']); // Default mode
     setIsCloseSchemeAlertOpen(true);
   };
 
   const handleConfirmCloseScheme = () => {
     if(!scheme || !closureDate) return;
+    if(closureType === 'full_reconciliation' && closureModeOfPayment.length === 0) {
+        toast({ title: 'Mode of Payment Required', description: 'Please select at least one mode of payment for full reconciliation.', variant: 'destructive' });
+        return;
+    }
     setIsClosingSchemeProcess(true);
-    const closedSchemeResult = closeMockScheme(scheme.id, formatISO(closureDate));
+
+    const closureOptions = {
+        closureDate: formatISO(closureDate),
+        type: closureType,
+        modeOfPayment: closureType === 'full_reconciliation' ? closureModeOfPayment : undefined,
+    };
+
+    const closedSchemeResult = closeMockScheme(scheme.id, closureOptions);
+
     if(closedSchemeResult) {
-      const refreshedScheme = getMockSchemeById(scheme.id);
+      const refreshedScheme = getMockSchemeById(scheme.id); // get scheme with updated payment statuses
       if (refreshedScheme) {
         setScheme(refreshedScheme);
-         toast({ title: 'Scheme Closed', description: `${refreshedScheme.customerName}'s scheme has been marked as completed on ${formatDate(refreshedScheme.closureDate)}. All pending payments marked as paid.` });
+         toast({ title: 'Scheme Closed', description: `${refreshedScheme.customerName}'s scheme has been marked as completed on ${formatDate(refreshedScheme.closureDate!)}.` });
       } else {
          toast({ title: 'Scheme Closed', description: `Scheme ${scheme.id} marked as completed.` });
+         // Fallback if getMockSchemeById fails after update, update local state
          setScheme(prev => prev ? {...prev, status: 'Completed', closureDate: formatISO(closureDate)} : null);
       }
     } else {
@@ -147,8 +167,9 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
+    // Check if all previous payments are paid
     for (let i = 0; i < payment.monthNumber - 1; i++) {
-      if (currentScheme.payments[i].status !== 'Paid') {
+      if (getPaymentStatus(currentScheme.payments[i], currentScheme.startDate) !== 'Paid') {
         return false;
       }
     }
@@ -269,8 +290,10 @@ export default function SchemeDetailsPage() {
                               )}
                             </Dialog>
                           ) : (
-                            payment.status === 'Paid' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
+                            payment.status === 'Paid' && scheme.status !== 'Completed' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
                           )}
+                           {scheme.status === 'Completed' && payment.status === 'Paid' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />}
+                           {/* Display nothing or specific icon if completed and not paid (partial close) */}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -442,40 +465,91 @@ export default function SchemeDetailsPage() {
 
       {isCloseSchemeAlertOpen && scheme && (
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={setIsCloseSchemeAlertOpen}>
-          <AlertDialogContent>
+          <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Scheme Closure for {scheme.customerName}</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will mark the scheme as 'Completed'. All pending payments will be marked as fully paid as of the selected closure date. This action cannot be easily undone.
-              </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="grid gap-2 py-2">
-                <Label htmlFor="closure-date">Closure Date</Label>
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <Button
-                        id="closure-date"
-                        variant={'outline'}
-                        className={cn('w-full justify-start text-left font-normal', !closureDate && 'text-muted-foreground')}
+            <div className="space-y-4 py-2">
+                <div>
+                    <Label htmlFor="closure-type">Closure Type</Label>
+                    <RadioGroup
+                        id="closure-type"
+                        value={closureType}
+                        onValueChange={(value: 'full_reconciliation' | 'partial_closure') => setClosureType(value)}
+                        className="mt-1 space-y-1"
                     >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {closureDate ? formatDate(closureDate.toISOString()) : <span>Pick a date</span>}
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                    <Calendar
-                        mode="single"
-                        selected={closureDate}
-                        onSelect={setClosureDate}
-                        disabled={(date) => date > new Date() || date < parseISO(scheme.startDate) }
-                        initialFocus
-                    />
-                    </PopoverContent>
-                </Popover>
+                        <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="full_reconciliation" id="full_reconciliation" />
+                        <Label htmlFor="full_reconciliation" className="font-normal">Reconcile & Close (Mark pending as paid)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="partial_closure" id="partial_closure" />
+                        <Label htmlFor="partial_closure" className="font-normal">Close Partially (Leave pending as is)</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
+
+                {closureType === 'full_reconciliation' && (
+                    <div className="space-y-2 rounded-md border p-3">
+                        <Label>Mode of Payment (for reconciled payments)</Label>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        {paymentModes.filter(m => m !== 'System Closure').map((mode) => (
+                            <div key={mode} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={`closure-mop-${mode}`}
+                                checked={closureModeOfPayment.includes(mode)}
+                                onCheckedChange={(checked) => {
+                                setClosureModeOfPayment(prev => 
+                                    checked ? [...prev, mode] : prev.filter(m => m !== mode)
+                                );
+                                }}
+                            />
+                            <Label htmlFor={`closure-mop-${mode}`} className="font-normal">{mode}</Label>
+                            </div>
+                        ))}
+                        </div>
+                        {closureModeOfPayment.length === 0 && <p className="text-xs text-destructive">Please select at least one payment mode for reconciliation.</p>}
+                    </div>
+                )}
+              
+                <div>
+                    <Label htmlFor="closure-date">Closure Date</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="closure-date"
+                            variant={'outline'}
+                            className={cn('w-full justify-start text-left font-normal mt-1', !closureDate && 'text-muted-foreground')}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {closureDate ? formatDate(closureDate.toISOString()) : <span>Pick a date</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                        <Calendar
+                            mode="single"
+                            selected={closureDate}
+                            onSelect={setClosureDate}
+                            disabled={(date) => date > new Date() || date < parseISO(scheme.startDate) }
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                 <AlertDialogDescription className="text-xs pt-2">
+                    {closureType === 'full_reconciliation' 
+                        ? "All pending payments will be marked as fully paid as of the selected closure date using the chosen mode(s). "
+                        : "The scheme will be marked 'Completed', but pending payments will remain as they are. "
+                    }
+                    This action cannot be easily undone.
+                </AlertDialogDescription>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setIsCloseSchemeAlertOpen(false)} disabled={isClosingSchemeProcess}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmCloseScheme} disabled={isClosingSchemeProcess || !closureDate}>
+              <AlertDialogAction 
+                onClick={handleConfirmCloseScheme} 
+                disabled={isClosingSchemeProcess || !closureDate || (closureType === 'full_reconciliation' && closureModeOfPayment.length === 0)}
+              >
                 {isClosingSchemeProcess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Confirm Closure
               </AlertDialogAction>
@@ -486,3 +560,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+

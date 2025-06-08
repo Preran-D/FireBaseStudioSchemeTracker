@@ -164,6 +164,9 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
   if (updatedPayment.amountPaid && updatedPayment.amountPaid >= updatedPayment.amountExpected) {
     updatedPayment.status = 'Paid'; 
     if(!updatedPayment.paymentDate) updatedPayment.paymentDate = formatISO(new Date());
+  } else if (updatedPayment.amountPaid && updatedPayment.amountPaid < updatedPayment.amountExpected) {
+    // If partially paid, it could be Pending or Overdue depending on due date
+     updatedPayment.status = getPaymentStatus(updatedPayment, scheme.startDate);
   }
   scheme.payments[paymentIndex] = updatedPayment;
   
@@ -229,8 +232,13 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
 }
 
+interface CloseSchemeOptions {
+  closureDate: string; // ISO Date string
+  type: 'full_reconciliation' | 'partial_closure';
+  modeOfPayment?: PaymentMode[]; // Required if type is 'full_reconciliation'
+}
 
-export const closeMockScheme = (schemeId: string, closureDateInput?: string): Scheme | undefined => {
+export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): Scheme | undefined => {
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -240,24 +248,36 @@ export const closeMockScheme = (schemeId: string, closureDateInput?: string): Sc
     return JSON.parse(JSON.stringify(scheme)); 
   }
 
-  const actualClosureDate = closureDateInput ? parseISO(closureDateInput).toISOString() : formatISO(new Date());
-
   scheme.status = 'Completed';
-  scheme.closureDate = actualClosureDate;
+  scheme.closureDate = options.closureDate;
 
-  scheme.payments.forEach(p => { 
-    if (p.status !== 'Paid') {
-      p.status = 'Paid';
-      p.amountPaid = p.amountExpected; 
-      p.paymentDate = actualClosureDate; 
-      p.modeOfPayment = p.modeOfPayment || ['System Closure'];
-    }
-  });
+  if (options.type === 'full_reconciliation') {
+    scheme.payments.forEach(p => { 
+      if (p.status !== 'Paid') {
+        p.status = 'Paid';
+        p.amountPaid = p.amountExpected; 
+        p.paymentDate = options.closureDate; 
+        p.modeOfPayment = options.modeOfPayment && options.modeOfPayment.length > 0 ? options.modeOfPayment : ['System Closure'];
+      }
+    });
+  } else if (options.type === 'partial_closure') {
+    // For partial closure, we don't change existing payment statuses or amounts.
+    // We just mark the scheme as completed.
+    // Individual payment statuses will remain as they were (e.g., Pending, Overdue).
+    // `getPaymentStatus` will correctly reflect this for each payment.
+  }
   
   const totals = calculateSchemeTotals(scheme); 
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+  
+  // After updating, re-evaluate payment statuses if necessary (especially for display)
+  // but primary driver is the scheme.status = 'Completed'
+  MOCK_SCHEMES[schemeIndex].payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  MOCK_SCHEMES[schemeIndex].status = getSchemeStatus(MOCK_SCHEMES[schemeIndex]); // Re-assert scheme status based on new state
+
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
 };
+
 
 export const recordNextDuePaymentsForCustomer = (
   customerName: string,
@@ -502,14 +522,19 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
 
     if (row.MarkAsClosed?.toUpperCase() === 'TRUE' && scheme.status !== 'Completed') {
         const closureDateForUpdate = row.ClosureDate ? parseISO(row.ClosureDate.trim()).toISOString() : formatISO(startOfDay(new Date()));
-        const updatedScheme = closeMockScheme(scheme.id, closureDateForUpdate);
+        // Defaulting to full reconciliation for CSV import for simplicity, can be expanded.
+        const updatedScheme = closeMockScheme(scheme.id, {
+            closureDate: closureDateForUpdate,
+            type: 'full_reconciliation',
+            modeOfPayment: ['System Closure'] 
+        });
         if (updatedScheme) {
             changed = true;
-            messages.push(`Row ${index + 2}: Scheme "${schemeId}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)}.`);
+            messages.push(`Row ${index + 2}: Scheme "${schemeId}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)} (Full Reconciliation).`);
         } else {
             messages.push(`Row ${index + 2}: Error closing scheme "${schemeId}".`);
-            errorCount++; // Increment error count if closeMockScheme fails
-            return; // Skip to next row
+            errorCount++; 
+            return; 
         }
     } else if (row.MarkAsClosed?.toUpperCase() === 'TRUE' && scheme.status === 'Completed') {
          messages.push(`Row ${index + 2}: Scheme "${schemeId}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
@@ -517,9 +542,9 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
             const newClosureDateISO = parseISO(row.ClosureDate.trim()).toISOString();
             if (scheme.closureDate !== newClosureDateISO) {
                 scheme.closureDate = newClosureDateISO;
-                // Also update payment dates for consistency if scheme was closed earlier
+                // Also update payment dates for consistency if scheme was closed earlier and reconciled
                 scheme.payments.forEach(p => {
-                    if(p.modeOfPayment?.includes('System Closure')) {
+                    if(p.modeOfPayment?.includes('System Closure') || (p.status === 'Paid' && p.paymentDate === scheme.closureDate)) { // check if it was reconciled
                         p.paymentDate = newClosureDateISO;
                     }
                 });
@@ -528,7 +553,6 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
          }
     } else if (row.MarkAsClosed?.toUpperCase() === 'FALSE') {
       messages.push(`Row ${index + 2}: Re-opening schemes (MarkAsClosed=FALSE) is not currently supported for SchemeID "${schemeId}". No action taken.`);
-      // errorCount++; // Not an error per se, but an unsupported action
     } else {
        messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeId}" (MarkAsClosed was not TRUE or FALSE).`);
     }
