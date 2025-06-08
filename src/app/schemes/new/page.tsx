@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SchemeForm } from '@/components/forms/SchemeForm';
 import type { Scheme } from '@/types/scheme';
-import { addMockScheme, updateMockSchemePayment, getMockSchemes, getUniqueGroupNames } from '@/lib/mock-data'; // Added getUniqueGroupNames
+import { addMockScheme, updateMockSchemePayment, getMockSchemes, getUniqueGroupNames } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -25,15 +25,12 @@ type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMo
 export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // General loading for page transitions
   const [isFormLoading, setIsFormLoading] = useState(false); // For form submission only
   
   const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
   const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
   const [firstPaymentAmount, setFirstPaymentAmount] = useState<string>('');
-
-  const [isCustomerExistsAlertOpen, setIsCustomerExistsAlertOpen] = useState(false);
-  const [formDataForConfirmation, setFormDataForConfirmation] = useState<NewSchemeFormData | null>(null);
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
 
@@ -41,9 +38,24 @@ export default function NewSchemePage() {
     setExistingGroupNames(getUniqueGroupNames());
   }, []);
 
-
-  const proceedWithSchemeCreation = (data: NewSchemeFormData) => {
+  const handleSubmit = (data: NewSchemeFormData) => {
     setIsFormLoading(true); 
+    const allSchemes = getMockSchemes();
+    const customerExists = allSchemes.some(
+      (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
+    );
+
+    if (customerExists) {
+      toast({
+        title: 'Customer Exists',
+        description: `A customer named '${data.customerName}' already exists. Please use a different name or manage their existing schemes.`,
+        variant: 'destructive',
+      });
+      setIsFormLoading(false);
+      return; // Prevent further processing
+    }
+    
+    // Proceed with scheme creation if customer does not exist
     try {
       const newScheme = addMockScheme({
         customerName: data.customerName,
@@ -60,40 +72,17 @@ export default function NewSchemePage() {
         description: `Scheme for ${newScheme.customerName} ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
       });
       setIsFirstPaymentAlertOpen(true);
-      setIsFormLoading(false); 
     } catch (error) {
       toast({
         title: 'Error Creating Scheme',
-        description: 'Failed to create scheme. Please try again.',
+        description: (error as Error).message || 'Failed to create scheme. Please try again.',
         variant: 'destructive',
       });
+    } finally {
       setIsFormLoading(false);
     }
   };
 
-  const handleSubmit = (data: NewSchemeFormData) => {
-    setIsFormLoading(true); 
-    const allSchemes = getMockSchemes();
-    const customerExists = allSchemes.some(
-      (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
-    );
-
-    if (customerExists) {
-      setFormDataForConfirmation(data);
-      setIsCustomerExistsAlertOpen(true);
-      setIsFormLoading(false); 
-    } else {
-      proceedWithSchemeCreation(data);
-    }
-  };
-
-  const handleCustomerExistsConfirmation = () => {
-    if (formDataForConfirmation) {
-      proceedWithSchemeCreation(formDataForConfirmation);
-    }
-    setIsCustomerExistsAlertOpen(false);
-    setFormDataForConfirmation(null);
-  };
 
   const handleRecordFirstPayment = () => {
     if (!newlyCreatedScheme || newlyCreatedScheme.payments.length === 0) return;
@@ -136,7 +125,7 @@ export default function NewSchemePage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
-            <CardDescription>Enter the details for the new customer scheme. You can assign it to an existing group or create a new one.</CardDescription>
+            <CardDescription>Enter the details for the new customer scheme. Customer names must be unique. You can assign it to an existing group or create a new one.</CardDescription>
           </CardHeader>
           <CardContent>
             <SchemeForm 
@@ -147,30 +136,6 @@ export default function NewSchemePage() {
           </CardContent>
         </Card>
       </div>
-
-      {formDataForConfirmation && (
-        <AlertDialog open={isCustomerExistsAlertOpen} onOpenChange={setIsCustomerExistsAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Customer Exists</AlertDialogTitle>
-              <AlertDialogDescription>
-                A customer named '{formDataForConfirmation.customerName}' already exists. 
-                Do you want to create a new scheme for this customer?
-                {formDataForConfirmation.customerGroupName && ` This new scheme will be part of group: ${formDataForConfirmation.customerGroupName}.`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => {
-                setIsCustomerExistsAlertOpen(false);
-                setFormDataForConfirmation(null);
-              }}>Cancel / Change Name</AlertDialogCancel>
-              <AlertDialogAction onClick={handleCustomerExistsConfirmation}>
-                Yes, Create Scheme
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
 
       {newlyCreatedScheme && newlyCreatedScheme.payments.length > 0 && (
         <AlertDialog 
@@ -221,3 +186,4 @@ export default function NewSchemePage() {
     </>
   );
 }
+

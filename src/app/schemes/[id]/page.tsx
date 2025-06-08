@@ -3,13 +3,14 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, AlertCircle, DollarSign, BarChart2, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2 } from 'lucide-react';
+import { CheckCircle, Edit, AlertCircle, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -19,7 +20,6 @@ import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, LineChart, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
-import Link from 'next/link';
 import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -29,9 +29,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
-import { Badge } from '@/components/ui/badge'; // Added missing import
+import { Badge } from '@/components/ui/badge';
 
 const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
+
+interface SelectedPaymentContext extends Payment {
+  schemeIdToUpdate: string;
+}
 
 export default function SchemeDetailsPage() {
   const params = useParams();
@@ -42,7 +46,7 @@ export default function SchemeDetailsPage() {
   const [scheme, setScheme] = useState<Scheme | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
-  const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<Payment | null>(null);
+  const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<SelectedPaymentContext | null>(null);
   
   const [isClosingSchemeProcess, setIsClosingSchemeProcess] = useState(false);
   const [isCloseSchemeAlertOpen, setIsCloseSchemeAlertOpen] = useState(false);
@@ -73,7 +77,7 @@ export default function SchemeDetailsPage() {
             const sStatus = getSchemeStatus(s);
             return { ...s, ...sTotals, status: sStatus };
           })
-          .sort((a,b) => parseISO(b.startDate).getTime() - parseISO(a.startDate).getTime()); // Sort by start date desc
+          .sort((a,b) => parseISO(b.startDate).getTime() - parseISO(a.startDate).getTime()); 
         setAllSchemesForThisCustomer(allCustomerSchemes);
       }
       setExistingGroupNames(getUniqueGroupNames());
@@ -87,22 +91,27 @@ export default function SchemeDetailsPage() {
 
 
   const handleRecordPayment = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
-    if (!selectedPaymentForRecord || !scheme || scheme.status === 'Completed') {
-      if(scheme?.status === 'Completed') {
-        toast({ title: 'Action Denied', description: 'Cannot record payment for a completed scheme.', variant: 'destructive' });
-      }
+    if (!selectedPaymentForRecord || !scheme) {
       return;
     }
+    if (selectedPaymentForRecord.status === 'Paid' && scheme.status === 'Completed') {
+        toast({ title: 'Action Denied', description: 'Cannot record payment for a completed scheme.', variant: 'destructive' });
+        return;
+    }
+
     setIsRecordingPayment(true);
-    const updatedScheme = updateMockSchemePayment(scheme.id, selectedPaymentForRecord.id, data);
-    if (updatedScheme) {
-      const totals = calculateSchemeTotals(updatedScheme);
-      updatedScheme.payments.forEach(p => p.status = getPaymentStatus(p, updatedScheme.startDate));
-      const status = getSchemeStatus(updatedScheme);
-      setScheme({ ...updatedScheme, ...totals, status }); // Update current scheme
-      // Also update this scheme in the allSchemesForThisCustomer list
-      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === updatedScheme.id ? { ...updatedScheme, ...totals, status } : s));
-      toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} recorded successfully.` });
+    const updatedSchemeFromMock = updateMockSchemePayment(selectedPaymentForRecord.schemeIdToUpdate, selectedPaymentForRecord.id, data);
+    
+    if (updatedSchemeFromMock) {
+      // Update allSchemesForThisCustomer list
+      setAllSchemesForThisCustomer(prevAll => 
+        prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s)
+      );
+      // If the updated scheme is the main scheme being viewed, update its state too
+      if (scheme && scheme.id === updatedSchemeFromMock.id) {
+        setScheme(updatedSchemeFromMock);
+      }
+      toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded successfully.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
     }
@@ -135,16 +144,9 @@ export default function SchemeDetailsPage() {
     const closedSchemeResult = closeMockScheme(scheme.id, closureOptions);
 
     if(closedSchemeResult) {
-      const refreshedScheme = getMockSchemeById(scheme.id); 
-      if (refreshedScheme) {
-        setScheme(refreshedScheme);
-        setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === refreshedScheme.id ? refreshedScheme : s));
-        toast({ title: 'Scheme Closed', description: `${refreshedScheme.customerName}'s scheme has been marked as completed on ${formatDate(refreshedScheme.closureDate!)}.` });
-      } else {
-         toast({ title: 'Scheme Closed', description: `Scheme ${scheme.id} marked as completed.` });
-         setScheme(prev => prev ? {...prev, status: 'Completed', closureDate: formatISO(closureDate)} : null);
-         setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === scheme.id ? {...s, status: 'Completed' as SchemeStatus, closureDate: formatISO(closureDate)} : s));
-      }
+      setScheme(closedSchemeResult); // Update main scheme state
+      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s)); // Update in list
+      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme has been marked as completed on ${formatDate(closedSchemeResult.closureDate!)}.` });
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
     }
@@ -156,11 +158,9 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(true);
     const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
     if (updatedSchemeFromMock) {
-      // If the updated scheme is the current main scheme, update it
       if (scheme && updatedSchemeFromMock.id === scheme.id) {
         setScheme(updatedSchemeFromMock);
       }
-      // Update the scheme in the list of all customer's schemes
       setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
       
       toast({
@@ -173,7 +173,6 @@ export default function SchemeDetailsPage() {
     setIsAssignGroupDialogOpen(false);
     setIsUpdatingGroup(false);
   };
-
 
   const paymentChartData = useMemo(() => {
     if (!scheme) return [];
@@ -210,8 +209,10 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
+    // Check if all previous payments for *this specific scheme* are paid
+    const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
     for (let i = 0; i < payment.monthNumber - 1; i++) {
-      if (getPaymentStatus(currentScheme.payments[i], currentScheme.startDate) !== 'Paid') {
+      if (getPaymentStatus(schemeToCheck.payments[i], schemeToCheck.startDate) !== 'Paid') {
         return false;
       }
     }
@@ -230,14 +231,19 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Scheme ID: {scheme.id} <br/> Started on {formatDate(scheme.startDate)}
+              Currently Viewing Scheme ID: {scheme.id} <br/> Started on {formatDate(scheme.startDate)}
               {scheme.status === 'Completed' && scheme.closureDate && (
                 <><br/>Closed on: {formatDate(scheme.closureDate)}</>
               )}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
             <SchemeStatusBadge status={scheme.status} />
+            <Button asChild variant="outline" size="sm">
+                <Link href="/schemes/new">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme for {scheme.customerName.split(' ')[0]}
+                </Link>
+            </Button>
             <Button 
               onClick={() => setIsAssignGroupDialogOpen(true)} 
               variant="outline"
@@ -264,84 +270,17 @@ export default function SchemeDetailsPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="payments">
-        <TabsList className="grid w-full grid-cols-2 md:w-auto md:grid-cols-3">
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="visuals">Visuals</TabsTrigger>
-          <TabsTrigger value="summary" disabled={scheme.status !== 'Completed'}>Summary</TabsTrigger>
+      <Tabs defaultValue="visuals">
+        <TabsList className="grid w-full grid-cols-2 md:w-auto md:grid-cols-2">
+          <TabsTrigger value="visuals">Visuals (Current Scheme)</TabsTrigger>
+          <TabsTrigger value="summary" disabled={scheme.status !== 'Completed'}>Summary (Current Scheme)</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="payments">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline">Payment Schedule for Current Scheme</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Month</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Expected</TableHead>
-                      <TableHead>Paid Amount</TableHead>
-                      <TableHead>Payment Date</TableHead>
-                      <TableHead>Mode(s)</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scheme.payments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell>{payment.monthNumber}</TableCell>
-                        <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                        <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
-                        <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
-                        <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                        <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
-                        <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, scheme.startDate)} /></TableCell>
-                        <TableCell className="text-right">
-                          {isPaymentRecordable(payment, scheme) ? (
-                            <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord(payment)}>
-                                  <DollarSign className="mr-1 h-4 w-4" /> Record
-                                </Button>
-                              </DialogTrigger>
-                              {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && (
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle className="font-headline">Record Payment for {scheme.customerName}</DialogTitle>
-                                  </DialogHeader>
-                                  <RecordPaymentForm
-                                    payment={selectedPaymentForRecord}
-                                    onSubmit={handleRecordPayment}
-                                    isLoading={isRecordingPayment}
-                                  />
-                                </DialogContent>
-                              )}
-                            </Dialog>
-                          ) : (
-                            payment.status === 'Paid' && scheme.status !== 'Completed' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
-                          )}
-                           {scheme.status === 'Completed' && payment.status === 'Paid' && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="visuals">
           <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
             <Card className="flex flex-col">
               <CardHeader>
-                <CardTitle className="font-headline">Monthly Progress (Current Scheme)</CardTitle>
-                <CardDescription>Visual breakdown of payments by month for the current scheme.</CardDescription>
+                <CardTitle className="font-headline">Monthly Progress</CardTitle>
+                <CardDescription>Visual breakdown of payments by month for the current scheme (ID: {scheme.id.substring(0,8)}...).</CardDescription>
               </CardHeader>
               <CardContent className="flex-grow flex items-center justify-center">
                 <MonthlyCircularProgress 
@@ -353,8 +292,8 @@ export default function SchemeDetailsPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="font-headline">Payment Trends (Current Scheme)</CardTitle>
-                <CardDescription>Expected vs. Paid amounts over the scheme duration.</CardDescription>
+                <CardTitle className="font-headline">Payment Trends</CardTitle>
+                <CardDescription>Expected vs. Paid amounts over time for the current scheme (ID: {scheme.id.substring(0,8)}...).</CardDescription>
               </CardHeader>
               <CardContent className="space-y-8">
                 <div>
@@ -393,12 +332,11 @@ export default function SchemeDetailsPage() {
             </Card>
           </div>
         </TabsContent>
-        
         <TabsContent value="summary">
             <Card>
                 <CardHeader>
                     <CardTitle className="font-headline">Scheme Completion Summary</CardTitle>
-                    <CardDescription>Overview of the completed scheme for {scheme.customerName}. 
+                    <CardDescription>Overview of the completed scheme for {scheme.customerName} (ID: {scheme.id.substring(0,8)}...). 
                         {scheme.closureDate && ` Closed on ${formatDate(scheme.closureDate)}.`}
                     </CardDescription>
                 </CardHeader>
@@ -448,18 +386,18 @@ export default function SchemeDetailsPage() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="font-headline">All Schemes Enrolled by {scheme.customerName}</CardTitle>
-            <CardDescription>Overview of all schemes associated with this customer.</CardDescription>
+            <CardDescription>View and manage payment schedules for all schemes associated with this customer.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Accordion type="multiple" className="w-full">
+            <Accordion type="multiple" className="w-full" defaultValue={schemeId ? [schemeId] : undefined}>
               {allSchemesForThisCustomer.map((s) => (
                 <AccordionItem value={s.id} key={s.id}>
                   <AccordionTrigger>
                     <div className="flex justify-between items-center w-full pr-2">
                       <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
+                        <span className="font-medium">Scheme ID: {s.id.substring(0,8)}...</span>
                         <SchemeStatusBadge status={s.status} />
-                        {s.id === scheme.id && <Badge variant="outline" className="text-xs h-5">Currently Viewing</Badge>}
+                        {s.id === scheme.id && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                       </div>
                       <div className="text-xs text-muted-foreground hidden md:block">
                         Started: {formatDate(s.startDate)} | Monthly: {formatCurrency(s.monthlyPaymentAmount)}
@@ -467,45 +405,78 @@ export default function SchemeDetailsPage() {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
-                    {s.id === scheme.id ? (
-                      <p className="p-4 text-sm text-muted-foreground">Details for this scheme are shown above in the main section and tabs.</p>
-                    ) : s.status === 'Completed' ? (
+                    {s.status === 'Completed' ? (
                       <div className="p-4 text-sm">
                         <p><strong>Scheme Completed</strong></p>
                         {s.closureDate && <p>Closed on: {formatDate(s.closureDate)}</p>}
                         <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
-                        <Button asChild variant="link" size="sm" className="p-0 h-auto mt-1">
-                          <Link href={`/schemes/${s.id}`}>View Full Details</Link>
-                        </Button>
+                        {s.id !== scheme.id && (
+                            <Button asChild variant="link" size="sm" className="p-0 h-auto mt-1">
+                                <Link href={`/schemes/${s.id}`}>View Full Details of This Scheme</Link>
+                            </Button>
+                        )}
                       </div>
                     ) : (
-                      <div className="p-2">
+                      <div className="p-2 overflow-x-auto">
                         <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme ID: {s.id.substring(0,8)}...</p>
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-xs">Month</TableHead>
-                              <TableHead className="text-xs">Due</TableHead>
-                              <TableHead className="text-xs text-right">Expected</TableHead>
-                              <TableHead className="text-xs text-right">Paid</TableHead>
-                              <TableHead className="text-xs">Status</TableHead>
+                              <TableHead>Month</TableHead>
+                              <TableHead>Due Date</TableHead>
+                              <TableHead>Expected</TableHead>
+                              <TableHead>Paid Amount</TableHead>
+                              <TableHead>Payment Date</TableHead>
+                              <TableHead>Mode(s)</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {s.payments.map((p) => (
-                              <TableRow key={p.id}>
-                                <TableCell className="text-xs">{p.monthNumber}</TableCell>
-                                <TableCell className="text-xs">{formatDate(p.dueDate, 'dd/MM/yy')}</TableCell>
-                                <TableCell className="text-xs text-right">{formatCurrency(p.amountExpected)}</TableCell>
-                                <TableCell className="text-xs text-right">{formatCurrency(p.amountPaid)}</TableCell>
-                                <TableCell className="text-xs"><PaymentStatusBadge status={getPaymentStatus(p, s.startDate)} /></TableCell>
+                            {s.payments.map((payment) => (
+                              <TableRow key={payment.id}>
+                                <TableCell>{payment.monthNumber}</TableCell>
+                                <TableCell>{formatDate(payment.dueDate)}</TableCell>
+                                <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
+                                <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
+                                <TableCell>{formatDate(payment.paymentDate)}</TableCell>
+                                <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
+                                <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
+                                <TableCell className="text-right">
+                                  {isPaymentRecordable(payment, s) ? (
+                                    <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
+                                      <DialogTrigger asChild>
+                                        <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
+                                          <DollarSign className="mr-1 h-4 w-4" /> Record
+                                        </Button>
+                                      </DialogTrigger>
+                                      {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
+                                        <DialogContent>
+                                          <DialogHeader>
+                                            <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
+                                            <CardDescription>Scheme ID: {s.id.substring(0,8)}...</CardDescription>
+                                          </DialogHeader>
+                                          <RecordPaymentForm
+                                            payment={selectedPaymentForRecord}
+                                            onSubmit={handleRecordPayment}
+                                            isLoading={isRecordingPayment}
+                                          />
+                                        </DialogContent>
+                                      )}
+                                    </Dialog>
+                                  ) : (
+                                    (payment.status === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
                         </Table>
-                        <Button asChild variant="link" size="sm" className="p-0 h-auto mt-2">
-                          <Link href={`/schemes/${s.id}`}>View Full Details & Record Payments</Link>
-                        </Button>
+                        {s.id !== scheme.id && (
+                            <Button asChild variant="link" size="sm" className="p-0 h-auto mt-2">
+                                <Link href={`/schemes/${s.id}`}>View Full Details & Visuals of This Scheme</Link>
+                            </Button>
+                        )}
                       </div>
                     )}
                   </AccordionContent>
@@ -624,3 +595,4 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+
