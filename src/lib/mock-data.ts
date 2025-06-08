@@ -7,11 +7,15 @@ const createScheme = (
   customerName: string, 
   startDate: Date, 
   monthlyPaymentAmount: number,
-  customerGroupName?: string 
+  customerGroupName?: string,
+  customerPhone?: string,
+  customerAddress?: string
 ): Scheme => {
   const baseScheme: Omit<Scheme, 'payments' | 'status' | 'closureDate'> = {
     id: generateId(),
     customerName,
+    customerPhone,
+    customerAddress,
     customerGroupName, 
     startDate: formatISO(startDate),
     monthlyPaymentAmount,
@@ -73,17 +77,17 @@ const createScheme = (
 };
 
 export let MOCK_SCHEMES: Scheme[] = [
-  createScheme('Alice Wonderland', subMonths(new Date(), 4), 1000, "Smith Family"),
-  createScheme('Active Customer', subMonths(new Date(), 4), 1000, "Smith Family"),
-  createScheme('Active Customer', subMonths(new Date(), 1), 500, "Smith Family"), 
-  createScheme('Bob The Builder', subMonths(new Date(), 2), 800, "Smith Family"),
-  createScheme('Charlie Brown', addMonths(new Date(), 1), 1500, "Office Buddies"),
-  createScheme('Diana Prince', subMonths(new Date(), 5), 500, "Smith Family"), 
-  createScheme('Edward Scissorhands', subMonths(new Date(), 13), 2000, "Solo Ventures"), 
-  createScheme('Fiona Gallagher', subMonths(new Date(), 11), 750, "Office Buddies"), 
-  createScheme('George Jetson', subMonths(new Date(), 3), 1200, "Office Buddies"),
-  createScheme('Hannah Montana', subMonths(new Date(), 1), 600), 
-  createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family"), 
+  createScheme('Alice Wonderland', subMonths(new Date(), 4), 1000, "Smith Family", "9876543210", "123 Wonderland Lane, Fantasy City"),
+  createScheme('Active Customer', subMonths(new Date(), 4), 1000, "Smith Family", "8765432109", "456 Active Rd, Live Town"),
+  createScheme('Active Customer', subMonths(new Date(), 1), 500, "Smith Family", "8765432109", "456 Active Rd, Live Town"), 
+  createScheme('Bob The Builder', subMonths(new Date(), 2), 800, "Smith Family", "7654321098", "789 Construction Ave, Buildville"),
+  createScheme('Charlie Brown', addMonths(new Date(), 1), 1500, "Office Buddies", "6543210987", "1 Peanuts St, Cartoonville"),
+  createScheme('Diana Prince', subMonths(new Date(), 5), 500, "Smith Family", "5432109876", "Themyscira Island, Paradise"), 
+  createScheme('Edward Scissorhands', subMonths(new Date(), 13), 2000, "Solo Ventures", "4321098765", "Gothic Mansion, Suburbia"), 
+  createScheme('Fiona Gallagher', subMonths(new Date(), 11), 750, "Office Buddies", "3210987654", "South Side, Chicago"), 
+  createScheme('George Jetson', subMonths(new Date(), 3), 1200, "Office Buddies", "2109876543", "Orbit City, Skypad Apartments"),
+  createScheme('Hannah Montana', subMonths(new Date(), 1), 600, undefined, "1098765432", "Malibu, CA"), 
+  createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family", "0987654321", "Central City Apt"), 
 ];
 
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
@@ -132,6 +136,8 @@ export const addMockScheme = (newSchemeData: Omit<Scheme, 'id' | 'payments' | 's
   const baseScheme: Omit<Scheme, 'payments' | 'status' | 'closureDate'> = {
     id: generateId(),
     customerName: newSchemeData.customerName,
+    customerPhone: newSchemeData.customerPhone,
+    customerAddress: newSchemeData.customerAddress,
     customerGroupName: newSchemeData.customerGroupName,
     startDate: newSchemeData.startDate, // Expecting ISO string
     monthlyPaymentAmount: newSchemeData.monthlyPaymentAmount,
@@ -258,7 +264,7 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
   
   return getMockSchemeById(schemeId);
-}
+};
 
 interface CloseSchemeOptions {
   closureDate: string; // ISO Date string
@@ -613,3 +619,4 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
 
   return { successCount, errorCount, messages };
 };
+

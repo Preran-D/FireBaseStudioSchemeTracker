@@ -19,6 +19,8 @@ export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming';
 export interface Scheme {
   id: string;
   customerName: string;
+  customerPhone?: string;
+  customerAddress?: string;
   customerGroupName?: string; // Added for grouping customers
   startDate: string; // ISO Date string
   monthlyPaymentAmount: number;
@@ -39,3 +41,4 @@ export interface GroupDetail {
   totalSchemesInGroup: number;
   recordableSchemeCount: number; // Number of schemes in this group with a next payment due
 }
+

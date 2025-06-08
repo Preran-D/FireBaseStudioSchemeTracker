@@ -18,7 +18,7 @@ import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart, LineChart } from "recharts"
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart, LineChart as RechartsLineChart } from "recharts"
 import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -106,6 +106,10 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
+      // Update activeAccordionItem visuals if the recorded payment was for the currently active scheme for visuals
+      if (activeAccordionItem === updatedSchemeFromMock.id) {
+        setActiveAccordionItem(updatedSchemeFromMock.id); // re-trigger memo for schemeForVisuals
+      }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
@@ -143,6 +147,10 @@ export default function SchemeDetailsPage() {
       setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
       if(scheme && scheme.id === closedSchemeResult.id) { 
         setScheme(closedSchemeResult);
+      }
+       // If the closed scheme was the one active for visuals, update visuals if needed
+      if (activeAccordionItem === closedSchemeResult.id) {
+        setActiveAccordionItem(closedSchemeResult.id); 
       }
       toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.substring(0,8)}) has been updated.` });
     } else {
@@ -253,6 +261,8 @@ export default function SchemeDetailsPage() {
     if (!scheme) return;
     const queryParams = new URLSearchParams();
     queryParams.append('customerName', scheme.customerName);
+    if(scheme.customerPhone) queryParams.append('customerPhone', scheme.customerPhone);
+    if(scheme.customerAddress) queryParams.append('customerAddress', scheme.customerAddress);
     if (scheme.customerGroupName) {
       queryParams.append('customerGroupName', scheme.customerGroupName);
     }
@@ -271,9 +281,11 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Primary Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
-              {scheme.customerGroupName && (<><br/>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link></>)}
-              {scheme.status === 'Completed' && scheme.closureDate && (<><br/>Closed on: {formatDate(scheme.closureDate)}</>)}
+              Primary Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}<br/>
+              Phone: {scheme.customerPhone || 'N/A'}<br/>
+              Address: {scheme.customerAddress || 'N/A'}<br/>
+              {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
+              {scheme.status === 'Completed' && scheme.closureDate && (<>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
@@ -474,7 +486,7 @@ export default function SchemeDetailsPage() {
                         <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
                         <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
                             <ResponsiveContainer>
-                            <LineChart data={cumulativePaymentData}>
+                            <RechartsLineChart data={cumulativePaymentData}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" fontSize={10} />
                                 <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
@@ -482,7 +494,7 @@ export default function SchemeDetailsPage() {
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
                                 <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
-                            </LineChart>
+                            </RechartsLineChart>
                             </ResponsiveContainer>
                         </ChartContainer>
                         </div>

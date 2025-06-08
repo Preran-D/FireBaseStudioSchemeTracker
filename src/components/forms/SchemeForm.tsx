@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon } from 'lucide-react';
@@ -19,6 +20,8 @@ import { formatISO, parseISO } from 'date-fns';
 
 const schemeFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name must be at least 2 characters.' }),
+  customerPhone: z.string().optional(),
+  customerAddress: z.string().optional(),
   startDate: z.date({ required_error: 'Scheme start date is required.' }),
   monthlyPaymentAmount: z.coerce.number().min(1, { message: 'Monthly payment amount must be positive.' }),
   groupOption: z.enum(['none', 'existing', 'new']).default('none'),
@@ -63,6 +66,8 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
     if (defaultValuesOverride && Object.keys(defaultValuesOverride).length > 0) {
       return {
         customerName: defaultValuesOverride.customerName || '',
+        customerPhone: defaultValuesOverride.customerPhone || '',
+        customerAddress: defaultValuesOverride.customerAddress || '',
         startDate: defaultValuesOverride.startDate || new Date(),
         monthlyPaymentAmount: defaultValuesOverride.monthlyPaymentAmount ?? '',
         groupOption: defaultValuesOverride.groupOption || (existingGroupNames.length > 0 ? 'none' : 'new'),
@@ -73,6 +78,8 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
     if (initialData) { // Editing existing scheme
       return {
         customerName: initialData.customerName || '',
+        customerPhone: initialData.customerPhone || '',
+        customerAddress: initialData.customerAddress || '',
         startDate: initialData.startDate ? parseISO(initialData.startDate) : new Date(),
         monthlyPaymentAmount: initialData.monthlyPaymentAmount ?? '',
         groupOption: initialData.customerGroupName 
@@ -85,6 +92,8 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
     // Default for a completely new, un-prefilled scheme
     return {
       customerName: '',
+      customerPhone: '',
+      customerAddress: '',
       startDate: new Date(),
       monthlyPaymentAmount: '',
       groupOption: existingGroupNames.length > 0 ? 'none' : 'new',
@@ -117,6 +126,8 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
 
     onSubmit({
       customerName: values.customerName,
+      customerPhone: values.customerPhone,
+      customerAddress: values.customerAddress,
       startDate: formatISO(values.startDate), // startDate from form is Date object
       monthlyPaymentAmount: values.monthlyPaymentAmount, // This is a number after Zod coercion
       customerGroupName: finalCustomerGroupName,
@@ -134,6 +145,34 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
               <FormLabel>Customer Name</FormLabel>
               <FormControl>
                 <Input placeholder="Enter customer name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="customerPhone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Customer Phone (Optional)</FormLabel>
+              <FormControl>
+                <Input type="tel" placeholder="Enter phone number" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="customerAddress"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Customer Address (Optional)</FormLabel>
+              <FormControl>
+                <Textarea placeholder="Enter full address" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -292,4 +331,3 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
     </Form>
   );
 }
-
