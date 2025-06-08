@@ -16,7 +16,12 @@ import { Loader2 } from 'lucide-react';
 import { formatISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'>;
+// This type should align with the form values, including customerGroupName
+type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths' | 'customerGroupName'> & {
+  customerGroupName?: string;
+  monthlyPaymentAmount: number; // Ensure this is number
+};
+
 
 export default function NewSchemePage() {
   const router = useRouter();
@@ -33,14 +38,20 @@ export default function NewSchemePage() {
   const proceedWithSchemeCreation = (data: NewSchemeFormData) => {
     setIsLoading(true); // For scheme creation process
     try {
-      const newScheme = addMockScheme(data);
+      // Pass all data including customerGroupName to addMockScheme
+      const newScheme = addMockScheme({
+        customerName: data.customerName,
+        startDate: data.startDate,
+        monthlyPaymentAmount: data.monthlyPaymentAmount,
+        customerGroupName: data.customerGroupName,
+      });
       setNewlyCreatedScheme(newScheme);
       if (newScheme.payments.length > 0) {
         setFirstPaymentAmount(newScheme.payments[0].amountExpected.toString());
       }
       toast({
         title: 'Scheme Created',
-        description: `Scheme for ${newScheme.customerName} created. You can now record the first payment.`,
+        description: `Scheme for ${newScheme.customerName} ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
       });
       setIsFirstPaymentAlertOpen(true);
       setIsLoading(false); // Scheme creation done
@@ -93,6 +104,7 @@ export default function NewSchemePage() {
     const updatedScheme = updateMockSchemePayment(newlyCreatedScheme.id, firstPayment.id, {
       amountPaid: amountToPay,
       paymentDate: formatISO(new Date()),
+      modeOfPayment: ['Cash'], // Default mode for now, can be expanded
     });
 
     if (updatedScheme) {
@@ -118,7 +130,7 @@ export default function NewSchemePage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
-            <CardDescription>Enter the details for the new customer scheme.</CardDescription>
+            <CardDescription>Enter the details for the new customer scheme, including an optional group name.</CardDescription>
           </CardHeader>
           <CardContent>
             <SchemeForm onSubmit={handleSubmit} isLoading={isLoading && !isCustomerExistsAlertOpen && !isFirstPaymentAlertOpen} />
@@ -135,6 +147,7 @@ export default function NewSchemePage() {
               <AlertDialogDescription>
                 A customer named '{formDataForConfirmation.customerName}' already exists. 
                 Do you want to create a new scheme for this customer?
+                {formDataForConfirmation.customerGroupName && ` (Group: ${formDataForConfirmation.customerGroupName})`}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -168,6 +181,7 @@ export default function NewSchemePage() {
               <AlertDialogDescription>
                 The first payment (Month 1) is due on {formatDate(newlyCreatedScheme.payments[0].dueDate)}.
                 Expected amount: {formatCurrency(newlyCreatedScheme.payments[0].amountExpected)}.
+                {newlyCreatedScheme.customerGroupName && ` This scheme is part of group: ${newlyCreatedScheme.customerGroupName}.`}
                 <br />
                 You can record it now or do it later from the scheme details page.
               </AlertDialogDescription>

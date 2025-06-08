@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -17,12 +18,13 @@ const schemeFormSchema = z.object({
   customerName: z.string().min(2, { message: 'Customer name must be at least 2 characters.' }),
   startDate: z.date({ required_error: 'Scheme start date is required.' }),
   monthlyPaymentAmount: z.coerce.number().min(1, { message: 'Monthly payment amount must be positive.' }),
+  customerGroupName: z.string().optional(),
 });
 
 type SchemeFormValues = z.infer<typeof schemeFormSchema>;
 
 interface SchemeFormProps {
-  onSubmit: (data: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'>) => void;
+  onSubmit: (data: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & { customerGroupName?: string }) => void;
   initialData?: Partial<Scheme>;
   isLoading?: boolean;
 }
@@ -34,13 +36,16 @@ export function SchemeForm({ onSubmit, initialData, isLoading }: SchemeFormProps
       customerName: initialData?.customerName || '',
       startDate: initialData?.startDate ? parseISO(initialData.startDate) : new Date(),
       monthlyPaymentAmount: initialData?.monthlyPaymentAmount ?? '', // Ensure defined value, empty string for undefined/null
+      customerGroupName: initialData?.customerGroupName || '',
     },
   });
 
   const handleSubmit = (values: SchemeFormValues) => {
     onSubmit({
-      ...values,
+      customerName: values.customerName,
       startDate: formatISO(values.startDate),
+      monthlyPaymentAmount: values.monthlyPaymentAmount,
+      customerGroupName: values.customerGroupName || undefined, // Ensure it's undefined if empty
     });
   };
 
@@ -55,6 +60,19 @@ export function SchemeForm({ onSubmit, initialData, isLoading }: SchemeFormProps
               <FormLabel>Customer Name</FormLabel>
               <FormControl>
                 <Input placeholder="Enter customer name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="customerGroupName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Customer Group Name (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Smith Family, Office Buddies" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
