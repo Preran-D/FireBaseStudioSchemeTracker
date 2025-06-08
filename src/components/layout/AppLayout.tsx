@@ -1,5 +1,6 @@
+
 import type { PropsWithChildren } from 'react';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
+import { SideContextWrapper, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Bell, LayoutDashboard, ListChecks, FileText, Settings, LogOut, CircleDollarSign } from 'lucide-react';
@@ -15,7 +16,7 @@ const navItems = [
 
 export default function AppLayout({ children }: PropsWithChildren) {
   return (
-    <SidebarProvider defaultOpen>
+    <SideContextWrapper defaultOpen>
       <Sidebar collapsible="icon" variant="sidebar" className="border-r">
         <SidebarHeader className="p-4">
           <Link href="/" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
@@ -99,7 +100,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem
+                <DropdownMenuItem>Settings</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>Log out</DropdownMenuItem>
               </DropdownMenuContent>
@@ -108,6 +109,6 @@ export default function AppLayout({ children }: PropsWithChildren) {
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </SidebarInset>
-    </SidebarProvider>
+    </SideContextWrapper>
   );
 }
