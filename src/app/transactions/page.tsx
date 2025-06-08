@@ -25,6 +25,7 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { formatISO, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 interface TransactionRow extends Payment {
@@ -63,6 +64,7 @@ export default function TransactionsPage() {
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<TransactionRow | null>(null);
   const [isDeletingPayment, setIsDeletingPayment] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('all-transactions');
 
   const { toast } = useToast();
 
@@ -92,11 +94,15 @@ export default function TransactionsPage() {
     loadData();
   }, [loadData]);
 
-  const { groupedDisplayData, individualDisplayData } = useMemo(() => {
-    let filteredTransactions = allFlatTransactions;
+  const {
+    filteredTransactions, // For "All Transactions" tab
+    groupedDisplayData,    // For "Grouped View" tab
+    individualDisplayData  // For "Grouped View" tab (non-grouped items)
+  } = useMemo(() => {
+    let currentFilteredTransactions = allFlatTransactions;
 
     if (dateRange.from || dateRange.to) {
-      filteredTransactions = filteredTransactions.filter(transaction => {
+      currentFilteredTransactions = currentFilteredTransactions.filter(transaction => {
         if (!transaction.paymentDate) return false;
         const paymentDateTime = parseISO(transaction.paymentDate);
         const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
@@ -116,7 +122,7 @@ export default function TransactionsPage() {
     }
 
     if (searchTerm) {
-      filteredTransactions = filteredTransactions.filter(transaction =>
+      currentFilteredTransactions = currentFilteredTransactions.filter(transaction =>
         transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (transaction.customerGroupName && transaction.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         transaction.schemeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -129,9 +135,9 @@ export default function TransactionsPage() {
       totalAmountInGroup: number;
       transactionsByDateMap: Map<string, { transactionsOnDate: TransactionRow[]; totalAmountOnDate: number; distinctCustomersOnDate: Set<string> }>;
     }>();
-    const individuals: TransactionRow[] = [];
+    const individualsForGroupedView: TransactionRow[] = [];
 
-    filteredTransactions.forEach(transaction => {
+    currentFilteredTransactions.forEach(transaction => {
       if (transaction.customerGroupName) {
         let groupEntry = groupsMapTemp.get(transaction.customerGroupName);
         if (!groupEntry) {
@@ -157,7 +163,7 @@ export default function TransactionsPage() {
         dateEntry.distinctCustomersOnDate.add(transaction.customerName);
 
       } else {
-        individuals.push(transaction);
+        individualsForGroupedView.push(transaction);
       }
     });
 
@@ -183,8 +189,9 @@ export default function TransactionsPage() {
     ).sort((a,b) => a.groupName.localeCompare(b.groupName));
 
     return {
+      filteredTransactions: currentFilteredTransactions.sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime()),
       groupedDisplayData: finalGroupedDisplayData,
-      individualDisplayData: individuals.sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
+      individualDisplayData: individualsForGroupedView.sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
     };
   }, [allFlatTransactions, searchTerm, dateRange]);
 
@@ -221,14 +228,14 @@ export default function TransactionsPage() {
     setDateRange({ from: undefined, to: undefined });
   };
 
-  const renderTransactionTable = (transactions: TransactionRow[], isNestedTable: boolean = false) => (
+  const renderTransactionTable = (transactions: TransactionRow[], isNestedTable: boolean = false, showPaymentDateColumn: boolean = true) => (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Customer</TableHead>
           <TableHead>Scheme ID</TableHead>
           <TableHead>Month</TableHead>
-          {!isNestedTable ? <TableHead>Payment Date</TableHead> : null }
+          {showPaymentDateColumn ? <TableHead>Payment Date</TableHead> : null }
           <TableHead>Amount Paid</TableHead>
           <TableHead>Mode(s)</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -241,12 +248,12 @@ export default function TransactionsPage() {
             <TableCell>
               <Button variant="link" asChild className="p-0 h-auto">
                   <Link href={`/schemes/${transaction.schemeId}`} className="truncate max-w-[100px] sm:max-w-xs block">
-                    {transaction.schemeId}
+                    {transaction.schemeId.substring(0,8)}...
                   </Link>
               </Button>
             </TableCell>
             <TableCell>{transaction.monthNumber}</TableCell>
-            {!isNestedTable ? <TableCell>{formatDate(transaction.paymentDate)}</TableCell> : null}
+            {showPaymentDateColumn ? <TableCell>{formatDate(transaction.paymentDate)}</TableCell> : null}
             <TableCell>{formatCurrency(transaction.amountPaid)}</TableCell>
             <TableCell>{transaction.modeOfPayment?.join(' | ') || '-'}</TableCell>
             <TableCell className="text-right">
@@ -349,68 +356,84 @@ export default function TransactionsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {groupedDisplayData.length === 0 && individualDisplayData.length === 0 && (
-              <div className="text-center py-10 text-muted-foreground">
-                <p>No transactions match your filters or no payments recorded yet.</p>
-              </div>
-            )}
+             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="all-transactions">All Transactions</TabsTrigger>
+                <TabsTrigger value="grouped-view">Grouped View</TabsTrigger>
+              </TabsList>
+              <TabsContent value="all-transactions" className="mt-4">
+                {filteredTransactions.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <p>No transactions match your filters or no payments recorded yet.</p>
+                  </div>
+                ) : (
+                  renderTransactionTable(filteredTransactions, false, true)
+                )}
+              </TabsContent>
+              <TabsContent value="grouped-view" className="mt-4">
+                {groupedDisplayData.length === 0 && individualDisplayData.length === 0 && (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <p>No transactions match your filters or no payments recorded yet for the grouped view.</p>
+                  </div>
+                )}
 
-            {groupedDisplayData.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold mb-2">Grouped Transactions</h2>
-                <Accordion type="multiple" className="w-full">
-                  {groupedDisplayData.map((group) => (
-                    <AccordionItem value={`group-${group.groupName}`} key={`group-${group.groupName}`} className="mb-2 border rounded-md overflow-hidden">
-                      <AccordionTrigger className="p-3 hover:bg-muted/80 text-left data-[state=open]:bg-muted/50 data-[state=open]:border-b">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-1">
-                          <span className="font-semibold text-base text-primary">Group: {group.groupName}</span>
-                          <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
-                            <span>{group.datesWithTransactions.reduce((sum, d) => sum + d.transactions.length, 0)} recorded payment(s)</span>
-                            <span className="font-medium">Group Total (filtered): {formatCurrency(group.totalAmountInGroup)}</span>
-                            {group.customerNames.length > 0 && (
-                              <span className="truncate max-w-xs">
-                                Involving: {group.customerNames.join(', ')}
-                              </span>
+                {groupedDisplayData.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-2">Grouped Transactions</h2>
+                    <Accordion type="multiple" className="w-full">
+                      {groupedDisplayData.map((group) => (
+                        <AccordionItem value={`group-${group.groupName}`} key={`group-${group.groupName}`} className="mb-2 border rounded-md overflow-hidden">
+                          <AccordionTrigger className="p-3 hover:bg-muted/80 text-left data-[state=open]:bg-muted/50 data-[state=open]:border-b">
+                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-1">
+                              <span className="font-semibold text-base text-primary">Group: {group.groupName}</span>
+                              <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center">
+                                <span>{group.datesWithTransactions.reduce((sum, d) => sum + d.transactions.length, 0)} recorded payment(s)</span>
+                                <span className="font-medium">Group Total (filtered): {formatCurrency(group.totalAmountInGroup)}</span>
+                                {group.customerNames.length > 0 && (
+                                  <span className="truncate max-w-xs">
+                                    Involving: {group.customerNames.join(', ')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-1">
+                            {group.datesWithTransactions.length > 0 ? (
+                              <Accordion type="multiple" className="w-full mt-2">
+                                {group.datesWithTransactions.map((dateItem) => (
+                                  <AccordionItem value={`date-${group.groupName}-${dateItem.date}`} key={`date-${group.groupName}-${dateItem.date}`} className="mb-1 border-t last:border-b-0">
+                                    <AccordionTrigger className="py-2 px-3 text-sm hover:bg-muted/50 data-[state=open]:bg-muted/40">
+                                      <div className="flex justify-between items-center w-full">
+                                        <span>Date: {dateItem.formattedDate}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {dateItem.distinctCustomerCountOnDate} customer(s), Total: {formatCurrency(dateItem.totalAmountOnDate)}
+                                        </span>
+                                      </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-1 pb-2 px-1">
+                                      {renderTransactionTable(dateItem.transactions, true, false)}
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                ))}
+                              </Accordion>
+                            ) : (
+                              <p className="p-4 text-center text-sm text-muted-foreground">No transactions for this group with the current filters.</p>
                             )}
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-1">
-                        {group.datesWithTransactions.length > 0 ? (
-                           <Accordion type="multiple" className="w-full mt-2">
-                            {group.datesWithTransactions.map((dateItem) => (
-                              <AccordionItem value={`date-${group.groupName}-${dateItem.date}`} key={`date-${group.groupName}-${dateItem.date}`} className="mb-1 border-t last:border-b-0">
-                                <AccordionTrigger className="py-2 px-3 text-sm hover:bg-muted/50 data-[state=open]:bg-muted/40">
-                                  <div className="flex justify-between items-center w-full">
-                                    <span>Date: {dateItem.formattedDate}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {dateItem.distinctCustomerCountOnDate} customer(s), Total: {formatCurrency(dateItem.totalAmountOnDate)}
-                                    </span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="pt-1 pb-2 px-1">
-                                  {renderTransactionTable(dateItem.transactions, true)}
-                                </AccordionContent>
-                              </AccordionItem>
-                            ))}
-                          </Accordion>
-                        ) : (
-                          <p className="p-4 text-center text-sm text-muted-foreground">No transactions for this group on the selected dates/filters.</p>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </div>
-            )}
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
+                )}
 
-            {individualDisplayData.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold mb-2 pt-4">Individual Transactions (Not in a Group)</h2>
-                {renderTransactionTable(individualDisplayData, false)}
-              </div>
-            )}
-
+                {individualDisplayData.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-semibold mb-2 pt-4">Individual Transactions (Not in a Group)</h2>
+                    {renderTransactionTable(individualDisplayData, false, true)}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
@@ -420,7 +443,7 @@ export default function TransactionsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="font-headline">Edit Payment for {selectedPaymentForEdit.customerName} (Month {selectedPaymentForEdit.monthNumber})</DialogTitle>
-               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId}</CardDescription>
+               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId.substring(0,8)}...</CardDescription>
             </DialogHeader>
             <RecordPaymentForm
               payment={selectedPaymentForEdit}
