@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation'; // Added useRouter
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,11 +38,11 @@ interface SelectedPaymentContext extends Payment {
 
 export default function SchemeDetailsPage() {
   const params = useParams();
-  const router = useRouter(); // Initialized useRouter
+  const router = useRouter();
   const { toast } = useToast();
   const schemeIdFromUrl = params.id as string;
 
-  const [scheme, setScheme] = useState<Scheme | null>(null); // Main scheme being viewed
+  const [scheme, setScheme] = useState<Scheme | null>(null);
   const [allSchemesForThisCustomer, setAllSchemesForThisCustomer] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -58,6 +58,9 @@ export default function SchemeDetailsPage() {
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   const [isAssignGroupDialogOpen, setIsAssignGroupDialogOpen] = useState(false);
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
+  
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string | undefined>(schemeIdFromUrl);
+
 
   const loadSchemeData = useCallback(() => {
     if (schemeIdFromUrl) {
@@ -68,6 +71,7 @@ export default function SchemeDetailsPage() {
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
         const status = getSchemeStatus(fetchedScheme); 
         setScheme({ ...fetchedScheme, ...totals, status });
+        setActiveAccordionItem(fetchedScheme.id); // Ensure the main scheme is active
 
         const allCustomerSchemes = getMockSchemes()
           .filter(s => s.customerName === fetchedScheme.customerName)
@@ -102,6 +106,10 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
+      if (activeAccordionItem === updatedSchemeFromMock.id) {
+        // If the updated scheme was the one active in accordion, ensure its visuals refresh
+        // by potentially re-evaluating schemeForVisuals or if its directly based on allSchemesForThisCustomer
+      }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
@@ -135,8 +143,10 @@ export default function SchemeDetailsPage() {
     const closedSchemeResult = closeMockScheme(scheme.id, closureOptions);
 
     if(closedSchemeResult) {
-      setScheme(closedSchemeResult); 
-      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s)); 
+      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
+      if(scheme.id === closedSchemeResult.id) {
+        setScheme(closedSchemeResult);
+      }
       toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme has been updated.` });
     } else {
        toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
@@ -149,11 +159,10 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(true);
     const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
     if (updatedSchemeFromMock) {
+      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
       if (scheme && updatedSchemeFromMock.id === scheme.id) {
         setScheme(updatedSchemeFromMock);
       }
-      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
-      
       toast({
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
@@ -191,21 +200,26 @@ export default function SchemeDetailsPage() {
       aggregateTotalRemaining,
     };
   }, [allSchemesForThisCustomer]);
+  
+  const schemeForVisuals = useMemo(() => {
+    return allSchemesForThisCustomer.find(s => s.id === activeAccordionItem) || scheme;
+  }, [activeAccordionItem, allSchemesForThisCustomer, scheme]);
 
-  const paymentChartDataForMainScheme = useMemo(() => {
-    if (!scheme) return [];
-    return scheme.payments.map(p => ({
+
+  const paymentChartData = useMemo(() => {
+    if (!schemeForVisuals) return [];
+    return schemeForVisuals.payments.map(p => ({
       month: `M${p.monthNumber}`,
       expected: p.amountExpected,
       paid: p.amountPaid || 0,
     }));
-  }, [scheme]);
+  }, [schemeForVisuals]);
 
-  const cumulativePaymentDataForMainScheme = useMemo(() => {
-    if (!scheme) return [];
+  const cumulativePaymentData = useMemo(() => {
+    if (!schemeForVisuals) return [];
     let cumulativePaid = 0;
     let cumulativeExpected = 0;
-    return scheme.payments.map(p => {
+    return schemeForVisuals.payments.map(p => {
       cumulativePaid += (p.amountPaid || 0);
       cumulativeExpected += p.amountExpected;
       return {
@@ -214,7 +228,7 @@ export default function SchemeDetailsPage() {
         cumulativeExpected,
       };
     });
-  }, [scheme]);
+  }, [schemeForVisuals]);
 
   const chartConfig = {
     paid: { label: "Paid", color: "hsl(var(--chart-2))" },
@@ -235,7 +249,7 @@ export default function SchemeDetailsPage() {
     }
     return true;
   };
-
+  
   const handleAddNewSchemeForCustomer = () => {
     if (!scheme) return;
     const queryParams = new URLSearchParams();
@@ -247,13 +261,11 @@ export default function SchemeDetailsPage() {
     router.push(`/schemes/new?${queryParams.toString()}`);
   };
 
+
   if (isLoading || !scheme) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
   
-  const defaultAccordionOpenValue = schemeIdFromUrl ? [schemeIdFromUrl] : (allSchemesForThisCustomer.length > 0 ? [allSchemesForThisCustomer[0].id] : []);
-
-
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -261,12 +273,12 @@ export default function SchemeDetailsPage() {
           <div>
             <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
             <CardDescription>
-              Viewing Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
+              Primary Scheme ID: {scheme.id.substring(0,8)}... Started on {formatDate(scheme.startDate)}
               {scheme.status === 'Completed' && scheme.closureDate && (<><br/>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
-            <Button 
+             <Button 
                 onClick={handleAddNewSchemeForCustomer}
                 variant="outline" 
                 size="sm"
@@ -289,14 +301,7 @@ export default function SchemeDetailsPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          <div><strong>Monthly Amount:</strong> {formatCurrency(scheme.monthlyPaymentAmount)}</div>
-          <div><strong>Duration:</strong> {scheme.durationMonths} Months</div>
-          <div><strong>Total Expected:</strong> {formatCurrency(scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0))}</div>
-          <div><strong>Total Collected:</strong> {formatCurrency(scheme.totalCollected || 0)}</div>
-          <div><strong>Total Remaining:</strong> {formatCurrency(scheme.totalRemaining || 0)}</div>
-          <div><strong>Payments Made:</strong> {scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</div>
-        </CardContent>
+        {/* Main scheme details (monthly, duration, etc.) could go here if desired, or rely on accordion for all */}
       </Card>
 
       {allSchemesForThisCustomer.length > 0 && (
@@ -306,15 +311,21 @@ export default function SchemeDetailsPage() {
             <CardDescription>View and manage payment schedules for all schemes associated with this customer.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Accordion type="multiple" className="w-full space-y-3" defaultValue={defaultAccordionOpenValue}>
+            <Accordion 
+                type="single" 
+                collapsible 
+                className="w-full space-y-3" 
+                value={activeAccordionItem} 
+                onValueChange={setActiveAccordionItem}
+            >
               {allSchemesForThisCustomer.map((s) => (
-                <AccordionItem value={s.id} key={s.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow">
+                <AccordionItem value={s.id} key={s.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
                   <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
                     <div className="flex justify-between items-center w-full">
                       <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                        <span className="font-medium">Scheme ID: {s.id.substring(0,8)}...</span>
+                        <span className="font-medium">ID: {s.id.substring(0,8)}...</span>
                         <SchemeStatusBadge status={s.status} />
-                        {s.id === scheme.id && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
+                        {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                       </div>
                       <div className="text-xs text-muted-foreground text-right">
                         <span>Started: {formatDate(s.startDate)}</span><br/>
@@ -411,90 +422,93 @@ export default function SchemeDetailsPage() {
         </CardContent>
       </Card>
       
-      <Card>
-        <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Current Scheme (ID: {scheme.id.substring(0,8)}...)</CardTitle>
-        </CardHeader>
-        <CardContent>
-             <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-                <Card className="flex flex-col shadow-none border">
+      {schemeForVisuals && (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Scheme ID: {schemeForVisuals.id.substring(0,8)}...</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+                    <Card className="flex flex-col shadow-none border">
+                        <CardHeader>
+                            <CardTitle className="font-headline text-base">Monthly Progress</CardTitle>
+                            <CardDescription className="text-xs">Visual breakdown of payments for the selected scheme.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-grow flex items-center justify-center p-2 sm:p-4">
+                            <MonthlyCircularProgress 
+                            payments={schemeForVisuals.payments} 
+                            startDate={schemeForVisuals.startDate}
+                            durationMonths={schemeForVisuals.durationMonths}
+                            />
+                        </CardContent>
+                    </Card>
+                    <Card className="shadow-none border">
                     <CardHeader>
-                        <CardTitle className="font-headline text-base">Monthly Progress</CardTitle>
-                        <CardDescription className="text-xs">Visual breakdown of payments for the current scheme.</CardDescription>
+                        <CardTitle className="font-headline text-base">Payment Trends</CardTitle>
+                        <CardDescription className="text-xs">Expected vs. Paid amounts over time for the selected scheme.</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-grow flex items-center justify-center p-2 sm:p-4">
-                        <MonthlyCircularProgress 
-                        payments={scheme.payments} 
-                        startDate={scheme.startDate}
-                        durationMonths={scheme.durationMonths}
-                        />
+                    <CardContent className="space-y-6 p-2 sm:p-4">
+                        <div>
+                        <h3 className="text-sm font-semibold mb-1">Monthly Payments</h3>
+                        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
+                            <ResponsiveContainer>
+                            <RechartsBarChart data={paymentChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" fontSize={10} />
+                                <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
+                                <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
+                                <Legend wrapperStyle={{fontSize: "10px"}} />
+                                <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
+                            </RechartsBarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                        </div>
+                        <div>
+                        <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
+                        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
+                            <ResponsiveContainer>
+                            <LineChart data={cumulativePaymentData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" fontSize={10} />
+                                <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
+                                <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
+                                <Legend wrapperStyle={{fontSize: "10px"}}/>
+                                <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
+                                <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
+                            </LineChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                        </div>
                     </CardContent>
-                </Card>
-                <Card className="shadow-none border">
-                <CardHeader>
-                    <CardTitle className="font-headline text-base">Payment Trends</CardTitle>
-                    <CardDescription className="text-xs">Expected vs. Paid amounts over time for the current scheme.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 p-2 sm:p-4">
-                    <div>
-                    <h3 className="text-sm font-semibold mb-1">Monthly Payments</h3>
-                    <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
-                        <ResponsiveContainer>
-                        <RechartsBarChart data={paymentChartDataForMainScheme}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" fontSize={10} />
-                            <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
-                            <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                            <Legend wrapperStyle={{fontSize: "10px"}} />
-                            <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
-                        </RechartsBarChart>
-                        </ResponsiveContainer>
-                    </ChartContainer>
-                    </div>
-                    <div>
-                    <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
-                    <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
-                        <ResponsiveContainer>
-                        <LineChart data={cumulativePaymentDataForMainScheme}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="month" fontSize={10} />
-                            <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
-                            <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                            <Legend wrapperStyle={{fontSize: "10px"}}/>
-                            <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
-                            <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
-                        </LineChart>
-                        </ResponsiveContainer>
-                    </ChartContainer>
-                    </div>
-                </CardContent>
-                </Card>
-            </div>
-            {scheme.status === 'Completed' && (
-                <div className="mt-6">
-                    <h3 className="font-semibold mb-2 text-lg">Scheme Completion Summary</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
-                        <div className="flex items-center gap-3">
-                            <PackageCheck className="h-8 w-8 text-green-600" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">Status</p>
-                                <p className="text-lg font-semibold text-green-700 dark:text-green-400">Successfully Completed</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <DollarSign className="h-8 w-8 text-green-600" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">Total Amount Paid</p>
-                                <p className="text-lg font-semibold text-green-700 dark:text-green-400">{formatCurrency(scheme.totalCollected || 0)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    {scheme.closureDate && <p className="mt-2 text-sm">This scheme was closed on <strong>{formatDate(scheme.closureDate)}</strong>.</p>}
+                    </Card>
                 </div>
-            )}
-        </CardContent>
-      </Card>
+                {schemeForVisuals.status === 'Completed' && (
+                    <div className="mt-6">
+                        <h3 className="font-semibold mb-2 text-lg">Scheme Completion Summary</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
+                            <div className="flex items-center gap-3">
+                                <PackageCheck className="h-8 w-8 text-green-600" />
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Status</p>
+                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">Successfully Completed</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <DollarSign className="h-8 w-8 text-green-600" />
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Amount Paid</p>
+                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">{formatCurrency(schemeForVisuals.totalCollected || 0)}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {schemeForVisuals.closureDate && <p className="mt-2 text-sm">This scheme was closed on <strong>{formatDate(schemeForVisuals.closureDate)}</strong>.</p>}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+      )}
+
 
       {isCloseSchemeAlertOpen && scheme && (
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={setIsCloseSchemeAlertOpen}>
