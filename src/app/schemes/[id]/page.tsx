@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -16,8 +17,10 @@ import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, LineChart, Legend, Tooltip as RechartsTooltip } from "recharts"
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, LineChart, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
 import Link from 'next/link';
+import { isPast, parseISO } from 'date-fns';
+
 
 export default function SchemeDetailsPage() {
   const params = useParams();
@@ -245,7 +248,7 @@ export default function SchemeDetailsPage() {
                     <RechartsBarChart data={paymentChartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => formatCurrency(value, '').replace('₹', '')} />
+                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
                       <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
                       <Legend />
                       <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
@@ -261,7 +264,7 @@ export default function SchemeDetailsPage() {
                     <LineChart data={cumulativePaymentData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
-                      <YAxis tickFormatter={(value) => formatCurrency(value, '').replace('₹', '')} />
+                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
                       <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
                       <Legend />
                       <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
@@ -300,13 +303,12 @@ export default function SchemeDetailsPage() {
                     
                     <p>This scheme, initiated on <strong>{formatDate(scheme.startDate)}</strong>, has concluded successfully. All {scheme.durationMonths} payments have been recorded, amounting to a total of <strong>{formatCurrency(scheme.totalCollected || 0)}</strong>.</p>
                     
-                    {/* Placeholder for more detailed summary visual if needed */}
                      <div className="mt-6">
                         <h4 className="font-semibold mb-2">Final Payment Overview</h4>
                         <ResponsiveContainer width="100%" height={200}>
                              <RechartsBarChart data={[{ name: 'Scheme Total', paid: scheme.totalCollected || 0 }]} layout="vertical">
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" tickFormatter={(value) => formatCurrency(value, '').replace('₹', '')} />
+                                <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
                                 <YAxis type="category" dataKey="name" width={100} />
                                 <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                                 <Bar dataKey="paid" fill="var(--color-paid)" barSize={30} radius={[4, 4, 0, 0]} />
@@ -324,3 +326,5 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -172,7 +173,7 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value, '').replace('₹', '')} />
+                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
                     <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <ChartLegend content={<ChartLegendContent />} />
@@ -272,3 +273,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
