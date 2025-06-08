@@ -1,6 +1,7 @@
+
 import type { Scheme, Payment } from '@/types/scheme';
 import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId } from '@/lib/utils';
-import { subMonths, addMonths, formatISO } from 'date-fns';
+import { subMonths, addMonths, formatISO, subWeeks } from 'date-fns';
 
 const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmount: number): Scheme => {
   const baseScheme: Omit<Scheme, 'payments' | 'status'> = {
@@ -14,14 +15,22 @@ const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmoun
   let payments = generatePaymentsForScheme(baseScheme);
   
   // Simulate some payments for mock data
-  if (customerName.includes("Active")) { // For "Active Customer"
+  if (customerName.includes("Active Customer") && monthlyPaymentAmount === 1000) { // For "Active Customer - Scheme 1"
     payments = payments.map((p, index) => {
       if (index < 3) { // First 3 months paid
         return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const };
       }
       return p;
     });
-  } else if (customerName.includes("Overdue")) { // For "Overdue Payer"
+  } else if (customerName.includes("Active Customer") && monthlyPaymentAmount === 800) { // For "Active Customer - Scheme 2"
+    payments = payments.map((p, index) => {
+      if (index < 1) { // First month paid
+        return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const };
+      }
+      // Second payment might be upcoming or pending
+      return p;
+    });
+  } else if (customerName.includes("Overdue Payer")) { // For "Overdue Payer"
      payments = payments.map((p, index) => {
       if (index === 0) { // First month paid
         return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const };
@@ -29,7 +38,7 @@ const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmoun
       // Month 2 and 3 are overdue, not paid
       return p;
     });
-  } else if (customerName.includes("Completed")) { // For "Completed Scheme"
+  } else if (customerName.includes("Completed Scheme")) { // For "Completed Scheme"
     payments = payments.map(p => ({ ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const }));
   }
 
@@ -50,7 +59,8 @@ const createScheme = (customerName: string, startDate: Date, monthlyPaymentAmoun
 };
 
 export const MOCK_SCHEMES: Scheme[] = [
-  createScheme('Active Customer', subMonths(new Date(), 4), 1000),
+  createScheme('Active Customer', subMonths(new Date(), 4), 1000), // Scheme 1 for Active Customer
+  createScheme('Active Customer', subMonths(new Date(), 2), 800),  // Scheme 2 for Active Customer, started later, different amount
   createScheme('New Prospect', addMonths(new Date(), 1), 1500),
   createScheme('Overdue Payer', subMonths(new Date(), 5), 500),
   createScheme('Completed Scheme', subMonths(new Date(), 13), 2000),
@@ -133,3 +143,4 @@ export const closeMockScheme = (schemeId: string): Scheme | undefined => {
   MOCK_SCHEMES[schemeIndex] = { ...MOCK_SCHEMES[schemeIndex], ...totals };
   return JSON.parse(JSON.stringify(MOCK_SCHEMES[schemeIndex]));
 }
+
