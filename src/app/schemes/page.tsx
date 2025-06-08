@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PlusCircle, Eye, MoreHorizontal, Filter } from 'lucide-react';
 import type { Scheme, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
-import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus } from '@/lib/utils';
+import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import {
   DropdownMenu,
