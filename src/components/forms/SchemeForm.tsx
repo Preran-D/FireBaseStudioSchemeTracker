@@ -33,7 +33,7 @@ export function SchemeForm({ onSubmit, initialData, isLoading }: SchemeFormProps
     defaultValues: {
       customerName: initialData?.customerName || '',
       startDate: initialData?.startDate ? parseISO(initialData.startDate) : new Date(),
-      monthlyPaymentAmount: initialData?.monthlyPaymentAmount || undefined,
+      monthlyPaymentAmount: initialData?.monthlyPaymentAmount ?? '', // Ensure defined value, empty string for undefined/null
     },
   });
 
