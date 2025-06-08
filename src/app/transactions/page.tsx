@@ -38,13 +38,14 @@ interface TransactionsOnDate {
   formattedDate: string;
   transactions: TransactionRow[];
   totalAmountOnDate: number;
+  distinctCustomerCountOnDate: number;
 }
 
 interface GroupedTransactionDisplay {
   groupName: string;
   datesWithTransactions: TransactionsOnDate[];
   totalAmountInGroup: number;
-  customerNames: string[];
+  customerNames: string[]; // All unique customer names in the group for the filtered range
 }
 
 interface DateRange {
@@ -124,9 +125,9 @@ export default function TransactionsPage() {
     }
 
     const groupsMapTemp = new Map<string, {
-      customerNames: Set<string>;
+      allCustomerNamesInGroup: Set<string>;
       totalAmountInGroup: number;
-      transactionsByDateMap: Map<string, { transactionsOnDate: TransactionRow[]; totalAmountOnDate: number }>;
+      transactionsByDateMap: Map<string, { transactionsOnDate: TransactionRow[]; totalAmountOnDate: number; distinctCustomersOnDate: Set<string> }>;
     }>();
     const individuals: TransactionRow[] = [];
 
@@ -135,24 +136,25 @@ export default function TransactionsPage() {
         let groupEntry = groupsMapTemp.get(transaction.customerGroupName);
         if (!groupEntry) {
           groupEntry = {
-            customerNames: new Set(),
+            allCustomerNamesInGroup: new Set(),
             totalAmountInGroup: 0,
             transactionsByDateMap: new Map(),
           };
           groupsMapTemp.set(transaction.customerGroupName, groupEntry);
         }
 
-        groupEntry.customerNames.add(transaction.customerName);
+        groupEntry.allCustomerNamesInGroup.add(transaction.customerName);
         groupEntry.totalAmountInGroup += transaction.amountPaid || 0;
 
         const paymentDateKey = transaction.paymentDate ? formatISO(parseISO(transaction.paymentDate), { representation: 'date' }) : 'UnknownDate';
         let dateEntry = groupEntry.transactionsByDateMap.get(paymentDateKey);
         if (!dateEntry) {
-          dateEntry = { transactionsOnDate: [], totalAmountOnDate: 0 };
+          dateEntry = { transactionsOnDate: [], totalAmountOnDate: 0, distinctCustomersOnDate: new Set() };
           groupEntry.transactionsByDateMap.set(paymentDateKey, dateEntry);
         }
         dateEntry.transactionsOnDate.push(transaction);
         dateEntry.totalAmountOnDate += transaction.amountPaid || 0;
+        dateEntry.distinctCustomersOnDate.add(transaction.customerName);
 
       } else {
         individuals.push(transaction);
@@ -167,6 +169,7 @@ export default function TransactionsPage() {
             formattedDate: dateISO === 'UnknownDate' ? 'Unknown Date' : formatDate(dateISO),
             transactions: dateData.transactionsOnDate.sort((a,b) => a.customerName.localeCompare(b.customerName)),
             totalAmountOnDate: dateData.totalAmountOnDate,
+            distinctCustomerCountOnDate: dateData.distinctCustomersOnDate.size,
           }))
           .sort((a,b) => (b.date === 'UnknownDate' ? -1 : a.date === 'UnknownDate' ? 1 : parseISO(b.date).getTime() - parseISO(a.date).getTime()));
 
@@ -174,14 +177,14 @@ export default function TransactionsPage() {
           groupName,
           datesWithTransactions: datesWithTransactionsArray,
           totalAmountInGroup: data.totalAmountInGroup,
-          customerNames: Array.from(data.customerNames).sort(),
+          customerNames: Array.from(data.allCustomerNamesInGroup).sort(),
         };
       }
     ).sort((a,b) => a.groupName.localeCompare(b.groupName));
 
     return {
       groupedDisplayData: finalGroupedDisplayData,
-      individualDisplayData: individuals
+      individualDisplayData: individuals.sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
     };
   }, [allFlatTransactions, searchTerm, dateRange]);
 
@@ -222,11 +225,10 @@ export default function TransactionsPage() {
     <Table>
       <TableHeader>
         <TableRow>
-          {!isGroupedTable && <TableHead>Customer</TableHead>}
-          {isGroupedTable && <TableHead>Customer (in Group)</TableHead>}
+          <TableHead>Customer</TableHead>
           <TableHead>Scheme ID</TableHead>
           <TableHead>Month</TableHead>
-          <TableHead>Payment Date</TableHead>
+          {!isGroupedTable && <TableHead>Payment Date</TableHead> } {/* Only show if not already grouped by date */}
           <TableHead>Amount Paid</TableHead>
           <TableHead>Mode(s)</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -244,7 +246,7 @@ export default function TransactionsPage() {
               </Button>
             </TableCell>
             <TableCell>{transaction.monthNumber}</TableCell>
-            <TableCell>{formatDate(transaction.paymentDate)}</TableCell>
+            {!isGroupedTable && <TableCell>{formatDate(transaction.paymentDate)}</TableCell>}
             <TableCell>{formatCurrency(transaction.amountPaid)}</TableCell>
             <TableCell>{transaction.modeOfPayment?.join(' | ') || '-'}</TableCell>
             <TableCell className="text-right">
@@ -358,7 +360,7 @@ export default function TransactionsPage() {
                 <h2 className="text-lg font-semibold mb-2">Grouped Transactions</h2>
                 <Accordion type="multiple" className="w-full">
                   {groupedDisplayData.map((group) => (
-                    <AccordionItem value={group.groupName} key={group.groupName} className="mb-2 border rounded-md overflow-hidden">
+                    <AccordionItem value={`group-${group.groupName}`} key={`group-${group.groupName}`} className="mb-2 border rounded-md overflow-hidden">
                       <AccordionTrigger className="p-3 hover:bg-muted/80 text-left data-[state=open]:bg-muted/50 data-[state=open]:border-b">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-1">
                           <span className="font-semibold text-base text-primary">Group: {group.groupName}</span>
@@ -373,19 +375,25 @@ export default function TransactionsPage() {
                           </div>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-3">
+                      <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-1">
                         {group.datesWithTransactions.length > 0 ? (
-                          group.datesWithTransactions.map((dateItem) => (
-                            <div key={dateItem.date} className="pt-2">
-                              <h4 className="text-md font-semibold mb-1 p-2 bg-muted/40 rounded-t-md border-b">
-                                Date: {dateItem.formattedDate}
-                                <span className="text-sm text-muted-foreground ml-4">
-                                  ({dateItem.transactions.length} payment(s) totaling {formatCurrency(dateItem.totalAmountOnDate)})
-                                </span>
-                              </h4>
-                              {renderTransactionTable(dateItem.transactions, true)}
-                            </div>
-                          ))
+                          <Accordion type="multiple" className="w-full mt-2">
+                            {group.datesWithTransactions.map((dateItem) => (
+                              <AccordionItem value={`date-${group.groupName}-${dateItem.date}`} key={`date-${group.groupName}-${dateItem.date}`} className="mb-1 border-t last:border-b-0">
+                                <AccordionTrigger className="py-2 px-3 text-sm hover:bg-muted/50 data-[state=open]:bg-muted/40">
+                                  <div className="flex justify-between items-center w-full">
+                                    <span>Date: {dateItem.formattedDate}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {dateItem.distinctCustomerCountOnDate} customer(s), Total: {formatCurrency(dateItem.totalAmountOnDate)}
+                                    </span>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-1 pb-2 px-1">
+                                  {renderTransactionTable(dateItem.transactions, true)}
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
                         ) : (
                           <p className="p-4 text-center text-sm text-muted-foreground">No transactions for this group on the selected dates/filters.</p>
                         )}
@@ -398,7 +406,7 @@ export default function TransactionsPage() {
 
             {individualDisplayData.length > 0 && (
               <div>
-                <h2 className="text-lg font-semibold mb-2 pt-4">Individual Transactions</h2>
+                <h2 className="text-lg font-semibold mb-2 pt-4">Individual Transactions (Not in a Group)</h2>
                 {renderTransactionTable(individualDisplayData, false)}
               </div>
             )}
