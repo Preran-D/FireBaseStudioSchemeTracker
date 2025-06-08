@@ -19,6 +19,7 @@ export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming';
 export interface Scheme {
   id: string;
   customerName: string;
+  customerGroupName?: string; // Added for grouping customers
   startDate: string; // ISO Date string
   monthlyPaymentAmount: number;
   durationMonths: 12;

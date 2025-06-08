@@ -15,6 +15,7 @@ import { CalendarIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { formatISO, parseISO } from 'date-fns';
+import Link from 'next/link';
 
 const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 
@@ -26,14 +27,14 @@ const batchRecordPaymentFormSchema = z.object({
 type BatchRecordPaymentFormValues = z.infer<typeof batchRecordPaymentFormSchema>;
 
 interface RecordablePaymentInfo extends Payment {
-  schemeCustomerName: string;
+  schemeCustomerName: string; // Customer name for this specific scheme's payment
   schemeId: string;
   schemeStartDate: string;
 }
 
 interface BatchRecordPaymentDialogProps {
-  customerName: string;
-  customerSchemes: Scheme[]; // All schemes for this customer
+  groupDisplayName: string; // Name of the customer or group
+  schemesInGroup: Scheme[]; // All schemes for this customer/group
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (details: { paymentDate: string; modeOfPayment: PaymentMode[] }) => void;
@@ -41,8 +42,8 @@ interface BatchRecordPaymentDialogProps {
 }
 
 export function BatchRecordPaymentDialog({
-  customerName,
-  customerSchemes,
+  groupDisplayName,
+  schemesInGroup,
   isOpen,
   onClose,
   onSubmit,
@@ -58,12 +59,11 @@ export function BatchRecordPaymentDialog({
 
   const recordablePayments = useMemo(() => {
     const payments: RecordablePaymentInfo[] = [];
-    customerSchemes.forEach(scheme => {
+    schemesInGroup.forEach(scheme => {
       if (scheme.status === 'Active' || scheme.status === 'Overdue') {
         let firstUnpaidIndex = -1;
         for (let i = 0; i < scheme.payments.length; i++) {
           if (getPaymentStatus(scheme.payments[i], scheme.startDate) !== 'Paid') {
-             // Check if all previous are paid
             let allPreviousPaid = true;
             for (let j = 0; j < i; j++) {
               if (getPaymentStatus(scheme.payments[j], scheme.startDate) !== 'Paid') {
@@ -80,15 +80,15 @@ export function BatchRecordPaymentDialog({
         if (firstUnpaidIndex !== -1) {
           payments.push({
             ...scheme.payments[firstUnpaidIndex],
-            schemeCustomerName: scheme.customerName,
-            schemeId: scheme.id, // Already in payment, but for clarity
+            schemeCustomerName: scheme.customerName, // Store customer name for display
+            schemeId: scheme.id, 
             schemeStartDate: scheme.startDate,
           });
         }
       }
     });
     return payments.sort((a,b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
-  }, [customerSchemes]);
+  }, [schemesInGroup]);
 
   const totalBatchAmount = useMemo(() => {
     return recordablePayments.reduce((sum, p) => sum + p.amountExpected, 0);
@@ -107,16 +107,16 @@ export function BatchRecordPaymentDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-headline">Record Batch Payments for {customerName}</DialogTitle>
+          <DialogTitle className="font-headline">Record Batch Payments for Group: {groupDisplayName}</DialogTitle>
           <DialogDescription>
-            The following next due payments will be recorded with the details you provide below.
+            The following next due payments for schemes in this group will be recorded with the details you provide below.
           </DialogDescription>
         </DialogHeader>
 
         {recordablePayments.length === 0 ? (
           <div className="py-6 text-center text-muted-foreground flex flex-col items-center gap-2">
             <AlertTriangle className="w-10 h-10 text-orange-400" />
-            <p>No recordable payments found for {customerName} at this time.</p>
+            <p>No recordable payments found for group "{groupDisplayName}" at this time.</p>
             <p className="text-xs">(All payments might be up-to-date, or waiting for prior installments.)</p>
           </div>
         ) : (
@@ -126,7 +126,7 @@ export function BatchRecordPaymentDialog({
               <ul className="space-y-2 text-sm">
                 {recordablePayments.map(p => (
                   <li key={p.id} className="p-2 border rounded-md bg-muted/50">
-                    Scheme <Button variant="link" asChild className="p-0 h-auto"><a href={`/schemes/${p.schemeId}`} target="_blank" rel="noopener noreferrer" className="truncate max-w-[100px] sm:max-w-xs inline-block">{p.schemeId.substring(0,8)}...</a></Button>
+                    For {p.schemeCustomerName} - Scheme <Button variant="link" asChild className="p-0 h-auto inline"><Link href={`/schemes/${p.schemeId}`} target="_blank" rel="noopener noreferrer" className="truncate max-w-[80px] sm:max-w-xs inline-block">{p.schemeId.substring(0,8)}...</Link></Button>
                     - Month {p.monthNumber} <br/>
                     Due: {formatDate(p.dueDate)}, Amount: {formatCurrency(p.amountExpected)}
                   </li>

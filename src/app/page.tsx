@@ -5,10 +5,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BarChart, TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2 } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2, Users2 } from 'lucide-react'; // Added Users2 for group icon
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
-import { getMockSchemes, recordNextDuePaymentsForCustomer } from '@/lib/mock-data';
+import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; // Changed to recordNextDuePaymentsForCustomerGroup
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
@@ -17,24 +17,24 @@ import { useToast } from '@/hooks/use-toast';
 import { isPast, parseISO, differenceInDays, isFuture, formatISO } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
 
-interface CustomerWithRecordablePayments {
-  customerName: string;
-  schemes: Scheme[];
-  recordablePaymentCount: number;
+interface GroupWithRecordablePayments {
+  groupName: string;
+  schemes: Scheme[]; // All schemes belonging to this group
+  recordableSchemeCount: number; // Number of schemes in this group that have a next payment due
 }
 
 export default function DashboardPage() {
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const { toast } = useToast();
   const [isBatchRecording, setIsBatchRecording] = useState(false);
-  const [selectedCustomerForBatch, setSelectedCustomerForBatch] = useState<CustomerWithRecordablePayments | null>(null);
+  const [selectedGroupForBatch, setSelectedGroupForBatch] = useState<GroupWithRecordablePayments | null>(null);
 
 
   const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
       const totals = calculateSchemeTotals(s);
-      const status = getSchemeStatus(s); // Recalculate scheme status after payment statuses
+      const status = getSchemeStatus(s); 
       return { ...s, ...totals, status };
     });
     setSchemes(loadedSchemesInitial);
@@ -49,7 +49,7 @@ export default function DashboardPage() {
       scheme.payments.map(payment => ({
         ...payment,
         schemeStartDate: scheme.startDate,
-        customerName: scheme.customerName,
+        customerName: scheme.customerName, 
       }))
     );
 
@@ -85,7 +85,7 @@ export default function DashboardPage() {
 
   const summaryStats = useMemo(() => {
     const activeSchemes = schemes.filter(s => s.status === 'Active' || s.status === 'Overdue');
-    const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0); // All schemes for total collected
+    const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0); 
     const totalExpectedFromActive = activeSchemes.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected,0) ,0);
     
     const totalOverdueAmount = schemes
@@ -129,11 +129,13 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [schemes]);
 
-  const customersWithRecordablePayments = useMemo(() => {
-    const customersMap = new Map<string, { schemes: Scheme[], recordablePaymentCount: number }>();
+  const groupsWithRecordablePayments = useMemo(() => {
+    const groupsMap = new Map<string, { schemes: Scheme[], recordableSchemeCount: number }>();
+    
     schemes.forEach(scheme => {
-      if (scheme.status === 'Active' || scheme.status === 'Overdue') {
+      if (scheme.customerGroupName && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         let hasRecordablePaymentForThisScheme = false;
+        // Check if *this specific scheme* has a next recordable payment
         for (let i = 0; i < scheme.payments.length; i++) {
           const payment = scheme.payments[i];
           if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -150,33 +152,36 @@ export default function DashboardPage() {
             }
           }
         }
+
         if (hasRecordablePaymentForThisScheme) {
-          const customerEntry = customersMap.get(scheme.customerName) || { schemes: [], recordablePaymentCount: 0 };
-          customerEntry.schemes.push(scheme);
-          customerEntry.recordablePaymentCount += 1; // Counts schemes with at least one recordable, not total payments
-          customersMap.set(scheme.customerName, customerEntry);
+          const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], recordableSchemeCount: 0 };
+          groupEntry.schemes.push(scheme); // Add the scheme to the group's list of schemes
+          groupEntry.recordableSchemeCount += 1; // Increment count of schemes in this group that have a payment due
+          groupsMap.set(scheme.customerGroupName, groupEntry);
         }
       }
     });
-    return Array.from(customersMap.entries()).map(([customerName, data]) => ({
-      customerName,
+    
+    return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
+      groupName,
       ...data,
     }));
   }, [schemes]);
 
   const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[] }) => {
-    if (!selectedCustomerForBatch) return;
+    if (!selectedGroupForBatch) return;
     setIsBatchRecording(true);
-    const result = recordNextDuePaymentsForCustomer(selectedCustomerForBatch.customerName, details);
+    // Call the new function for group batch payment
+    const result = recordNextDuePaymentsForCustomerGroup(selectedGroupForBatch.groupName, details);
     
     toast({
-      title: "Batch Payment Processed",
-      description: `Recorded ${result.paymentsRecordedCount} payment(s) for ${selectedCustomerForBatch.customerName}, totaling ${formatCurrency(result.totalRecordedAmount)}.`,
+      title: "Batch Payment Processed for Group",
+      description: `Recorded ${result.paymentsRecordedCount} payment(s) for group "${selectedGroupForBatch.groupName}", totaling ${formatCurrency(result.totalRecordedAmount)}. Affected customers: ${[...new Set(result.recordedPaymentsInfo.map(p => p.customerName))].join(', ')}.`,
     });
     
-    setSelectedCustomerForBatch(null);
+    setSelectedGroupForBatch(null);
     setIsBatchRecording(false);
-    loadSchemesData(); // Refresh data
+    loadSchemesData(); 
   };
 
 
@@ -242,45 +247,45 @@ export default function DashboardPage() {
        <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
-            <PackageCheck className="h-5 w-5 text-primary" />
-            Batch Payment Actions
+            <Users2 className="h-5 w-5 text-primary" /> {/* Changed icon */}
+            Batch Payment Actions (By Customer Group)
           </CardTitle>
-          <CardDescription>Quickly record next due payments for customers with multiple active schemes.</CardDescription>
+          <CardDescription>Quickly record next due payments for all eligible schemes within a customer group.</CardDescription>
         </CardHeader>
         <CardContent>
-          {customersWithRecordablePayments.length > 0 ? (
+          {groupsWithRecordablePayments.length > 0 ? (
             <div className="space-y-3">
-              {customersWithRecordablePayments.map(customer => (
-                <div key={customer.customerName} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50">
+              {groupsWithRecordablePayments.map(group => (
+                <div key={group.groupName} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50">
                   <div>
-                    <p className="font-medium">{customer.customerName}</p>
+                    <p className="font-medium">{group.groupName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {customer.recordablePaymentCount} scheme(s) with next payment due.
+                      {group.recordableSchemeCount} scheme(s) with next payment due in this group.
                     </p>
                   </div>
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={() => setSelectedCustomerForBatch(customer)}
+                    onClick={() => setSelectedGroupForBatch(group)}
                     disabled={isBatchRecording}
                   >
-                    <Edit className="mr-2 h-4 w-4" /> Record Batch
+                    <Edit className="mr-2 h-4 w-4" /> Record Batch for Group
                   </Button>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground">No customers currently eligible for batch payment recording.</p>
+            <p className="text-muted-foreground">No customer groups currently eligible for batch payment recording.</p>
           )}
         </CardContent>
       </Card>
 
-      {selectedCustomerForBatch && (
+      {selectedGroupForBatch && (
         <BatchRecordPaymentDialog
-          customerName={selectedCustomerForBatch.customerName}
-          customerSchemes={selectedCustomerForBatch.schemes}
-          isOpen={!!selectedCustomerForBatch}
-          onClose={() => setSelectedCustomerForBatch(null)}
+          groupDisplayName={selectedGroupForBatch.groupName}
+          schemesInGroup={selectedGroupForBatch.schemes} // Pass all schemes of the group
+          isOpen={!!selectedGroupForBatch}
+          onClose={() => setSelectedGroupForBatch(null)}
           onSubmit={handleBatchRecordSubmit}
           isLoading={isBatchRecording}
         />
