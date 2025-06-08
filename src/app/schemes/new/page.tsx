@@ -18,15 +18,15 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 
 type NewSchemeFormData = Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths'> & {
   customerGroupName?: string;
-  monthlyPaymentAmount: number; 
+  monthlyPaymentAmount: number;
 };
 
 
 export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false); // General loading for page transitions
-  const [isFormLoading, setIsFormLoading] = useState(false); // For form submission only
+  const [isLoading, setIsLoading] = useState(false); 
+  const [isFormLoading, setIsFormLoading] = useState(false);
   
   const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
   const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
@@ -39,7 +39,7 @@ export default function NewSchemePage() {
   }, []);
 
   const handleSubmit = (data: NewSchemeFormData) => {
-    setIsFormLoading(true); 
+    setIsFormLoading(true);
     const allSchemes = getMockSchemes();
     const customerExists = allSchemes.some(
       (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
@@ -47,21 +47,17 @@ export default function NewSchemePage() {
 
     if (customerExists) {
       toast({
-        title: 'Customer Exists',
-        description: `A customer named '${data.customerName}' already exists. Please use a different name or manage their existing schemes.`,
-        variant: 'destructive',
+        title: 'Existing Customer',
+        description: `Creating new scheme for existing customer: ${data.customerName}.`,
       });
-      setIsFormLoading(false);
-      return; // Prevent further processing
     }
     
-    // Proceed with scheme creation if customer does not exist
     try {
       const newScheme = addMockScheme({
         customerName: data.customerName,
         startDate: data.startDate,
         monthlyPaymentAmount: data.monthlyPaymentAmount,
-        customerGroupName: data.customerGroupName, 
+        customerGroupName: data.customerGroupName,
       });
       setNewlyCreatedScheme(newScheme);
       if (newScheme.payments.length > 0) {
@@ -109,14 +105,14 @@ export default function NewSchemePage() {
     }
     setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
-    setIsLoading(false); 
+    // setIsLoading(false); // Already handled by router push
   };
 
   const handleSkipFirstPayment = () => {
     if (!newlyCreatedScheme) return;
     setIsFirstPaymentAlertOpen(false);
     router.push(`/schemes/${newlyCreatedScheme.id}`);
-    setIsLoading(false); 
+    // setIsLoading(false); // Already handled by router push
   };
 
   return (
@@ -125,7 +121,7 @@ export default function NewSchemePage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
-            <CardDescription>Enter the details for the new customer scheme. Customer names must be unique. You can assign it to an existing group or create a new one.</CardDescription>
+            <CardDescription>Enter the details for the scheme. You can assign it to an existing group or create a new one. Multiple schemes can be created for the same customer.</CardDescription>
           </CardHeader>
           <CardContent>
             <SchemeForm 
@@ -186,4 +182,3 @@ export default function NewSchemePage() {
     </>
   );
 }
-
