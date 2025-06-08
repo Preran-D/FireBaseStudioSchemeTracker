@@ -106,10 +106,6 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
-      // If the active accordion item was the one updated, schemeForVisuals will update automatically
-      if (activeAccordionItem === updatedSchemeFromMock.id) {
-        // This will trigger a re-render of visuals if they depend on schemeForVisuals
-      }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.substring(0,8)} recorded.` });
     } else {
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
@@ -147,9 +143,6 @@ export default function SchemeDetailsPage() {
       setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
       if(scheme && scheme.id === closedSchemeResult.id) { 
         setScheme(closedSchemeResult);
-      }
-      if (activeAccordionItem === closedSchemeResult.id) {
-        // Visuals will update if they depend on schemeForVisuals which uses activeAccordionItem
       }
       toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.substring(0,8)}) has been updated.` });
     } else {
@@ -246,7 +239,6 @@ export default function SchemeDetailsPage() {
     if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
       return false;
     }
-    // Ensure we are checking against the potentially updated version of the scheme from allSchemesForThisCustomer
     const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
 
     for (let i = 0; i < payment.monthNumber - 1; i++) {
@@ -335,6 +327,7 @@ export default function SchemeDetailsPage() {
                     </AccordionTrigger>
                     <AccordionContent className="p-0">
                         <div className="border-t p-4 space-y-4">
+                            <p className="text-sm font-semibold mb-2">Details for Scheme {s.id.substring(0,8)}...</p>
                             {s.status === 'Completed' ? (
                             <div className="text-sm">
                                 <p className="font-semibold">Scheme Completed</p>
@@ -343,18 +336,7 @@ export default function SchemeDetailsPage() {
                             </div>
                             ) : (
                             <>
-                                <div className="flex justify-end">
-                                    <Button 
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => openClosureDialogForSpecificScheme(s)}
-                                      disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || s.status === 'Completed'}
-                                    >
-                                      <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
-                                    </Button>
-                                </div>
                                 <div className="overflow-x-auto">
-                                    <p className="text-sm font-semibold mb-2">Payment Schedule for Scheme {s.id.substring(0,8)}...</p>
                                     <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -408,6 +390,16 @@ export default function SchemeDetailsPage() {
                                         ))}
                                     </TableBody>
                                     </Table>
+                                </div>
+                                <div className="flex justify-end mt-4">
+                                    <Button 
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => openClosureDialogForSpecificScheme(s)}
+                                      disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || s.status === 'Completed'}
+                                    >
+                                      <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
+                                    </Button>
                                 </div>
                             </>
                             )}
@@ -641,4 +633,3 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
-
