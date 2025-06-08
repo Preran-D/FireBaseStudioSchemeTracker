@@ -373,25 +373,19 @@ export default function TransactionsPage() {
                           </div>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="pt-0 pb-2 px-1 bg-background">
+                      <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-3">
                         {group.datesWithTransactions.length > 0 ? (
-                          <Accordion type="multiple" className="w-full px-2 py-2 space-y-1">
-                            {group.datesWithTransactions.map((dateItem) => (
-                              <AccordionItem value={`${group.groupName}-${dateItem.date}`} key={`${group.groupName}-${dateItem.date}`} className="border rounded-md overflow-hidden">
-                                <AccordionTrigger className="p-2.5 text-sm hover:bg-muted/60 data-[state=open]:bg-muted/40 data-[state=open]:border-b">
-                                  <div className="flex justify-between items-center w-full">
-                                    <span>Date: {dateItem.formattedDate}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {dateItem.transactions.length} payment(s) totaling {formatCurrency(dateItem.totalAmountOnDate)}
-                                    </span>
-                                  </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="pt-0 pb-1 px-0.5">
-                                  {renderTransactionTable(dateItem.transactions, true)}
-                                </AccordionContent>
-                              </AccordionItem>
-                            ))}
-                          </Accordion>
+                          group.datesWithTransactions.map((dateItem) => (
+                            <div key={dateItem.date} className="pt-2">
+                              <h4 className="text-md font-semibold mb-1 p-2 bg-muted/40 rounded-t-md border-b">
+                                Date: {dateItem.formattedDate}
+                                <span className="text-sm text-muted-foreground ml-4">
+                                  ({dateItem.transactions.length} payment(s) totaling {formatCurrency(dateItem.totalAmountOnDate)})
+                                </span>
+                              </h4>
+                              {renderTransactionTable(dateItem.transactions, true)}
+                            </div>
+                          ))
                         ) : (
                           <p className="p-4 text-center text-sm text-muted-foreground">No transactions for this group on the selected dates/filters.</p>
                         )}
@@ -453,5 +447,4 @@ export default function TransactionsPage() {
     </>
   );
 }
-
     
