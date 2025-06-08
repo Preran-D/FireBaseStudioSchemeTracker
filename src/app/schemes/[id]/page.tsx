@@ -18,7 +18,7 @@ import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
 import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart, LineChart as RechartsLineChart } from "recharts"
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
 import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
 import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -106,9 +106,8 @@ export default function SchemeDetailsPage() {
       if (scheme && scheme.id === updatedSchemeFromMock.id) {
         setScheme(updatedSchemeFromMock);
       }
-      // Update activeAccordionItem visuals if the recorded payment was for the currently active scheme for visuals
       if (activeAccordionItem === updatedSchemeFromMock.id) {
-        setActiveAccordionItem(updatedSchemeFromMock.id); // re-trigger memo for schemeForVisuals
+        setActiveAccordionItem(updatedSchemeFromMock.id); 
       }
       toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.toUpperCase()} recorded.` });
     } else {
@@ -148,7 +147,6 @@ export default function SchemeDetailsPage() {
       if(scheme && scheme.id === closedSchemeResult.id) { 
         setScheme(closedSchemeResult);
       }
-       // If the closed scheme was the one active for visuals, update visuals if needed
       if (activeAccordionItem === closedSchemeResult.id) {
         setActiveAccordionItem(closedSchemeResult.id); 
       }
@@ -279,16 +277,33 @@ export default function SchemeDetailsPage() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
+            <div className="flex items-center gap-3 mb-1">
+              <CardTitle className="font-headline text-2xl">{scheme.customerName}</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full px-3 py-1 h-auto text-xs"
+                onClick={() => {
+                  setActiveAccordionItem(scheme.id);
+                  setTimeout(() => {
+                    const element = document.getElementById(scheme.id + "-accordion");
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                  }, 100);
+                }}
+              >
+                ID: {scheme.id.toUpperCase()}
+              </Button>
+            </div>
             <CardDescription>
-              Primary Scheme ID: {scheme.id.toUpperCase()}<br/> Started on {formatDate(scheme.startDate)}<br/>
               Phone: {scheme.customerPhone || 'N/A'}<br/>
               Address: {scheme.customerAddress || 'N/A'}<br/>
               {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
               {scheme.status === 'Completed' && scheme.closureDate && (<>Closed on: {formatDate(scheme.closureDate)}</>)}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
+          <div className="flex items-center gap-2 mt-4 sm:mt-0 flex-wrap">
              <Button 
                 onClick={handleAddNewSchemeForCustomer}
                 variant="outline" 
@@ -323,7 +338,7 @@ export default function SchemeDetailsPage() {
                     onValueChange={setActiveAccordionItem}
                 >
                 {allSchemesForThisCustomer.map((s) => (
-                    <AccordionItem value={s.id} key={s.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
+                    <AccordionItem value={s.id} key={s.id} id={s.id + "-accordion"} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
                     <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
                         <div className="flex justify-between items-center w-full">
                         <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
@@ -486,7 +501,7 @@ export default function SchemeDetailsPage() {
                         <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
                         <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
                             <ResponsiveContainer>
-                            <RechartsLineChart data={cumulativePaymentData}>
+                            <LineChart data={cumulativePaymentData}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" fontSize={10} />
                                 <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
@@ -494,7 +509,7 @@ export default function SchemeDetailsPage() {
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
                                 <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
-                            </RechartsLineChart>
+                            </LineChart>
                             </ResponsiveContainer>
                         </ChartContainer>
                         </div>
