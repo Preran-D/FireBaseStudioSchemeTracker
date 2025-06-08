@@ -221,14 +221,14 @@ export default function TransactionsPage() {
     setDateRange({ from: undefined, to: undefined });
   };
 
-  const renderTransactionTable = (transactions: TransactionRow[], isGroupedTable: boolean = false) => (
+  const renderTransactionTable = (transactions: TransactionRow[], isNestedTable: boolean = false) => (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Customer</TableHead>
           <TableHead>Scheme ID</TableHead>
           <TableHead>Month</TableHead>
-          {!isGroupedTable && <TableHead>Payment Date</TableHead> } {/* Only show if not already grouped by date */}
+          {!isNestedTable ? <TableHead>Payment Date</TableHead> : null }
           <TableHead>Amount Paid</TableHead>
           <TableHead>Mode(s)</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -246,7 +246,7 @@ export default function TransactionsPage() {
               </Button>
             </TableCell>
             <TableCell>{transaction.monthNumber}</TableCell>
-            {!isGroupedTable && <TableCell>{formatDate(transaction.paymentDate)}</TableCell>}
+            {!isNestedTable ? <TableCell>{formatDate(transaction.paymentDate)}</TableCell> : null}
             <TableCell>{formatCurrency(transaction.amountPaid)}</TableCell>
             <TableCell>{transaction.modeOfPayment?.join(' | ') || '-'}</TableCell>
             <TableCell className="text-right">
@@ -377,7 +377,7 @@ export default function TransactionsPage() {
                       </AccordionTrigger>
                       <AccordionContent className="pt-0 pb-2 px-2 bg-background space-y-1">
                         {group.datesWithTransactions.length > 0 ? (
-                          <Accordion type="multiple" className="w-full mt-2">
+                           <Accordion type="multiple" className="w-full mt-2">
                             {group.datesWithTransactions.map((dateItem) => (
                               <AccordionItem value={`date-${group.groupName}-${dateItem.date}`} key={`date-${group.groupName}-${dateItem.date}`} className="mb-1 border-t last:border-b-0">
                                 <AccordionTrigger className="py-2 px-3 text-sm hover:bg-muted/50 data-[state=open]:bg-muted/40">
@@ -455,4 +455,6 @@ export default function TransactionsPage() {
     </>
   );
 }
+    
+
     
