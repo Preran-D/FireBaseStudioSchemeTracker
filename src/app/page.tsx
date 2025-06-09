@@ -449,7 +449,7 @@ export default function DashboardPage() {
                                 {scheme.customerName}
                                 </p>
                             </Link>
-                            <div className="flex justify-between items-center mt-2 text-sm">
+                            <div className="flex justify-between items-baseline mt-2 text-sm">
                                 <p className="text-muted-foreground">
                                 Starts: <span className="font-semibold text-foreground">{formatDate(scheme.startDate, 'dd MMM yyyy')}</span>
                                 </p>
