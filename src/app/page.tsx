@@ -5,16 +5,15 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Sparkles, Edit, PackageCheck, Loader2, Users2 } from 'lucide-react'; 
+import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2 } from 'lucide-react'; 
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; 
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
-import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { useToast } from '@/hooks/use-toast';
-import { isPast, parseISO, differenceInDays, isFuture, formatISO } from 'date-fns';
+import { isPast, parseISO, differenceInDays, formatISO } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
 
 interface GroupWithRecordablePayments {
@@ -62,11 +61,13 @@ export default function DashboardPage() {
       .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
     
     if (upcomingDueSoon.length > 0) {
-      toast({
-        title: "Upcoming Payment Reminder",
-        description: `Payment for ${upcomingDueSoon[0].customerName} is due on ${formatDate(upcomingDueSoon[0].dueDate)}. Amount: ${formatCurrency(upcomingDueSoon[0].amountExpected)}`,
-        variant: "default",
-      });
+      // Toast notifications can be intrusive; consider a less aggressive notification system if desired.
+      // For now, keeping as is, but this could be a future enhancement point.
+      // toast({
+      //   title: "Upcoming Payment Reminder",
+      //   description: `Payment for ${upcomingDueSoon[0].customerName} is due on ${formatDate(upcomingDueSoon[0].dueDate)}. Amount: ${formatCurrency(upcomingDueSoon[0].amountExpected)}`,
+      //   variant: "default",
+      // });
     }
     
     const allOverdueGlobal = allPaymentsWithContext
@@ -74,11 +75,12 @@ export default function DashboardPage() {
       .sort((a,b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
 
     if (allOverdueGlobal.length > 0) {
-      toast({
-        title: "Overdue Payment Alert",
-        description: `Payment for ${allOverdueGlobal[0].customerName} was due on ${formatDate(allOverdueGlobal[0].dueDate)}. Amount: ${formatCurrency(allOverdueGlobal[0].amountExpected)}`,
-        variant: "destructive",
-      });
+      // Similar to above, toast for overdue payments.
+      // toast({
+      //   title: "Overdue Payment Alert",
+      //   description: `Payment for ${allOverdueGlobal[0].customerName} was due on ${formatDate(allOverdueGlobal[0].dueDate)}. Amount: ${formatCurrency(allOverdueGlobal[0].amountExpected)}`,
+      //   variant: "destructive",
+      // });
     }
 
   }, [toast, loadSchemesData]);
@@ -109,8 +111,8 @@ export default function DashboardPage() {
   ], [summaryStats.totalCollected, summaryStats.totalPending]);
 
   const chartConfig = {
-    collected: { label: 'Collected', color: 'hsl(var(--chart-2))' },
-    pending: { label: 'Pending', color: 'hsl(var(--chart-4))' },
+    collected: { label: 'Collected', color: 'hsl(var(--chart-1))' }, // Use chart-1 for collected
+    pending: { label: 'Pending', color: 'hsl(var(--chart-2))' }, // Use chart-2 for pending
   };
   
   const upcomingPaymentsList = useMemo(() => {
@@ -152,7 +154,6 @@ export default function DashboardPage() {
           }
         }
 
-        // Add scheme to group for dialog context, even if not immediately recordable by count
         const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], recordableSchemeCount: 0 };
         groupEntry.schemes.push(scheme); 
 
@@ -166,7 +167,7 @@ export default function DashboardPage() {
     return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
       groupName,
       ...data,
-    })).filter(g => g.recordableSchemeCount > 0); // Only show groups with >0 recordable for button
+    })).filter(g => g.recordableSchemeCount > 0);
   }, [schemes]);
 
   const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[]; schemeIdsToRecord: string[] }) => {
@@ -175,7 +176,7 @@ export default function DashboardPage() {
     const result = recordNextDuePaymentsForCustomerGroup(selectedGroupForBatch.groupName, details);
     
     toast({
-      title: "Batch Payment Processed for Group",
+      title: "Batch Payment Processed",
       description: `Recorded ${result.paymentsRecordedCount} payment(s) for group "${selectedGroupForBatch.groupName}", totaling ${formatCurrency(result.totalRecordedAmount)}. Affected customers: ${[...new Set(result.recordedPaymentsInfo.map(p => p.customerName))].join(', ')}.`,
     });
     
@@ -186,60 +187,60 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8"> {/* Increased gap for more spacing */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-headline font-semibold">Dashboard</h1>
+        <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
         <Link href="/schemes/new">
-          <Button>
-            <Users className="mr-2 h-4 w-4" /> Add New Scheme
+          <Button size="lg"> {/* Slightly larger button */}
+            <Users className="mr-2 h-5 w-5" /> Add New Scheme
           </Button>
         </Link>
       </div>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"> {/* Adjusted gap and cols */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Schemes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-5 w-5 text-primary" /> {/* Use primary color for icon */}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summaryStats.totalSchemes}</div>
+            <div className="text-3xl font-bold">{summaryStats.totalSchemes}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-5 w-5 text-green-400" /> {/* Adjusted color */}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summaryStats.totalCollected)}</div>
+            <div className="text-3xl font-bold">{formatCurrency(summaryStats.totalCollected)}</div>
           </CardContent>
         </Card>
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Pending (Active)</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-5 w-5 text-orange-400" /> {/* Adjusted color */}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(summaryStats.totalPending)}</div>
+            <div className="text-3xl font-bold">{formatCurrency(summaryStats.totalPending)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Overdue</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTriangle className="h-5 w-5 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">{formatCurrency(summaryStats.totalOverdueAmount)}</div>
+            <div className="text-3xl font-bold text-destructive">{formatCurrency(summaryStats.totalOverdueAmount)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed Schemes</CardTitle>
-            <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+            <CalendarCheck className="h-5 w-5 text-blue-400" /> {/* Adjusted color */}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summaryStats.completedSchemesCount}</div>
+            <div className="text-3xl font-bold">{summaryStats.completedSchemesCount}</div>
           </CardContent>
         </Card>
       </div>
@@ -247,20 +248,20 @@ export default function DashboardPage() {
        <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
-            <Users2 className="h-5 w-5 text-primary" /> 
-            Batch Payment Actions (By Customer Group)
+            <Users2 className="h-6 w-6 text-primary" /> 
+            Batch Payment Actions (By Group)
           </CardTitle>
-          <CardDescription>Quickly record next due payments for all eligible schemes within a customer group.</CardDescription>
+          <CardDescription>Record next due payments for all eligible schemes within a customer group.</CardDescription>
         </CardHeader>
         <CardContent>
           {groupsWithRecordablePayments.length > 0 ? (
             <div className="space-y-3">
               {groupsWithRecordablePayments.map(group => (
-                <div key={group.groupName} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50">
+                <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 border rounded-lg hover:shadow-lg transition-shadow">
                   <div>
-                    <p className="font-medium">{group.groupName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {group.recordableSchemeCount} scheme(s) with next payment due in this group.
+                    <p className="text-lg font-semibold text-accent">{group.groupName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {group.recordableSchemeCount} scheme(s) with next payment due.
                     </p>
                   </div>
                   <Button 
@@ -268,14 +269,15 @@ export default function DashboardPage() {
                     variant="outline" 
                     onClick={() => setSelectedGroupForBatch(group)}
                     disabled={isBatchRecording}
+                    className="mt-2 sm:mt-0"
                   >
-                    <Edit className="mr-2 h-4 w-4" /> Record Batch for Group
+                    <Edit className="mr-2 h-4 w-4" /> Record Batch
                   </Button>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground">No customer groups currently eligible for batch payment recording.</p>
+            <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
           )}
         </CardContent>
       </Card>
@@ -291,55 +293,44 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+      <div className="grid gap-8 grid-cols-1 md:grid-cols-2"> {/* Increased gap */}
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Overall Payment Progress (Active Schemes)</CardTitle>
+            <CardTitle className="font-headline">Payment Progress (Active Schemes)</CardTitle>
             <CardDescription>Collected vs. Pending amounts for all active schemes.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[350px]"> {/* Increased height */}
             {chartData.some(d => d.value > 0) ? (
               <ChartContainer config={chartConfig} className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 20, left:10 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} />
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={80} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
+                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 30, left:20, top: 5, bottom: 5 }} barGap={8}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border) / 0.5)" />
+                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={90} stroke="hsl(var(--muted-foreground))" />
+                    <ChartTooltip 
+                      content={<ChartTooltipContent 
+                        formatter={(value, name) => (
+                          <div className="flex flex-col">
+                            <span className="capitalize">{name}</span>
+                            <span>{formatCurrency(Number(value))}</span>
+                          </div>
+                        )}
+                      />} 
+                      cursor={{ fill: 'hsl(var(--muted) / 0.3)'}}
+                    />
                     <ChartLegend content={<ChartLegendContent />} />
-                    <Bar dataKey="value" radius={5} />
+                    <Bar dataKey="value" radius={6} />
                   </RechartsBarChart>
                 </ResponsiveContainer>
               </ChartContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">No data to display.</div>
+              <div className="flex items-center justify-center h-full text-muted-foreground">No data to display for payment progress.</div>
             )}
           </CardContent>
         </Card>
+        
+        {/* AI Recommendations Card Removed */}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-accent" />
-              AI Recommendations
-            </CardTitle>
-            <CardDescription>Tailored interventions for improving collections.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-md">
-              <p className="font-medium text-foreground">Payment Insights:</p>
-              <ul className="list-disc pl-5 mt-2 space-y-1">
-                <li>Consider sending personalized reminders to customers with payments due in the next 3 days.</li>
-                <li>For customers with multiple overdue payments, a structured follow-up call might be effective.</li>
-                <li>Highlight benefits of on-time payments in next communication batch.</li>
-              </ul>
-              <p className="mt-3 text-xs italic"> (AI-powered recommendations will appear here based on historical data from Genkit flows) </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Upcoming Payments (Next 30 Days)</CardTitle>
@@ -357,7 +348,7 @@ export default function DashboardPage() {
                 <TableBody>
                   {upcomingPaymentsList.map((payment) => (
                     <TableRow key={payment.id}>
-                      <TableCell>{payment.customerName}</TableCell>
+                      <TableCell className="font-medium">{payment.customerName}</TableCell>
                       <TableCell>{formatDate(payment.dueDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
                     </TableRow>
@@ -365,12 +356,13 @@ export default function DashboardPage() {
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-muted-foreground">No upcoming payments in the next 30 days.</p>
+              <p className="text-muted-foreground text-center py-4">No upcoming payments in the next 30 days.</p>
             )}
           </CardContent>
         </Card>
-
-        <Card>
+      </div>
+      
+      <Card className="md:col-span-2"> {/* Allow this to span if only two items in the last row */}
           <CardHeader>
             <CardTitle className="font-headline">Overdue Payments</CardTitle>
           </CardHeader>
@@ -386,8 +378,8 @@ export default function DashboardPage() {
                 </TableHeader>
                 <TableBody>
                   {overduePaymentsList.map((payment) => (
-                    <TableRow key={payment.id} className="text-destructive">
-                      <TableCell>{payment.customerName}</TableCell>
+                    <TableRow key={payment.id} className="text-destructive hover:bg-destructive/10">
+                      <TableCell className="font-medium">{payment.customerName}</TableCell>
                       <TableCell>{formatDate(payment.dueDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
                     </TableRow>
@@ -395,11 +387,10 @@ export default function DashboardPage() {
                 </TableBody>
               </Table>
             ) : (
-             <p className="text-muted-foreground">No overdue payments.</p>
+             <p className="text-muted-foreground text-center py-4">No overdue payments. Great job!</p>
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

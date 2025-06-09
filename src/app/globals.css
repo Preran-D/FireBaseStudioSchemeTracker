@@ -9,103 +9,94 @@ body {
 
 @layer base {
   :root {
-    /* Cool Breeze Theme */
-    --background: 200 70% 95%; /* Light Sky Blue #E0F2FA */
-    --foreground: 210 25% 30%; /* Dark Slate Gray #3D4A5C */
+    /* Deep Ocean Theme */
+    --background: 220 40% 10%; /* Very Dark Desaturated Blue */
+    --foreground: 210 30% 90%; /* Light Bluish Grey */
 
-    --muted: 210 40% 88%; /* Lighter Slate Gray #D5DEE5 */
-    --muted-foreground: 210 25% 45%; /* Medium Slate Gray #5C6F88 */
+    --muted: 220 30% 20%;    /* Darker Muted Blue */
+    --muted-foreground: 210 25% 65%; /* Medium Grey */
 
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 210 25% 30%;
+    --popover: 220 40% 12%;    /* Slightly Lighter Dark Blue for Popovers */
+    --popover-foreground: 210 30% 90%;
 
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 210 25% 30%;
+    --card: 220 35% 18%;       /* Dark Blue Card Background */
+    --card-foreground: 210 30% 88%; /* Foreground for Card text */
 
-    --border: 210 20% 75%; /* #B3C1D1 */
-    --input: 210 20% 80%; /* #C0CCD9 */
+    --border: 220 25% 30%;    /* Muted Blue Border */
+    --input: 220 25% 25%;     /* Dark Input Background */
 
-    --primary: 207 44% 49%; /* Steel Blue #4A80B0 */
-    --primary-foreground: 0 0% 100%; /* White */
+    --primary: 180 70% 55%;   /* Bright Teal */
+    --primary-foreground: 220 40% 10%; /* Dark Background color for contrast on primary elements */
 
-    --secondary: 210 30% 80%; /* Light Steel Blue #BECBDA */
-    --secondary-foreground: 210 25% 30%; /* Dark Slate Gray */
+    --secondary: 210 50% 45%;  /* Medium Steel Blue */
+    --secondary-foreground: 210 20% 95%; /* Very Light Grey for text on secondary elements */
 
-    --accent: 175 55% 45%; /* Teal #36A28B */
-    --accent-foreground: 0 0% 100%; /* White */
+    --accent: 30 85% 60%;     /* Vibrant Orange/Amber */
+    --accent-foreground: 220 40% 10%; /* Dark Background color for contrast on accent elements */
 
-    --destructive: 0 72% 51%; /* Bright Red #D92D20 */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 70% 55%;   /* Saturated Red */
+    --destructive-foreground: 0 0% 100%; /* White text on destructive elements */
 
-    --ring: 207 44% 49%; /* Steel Blue for rings */
+    --ring: 180 70% 55%; /* Teal for rings/focus indicators */
 
     --radius: 0.5rem;
 
-    /* Chart colors (can be adjusted to fit new theme) */
-    --chart-1: 207 44% 49%; /* Primary - Steel Blue */
-    --chart-2: 175 55% 45%; /* Accent - Teal */
-    --chart-3: 30 80% 60%; /* Orange/Coral */
-    --chart-4: 260 60% 65%; /* Purple */
-    --chart-5: 210 25% 50%; /* Mid Gray Blue */
+    /* Chart colors */
+    --chart-1: 180 70% 55%; /* Primary - Teal */
+    --chart-2: 30 85% 60%;  /* Accent - Orange/Amber */
+    --chart-3: 280 60% 70%; /* Purple */
+    --chart-4: 45 90% 55%;  /* Gold/Yellow */
+    --chart-5: 210 50% 45%; /* Secondary - Steel Blue */
 
-    /* Sidebar specific theme */
-    --sidebar-background: 207 44% 40%; /* Darker Steel Blue #3C6B90 */
-    --sidebar-foreground: 210 20% 90%; /* Light Grey/White #DBE1E8 */
-    --sidebar-primary: 200 70% 95%;    /* Active item bg - Light Sky Blue (like main background) */
-    --sidebar-primary-foreground: 207 44% 49%; /* Active item text - Primary Steel Blue */
-    --sidebar-accent: 207 44% 45%;     /* Hover bg - Slightly lighter sidebar bg */
-    --sidebar-accent-foreground: 0 0% 100%; /* Hover text - White */
-    --sidebar-border: 207 44% 35%;     /* Border - Even darker Steel Blue */
-    --sidebar-ring: 175 55% 45%;       /* Ring - Teal */
+    /* Sidebar specific theme (for nav rail) */
+    --sidebar-background: 220 40% 8%;  /* Even Darker than main bg */
+    --sidebar-foreground: 210 25% 80%; /* Slightly dimmer foreground */
+    --sidebar-primary: 180 70% 55%;    /* Active item bg - Teal */
+    --sidebar-primary-foreground: 220 40% 10%; /* Active item text - Dark to contrast teal */
+    --sidebar-accent: 220 30% 22%;     /* Hover bg - Slightly lighter than rail bg */
+    --sidebar-accent-foreground: 180 70% 75%; /* Hover text - Lighter Teal */
+    --sidebar-border: 220 25% 25%;     /* Border for sidebar elements if needed */
+    --sidebar-ring: 30 85% 60%;       /* Ring for focus on sidebar items - Accent Orange */
   }
 
   .dark {
-    /* Dark theme adjustments */
-    --background: 210 25% 15%; /* Dark Slate Blue/Gray #1F2937 */
-    --foreground: 210 20% 85%; /* Light Gray #D1D5DB */
-
-    --muted: 210 25% 25%; /* #303D4F */
-    --muted-foreground: 210 20% 65%; /* #A0AEC0 */
-
-    --popover: 210 25% 20%; /* #283343 */
-    --popover-foreground: 210 20% 85%;
-
-    --card: 210 25% 20%;
-    --card-foreground: 210 20% 85%;
-
-    --border: 210 25% 35%; /* #4A5568 */
-    --input: 210 25% 35%;
-
-    --primary: 207 50% 60%; /* Brighter Steel Blue #63A0D4 */
-    --primary-foreground: 210 20% 98%; /* Almost White */
-
-    --secondary: 210 25% 30%; /* #3D4A5C */
-    --secondary-foreground: 210 20% 85%;
-
-    --accent: 175 60% 55%; /* Brighter Teal #4DCBB1 */
-    --accent-foreground: 210 20% 98%;
-
-    --destructive: 0 65% 55%; /* Brighter Red #E64940 */
-    --destructive-foreground: 0 0% 98%;
-
-    --ring: 207 50% 60%;
+    /* Deep Ocean Theme (Same as light for a consistent dark theme) */
+    --background: 220 40% 10%;
+    --foreground: 210 30% 90%;
+    --muted: 220 30% 20%;
+    --muted-foreground: 210 25% 65%;
+    --popover: 220 40% 12%;
+    --popover-foreground: 210 30% 90%;
+    --card: 220 35% 18%;
+    --card-foreground: 210 30% 88%;
+    --border: 220 25% 30%;
+    --input: 220 25% 25%;
+    --primary: 180 70% 55%;
+    --primary-foreground: 220 40% 10%;
+    --secondary: 210 50% 45%;
+    --secondary-foreground: 210 20% 95%;
+    --accent: 30 85% 60%;
+    --accent-foreground: 220 40% 10%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 180 70% 55%;
     
-    /* Chart colors for dark theme */
-    --chart-1: 207 50% 60%;
-    --chart-2: 175 60% 55%;
-    --chart-3: 30 70% 65%;
-    --chart-4: 260 55% 70%;
-    --chart-5: 210 20% 60%;
+    /* Chart colors for dark theme (same as light for consistency) */
+    --chart-1: 180 70% 55%;
+    --chart-2: 30 85% 60%;
+    --chart-3: 280 60% 70%;
+    --chart-4: 45 90% 55%;
+    --chart-5: 210 50% 45%;
 
-    /* Sidebar specific theme for dark mode */
-    --sidebar-background: 210 25% 10%; /* Very Dark Slate #121821 */
-    --sidebar-foreground: 210 20% 80%; /* #CBD5E0 */
-    --sidebar-primary: 207 50% 60%;    /* Active item bg - Brighter Steel Blue */
-    --sidebar-primary-foreground: 210 20% 98%; /* Active item text - Almost White */
-    --sidebar-accent: 210 25% 20%;     /* Hover bg - Darker than muted */
-    --sidebar-accent-foreground: 210 20% 90%; /* Hover text - Lighter Gray */
-    --sidebar-border: 210 25% 25%;     /* Border */
-    --sidebar-ring: 175 60% 55%;       /* Ring - Brighter Teal */
+    /* Sidebar specific theme for dark mode (same as light) */
+    --sidebar-background: 220 40% 8%;
+    --sidebar-foreground: 210 25% 80%;
+    --sidebar-primary: 180 70% 55%;
+    --sidebar-primary-foreground: 220 40% 10%;
+    --sidebar-accent: 220 30% 22%;
+    --sidebar-accent-foreground: 180 70% 75%;
+    --sidebar-border: 220 25% 25%;
+    --sidebar-ring: 30 85% 60%;
   }
 }
 
