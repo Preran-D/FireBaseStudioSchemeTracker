@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed
 import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
@@ -85,7 +85,6 @@ export function RecordIndividualPaymentDialog({
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
       .sort((a,b) => { 
-        // Keep original selection order or sort by name/date if preferred
         const indexA = selectedSchemeIds.indexOf(a.id);
         const indexB = selectedSchemeIds.indexOf(b.id);
         return indexA - indexB;
@@ -125,7 +124,6 @@ export function RecordIndividualPaymentDialog({
         }
       } else {
         // Optionally clear monthsToPay when unchecking: delete newMonths[schemeId];
-        // Keeping it allows remembering the count if re-checked.
       }
       return newMonths;
     });
@@ -173,7 +171,6 @@ export function RecordIndividualPaymentDialog({
       }
     });
      if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (monthsToPayPerScheme[id] || 0) === 0)) {
-        // This case should ideally be prevented by disabling the submit button
         console.warn("Submit called with selected schemes but zero months for all.");
         return;
     }
@@ -185,7 +182,7 @@ export function RecordIndividualPaymentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-headline">Record Individual Payment(s)</DialogTitle>
           <DialogDescription>
@@ -204,7 +201,8 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="h-0 flex-1 min-h-0"> 
+        {/* This div becomes the scrollable container for the schemes list */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
@@ -278,7 +276,7 @@ export function RecordIndividualPaymentDialog({
               </p>
             )}
           </div>
-        </ScrollArea>
+        </div>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-3 flex-shrink-0">
