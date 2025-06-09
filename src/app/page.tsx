@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, Edit, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History } from 'lucide-react'; // Added History
+import { TrendingUp, Users, AlertTriangle, DollarSign, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History, Search } from 'lucide-react'; // Added Search
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data';
@@ -16,8 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
 import { QuickIndividualBatchDialog, type QuickIndividualBatchSubmitDetails } from '@/components/dialogs/QuickIndividualBatchDialog';
-import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar'; // New Import
-import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; // New Import
+import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import { Input } from '@/components/ui/input'; // Added Input
 
 
 interface GroupWithRecordablePayments {
@@ -48,8 +49,10 @@ export default function DashboardPage() {
   const [isQuickIndividualBatchDialogOpen, setIsQuickIndividualBatchDialogOpen] = useState(false);
   const [isProcessingQuickIndividualBatch, setIsProcessingQuickIndividualBatch] = useState(false);
 
-  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false); // New state for history panel
-  const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null); // New state for history panel
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+  const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
+
+  const [individualSchemeSearchTerm, setIndividualSchemeSearchTerm] = useState(''); // New state for individual scheme search
 
 
   const loadSchemesData = useCallback(() => {
@@ -166,35 +169,46 @@ export default function DashboardPage() {
 
 
   const recordableIndividualSchemes = useMemo((): EnhancedRecordableSchemeInfo[] => {
+    if (!individualSchemeSearchTerm.trim()) {
+      return []; // Return empty if search term is empty
+    }
+
+    const searchTermLower = individualSchemeSearchTerm.toLowerCase();
+    
     const result: EnhancedRecordableSchemeInfo[] = [];
-    schemes.forEach(s => {
-      if (s.status === 'Active' || s.status === 'Overdue') {
-        let firstUnpaidRecordableIndex = -1;
-        for (let i = 0; i < s.payments.length; i++) {
-          if (getPaymentStatus(s.payments[i], s.startDate) !== 'Paid') {
-            let allPreviousPaid = true;
-            for (let j = 0; j < i; j++) {
-              if (getPaymentStatus(s.payments[j], s.startDate) !== 'Paid') {
-                allPreviousPaid = false;
+    schemes
+      .filter(s => 
+        s.customerName.toLowerCase().includes(searchTermLower) || 
+        s.id.toLowerCase().includes(searchTermLower)
+      )
+      .forEach(s => {
+        if (s.status === 'Active' || s.status === 'Overdue') {
+          let firstUnpaidRecordableIndex = -1;
+          for (let i = 0; i < s.payments.length; i++) {
+            if (getPaymentStatus(s.payments[i], s.startDate) !== 'Paid') {
+              let allPreviousPaid = true;
+              for (let j = 0; j < i; j++) {
+                if (getPaymentStatus(s.payments[j], s.startDate) !== 'Paid') {
+                  allPreviousPaid = false;
+                  break;
+                }
+              }
+              if (allPreviousPaid) {
+                firstUnpaidRecordableIndex = i;
                 break;
               }
             }
-            if (allPreviousPaid) {
-              firstUnpaidRecordableIndex = i;
-              break;
-            }
+          }
+          if (firstUnpaidRecordableIndex !== -1) {
+            result.push({
+              scheme: s,
+              firstRecordablePayment: s.payments[firstUnpaidRecordableIndex],
+            });
           }
         }
-        if (firstUnpaidRecordableIndex !== -1) {
-          result.push({
-            scheme: s,
-            firstRecordablePayment: s.payments[firstUnpaidRecordableIndex],
-          });
-        }
-      }
     });
     return result.sort((a, b) => parseISO(a.firstRecordablePayment.dueDate).getTime() - parseISO(b.firstRecordablePayment.dueDate).getTime());
-  }, [schemes]);
+  }, [schemes, individualSchemeSearchTerm]);
 
   const handleGroupBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord: string[] }) => {
     if (!selectedGroupForBatch) return;
@@ -365,10 +379,28 @@ export default function DashboardPage() {
               <ListChecks className="h-6 w-6 text-primary" />
               Record Payments (Individual Schemes)
             </CardTitle>
-            <CardDescription>Quickly record payments for individual schemes.</CardDescription>
+            <CardDescription>Search for a customer or scheme ID to record payments.</CardDescription>
           </CardHeader>
           <CardContent>
-            {recordableIndividualSchemes.length > 0 ? (
+            <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                placeholder="Search by customer name or scheme ID..."
+                value={individualSchemeSearchTerm}
+                onChange={(e) => setIndividualSchemeSearchTerm(e.target.value)}
+                className="pl-10"
+                />
+            </div>
+            
+            {individualSchemeSearchTerm.trim() && recordableIndividualSchemes.length === 0 && (
+                 <p className="text-muted-foreground py-4 text-center">No matching recordable schemes found for "{individualSchemeSearchTerm}".</p>
+            )}
+
+            {!individualSchemeSearchTerm.trim() && (
+                 <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
+            )}
+
+            {recordableIndividualSchemes.length > 0 && (
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {recordableIndividualSchemes.map((schemeInfo) => {
                   const { scheme } = schemeInfo;
@@ -437,7 +469,7 @@ export default function DashboardPage() {
                               disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
                               className="w-full sm:w-auto"
                             >
-                              {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Edit className="mr-2 h-4 w-4" />}
+                              {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
                               Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment(s)
                             </Button>
                           </div>
@@ -449,8 +481,6 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-muted-foreground py-4 text-center">No individual schemes currently eligible for payment recording.</p>
             )}
           </CardContent>
         </Card>
@@ -485,7 +515,7 @@ export default function DashboardPage() {
                       disabled={isBatchRecordingGroup || isProcessingQuickIndividualBatch}
                       className="mt-2 sm:mt-0"
                     >
-                      <Edit className="mr-2 h-4 w-4" /> Record Batch
+                      <ListChecks className="mr-2 h-4 w-4" /> Record Batch
                     </Button>
                   </div>
                 ))}
@@ -635,3 +665,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
