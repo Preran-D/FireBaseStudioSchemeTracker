@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
 
   const [individualSchemeSearchTerm, setIndividualSchemeSearchTerm] = useState('');
+  const [batchGroupSearchTerm, setBatchGroupSearchTerm] = useState('');
   const [activePaymentTab, setActivePaymentTab] = useState('individual');
 
 
@@ -163,11 +164,14 @@ export default function DashboardPage() {
       }
     });
 
-    return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
-      groupName,
-      ...data,
-    })).filter(g => g.recordableSchemeCount > 0);
-  }, [schemes]);
+    return Array.from(groupsMap.entries())
+      .map(([groupName, data]) => ({
+        groupName,
+        ...data,
+      }))
+      .filter(g => g.recordableSchemeCount > 0)
+      .filter(g => batchGroupSearchTerm.trim() === '' || g.groupName.toLowerCase().includes(batchGroupSearchTerm.toLowerCase()));
+  }, [schemes, batchGroupSearchTerm]);
 
 
   const recordableIndividualSchemes = useMemo((): EnhancedRecordableSchemeInfo[] => {
@@ -418,11 +422,11 @@ export default function DashboardPage() {
 
                     return (
                       <div key={scheme.id} className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-3">
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-start">
                           <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
                             {scheme.customerName}
                           </Link>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 text-right">
                               <span className="font-semibold text-accent text-lg">
                               {scheme.id.toUpperCase()}
                               </span>
@@ -491,7 +495,28 @@ export default function DashboardPage() {
               )}
             </TabsContent>
             <TabsContent value="batch" className="mt-6">
-              {groupsWithRecordablePayments.length > 0 ? (
+              <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by group name..."
+                    value={batchGroupSearchTerm}
+                    onChange={(e) => setBatchGroupSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+              </div>
+
+              {batchGroupSearchTerm.trim() && groupsWithRecordablePayments.length === 0 && (
+                 <p className="text-muted-foreground py-4 text-center">No matching groups found for "{batchGroupSearchTerm}" with recordable payments.</p>
+              )}
+              {!batchGroupSearchTerm.trim() && schemes.length > 0 && groupsWithRecordablePayments.length === 0 && (
+                 <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
+              )}
+              {!batchGroupSearchTerm.trim() && schemes.length === 0 && (
+                 <p className="text-muted-foreground py-4 text-center">No schemes or groups available. Add schemes to enable batch recording.</p>
+              )}
+
+
+              {groupsWithRecordablePayments.length > 0 && (
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                   {groupsWithRecordablePayments.map(group => (
                     <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-lg hover:shadow-md transition-shadow bg-card">
@@ -517,8 +542,6 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
               )}
             </TabsContent>
           </Tabs>
