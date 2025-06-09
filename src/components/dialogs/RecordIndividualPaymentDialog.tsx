@@ -77,6 +77,7 @@ export function RecordIndividualPaymentDialog({
 
   const [suggestedGroup, setSuggestedGroup] = useState<GroupDetail | null>(null);
   const [activeGroupSelection, setActiveGroupSelection] = useState<string | null>(null);
+  const [groupNameSuggestions, setGroupNameSuggestions] = useState<GroupDetail[]>([]);
 
 
   const form = useForm<RecordIndividualPaymentFormValues>({
@@ -95,20 +96,30 @@ export function RecordIndividualPaymentDialog({
       setPaymentModePerScheme({});
       setIsSchemePeekPanelOpen(false);
       setSchemeForPeekPanel(null);
-      setSuggestedGroup(null);
+      // suggestedGroup will be set by handleSearchTermChange via initialSearchTerm
       setActiveGroupSelection(null);
+      setGroupNameSuggestions([]);
+
 
       if (initialSearchTerm) {
         setSearchTerm(initialSearchTerm);
-        const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === initialSearchTerm.toLowerCase());
-        if (matchedGroup) {
-          setSuggestedGroup(matchedGroup);
+        // Trigger search logic based on initial term to populate suggestedGroup if it's an exact match
+        const lowerInitialSearchTerm = initialSearchTerm.toLowerCase();
+        const exactMatchGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerInitialSearchTerm);
+        setSuggestedGroup(exactMatchGroup || null);
+        if (exactMatchGroup) {
+          setGroupNameSuggestions([]);
         } else {
-           setSuggestedGroup(null);
+           const partialMatches = allGroups.filter(g =>
+            g.groupName.toLowerCase().includes(lowerInitialSearchTerm)
+          );
+          setGroupNameSuggestions(partialMatches.slice(0, 5));
         }
+
       } else {
         setSearchTerm('');
         setSuggestedGroup(null);
+        setGroupNameSuggestions([]);
       }
     }
   }, [isOpen, form, initialSearchTerm, allGroups]);
@@ -116,17 +127,41 @@ export function RecordIndividualPaymentDialog({
   const handleSearchTermChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newSearchTerm = event.target.value;
     setSearchTerm(newSearchTerm);
+
+    if (activeGroupSelection && newSearchTerm.toLowerCase() !== activeGroupSelection.toLowerCase()) {
+        setActiveGroupSelection(null);
+    }
+
     if (newSearchTerm.trim() === '') {
       setSuggestedGroup(null);
+      setGroupNameSuggestions([]);
       return;
     }
-    const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === newSearchTerm.toLowerCase());
-    setSuggestedGroup(matchedGroup || null);
+
+    const lowerSearchTerm = newSearchTerm.toLowerCase();
+    const exactMatchGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerSearchTerm);
+    setSuggestedGroup(exactMatchGroup || null);
+
+    if (exactMatchGroup) {
+      setGroupNameSuggestions([]);
+    } else {
+      const partialMatches = allGroups.filter(g =>
+        g.groupName.toLowerCase().includes(lowerSearchTerm)
+      );
+      setGroupNameSuggestions(partialMatches.slice(0, 5)); // Limit to 5 suggestions
+    }
   };
+  
+  const handleSuggestionClick = (group: GroupDetail) => {
+    setSearchTerm(group.groupName); 
+    // handleSearchTermChange will be triggered by setSearchTerm, which will set suggestedGroup
+    setGroupNameSuggestions([]); 
+  };
+
 
   const handleToggleGroupSuggestion = (groupToToggle: GroupDetail) => {
     const groupSchemeIds = groupToToggle.schemes
-      .filter(s => allRecordableSchemes.some(rs => rs.id === s.id)) // ensure they are in the recordable list
+      .filter(s => allRecordableSchemes.some(rs => rs.id === s.id))
       .map(s => s.id);
 
     let newSelectedIds = [...selectedSchemeIds];
@@ -135,10 +170,10 @@ export function RecordIndividualPaymentDialog({
 
     if (activeGroupSelection === groupToToggle.groupName) { // Deselecting
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
+      // Optionally clear months/modes for deselected schemes
       groupSchemeIds.forEach(id => {
-        // Optionally reset months/modes for deselected, or just rely on them being ignored if not in newSelectedIds
-        // delete newMonths[id];
-        // delete newModes[id];
+        // delete newMonths[id]; // Or reset to 0 if preferred
+        // delete newModes[id]; // Or reset to []
       });
       setActiveGroupSelection(null);
     } else { // Selecting
@@ -163,9 +198,10 @@ export function RecordIndividualPaymentDialog({
     setMonthsToPayPerScheme(newMonths);
     setPaymentModePerScheme(newModes);
     
-    // Clear search and suggestion after action for better UX
-    setSearchTerm('');
-    setSuggestedGroup(null);
+    // Clear search term and explicit suggestion display after action
+    // setSearchTerm(''); // Keep search term if user might want to fine-tune
+    setSuggestedGroup(groupToToggle); // Keep the button visible but its text will update
+    setGroupNameSuggestions([]); // Hide partial suggestions
   };
 
 
@@ -180,7 +216,9 @@ export function RecordIndividualPaymentDialog({
 
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
-    if (searchTerm && !suggestedGroup) { // Only filter unselected if search term is active and not matching a group
+    // Only filter unselected items if search term is active AND there's no exact group match button shown
+    // OR if there are group name suggestions being shown (meaning it's a partial search)
+    if (searchTerm && (!suggestedGroup || groupNameSuggestions.length > 0)) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       unselectedItems = unselectedItems.filter(
         (s) =>
@@ -197,7 +235,7 @@ export function RecordIndividualPaymentDialog({
     });
 
     return [...selectedItems, ...unselectedItems];
-  }, [allRecordableSchemes, searchTerm, selectedSchemeIds, suggestedGroup]);
+  }, [allRecordableSchemes, searchTerm, selectedSchemeIds, suggestedGroup, groupNameSuggestions]);
 
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
@@ -223,9 +261,8 @@ export function RecordIndividualPaymentDialog({
         return newModes;
       });
     }
-    // If unchecking, activeGroupSelection might need to be cleared if this scheme was part of it.
-    // This logic can be complex if a user unchecks one scheme from a bulk-selected group.
-    // For simplicity, we currently only clear activeGroupSelection when the suggestion button itself is used to "clear".
+    // If unchecking, consider clearing activeGroupSelection if this scheme was the last one keeping it active.
+    // This can be complex, so for now, activeGroupSelection is primarily managed by the group suggestion button.
   };
 
   const handleMonthsToPayChange = (schemeId: string, delta: number) => {
@@ -342,13 +379,28 @@ export function RecordIndividualPaymentDialog({
                 disabled={isLoading}
               />
             </div>
+            {groupNameSuggestions.length > 0 && (
+              <div className="mt-1 border rounded-md shadow-sm bg-popover max-h-40 overflow-y-auto z-10 relative">
+                <ul className="py-1">
+                  {groupNameSuggestions.map(group => (
+                    <li
+                      key={group.groupName}
+                      className="px-3 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                      onClick={() => handleSuggestionClick(group)}
+                    >
+                      {group.groupName}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {suggestedGroup && (
               <div className="flex items-center gap-2 p-2 border border-dashed rounded-md bg-muted/50">
                 <Info className="h-4 w-4 text-primary"/>
                 <span className="text-sm text-muted-foreground">Matched Group:</span>
                 <Button
                   variant="link"
-                  className="p-0 h-auto text-sm"
+                  className="p-0 h-auto text-sm text-left" // Added text-left
                   onClick={() => handleToggleGroupSuggestion(suggestedGroup)}
                 >
                   {activeGroupSelection === suggestedGroup.groupName
@@ -359,7 +411,7 @@ export function RecordIndividualPaymentDialog({
             )}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto h-0"> {/* Added h-0 here */}
+          <div className="flex-1 min-h-0 h-0 overflow-y-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
               {filteredSchemes.map((scheme) => {
                 const isSelected = selectedSchemeIds.includes(scheme.id);
