@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react'; // Ensured React is imported
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp, Users, AlertTriangle, DollarSign, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History, Search } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History, Search, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data';
@@ -238,7 +238,7 @@ export default function DashboardPage() {
       let newMonths = currentMonths + delta;
       if (newMonths < 1) newMonths = 1;
       if (newMonths > maxMonths) newMonths = maxMonths;
-      if (maxMonths <= 0) newMonths = 0;
+      if (maxMonths <= 0) newMonths = 0; 
       return { ...prev, [schemeId]: newMonths };
     });
   };
@@ -310,7 +310,12 @@ export default function DashboardPage() {
     setIsQuickIndividualBatchDialogOpen(false);
     setPaymentContextForDialog(null);
     loadSchemesData();
-    setMonthsToPayForScheme(prev => ({ ...prev, [scheme.id]: 1 }));
+    setMonthsToPayForScheme(prev => {
+      if (paymentContextForDialog && paymentContextForDialog.scheme && paymentContextForDialog.scheme.id) {
+        return { ...prev, [paymentContextForDialog.scheme.id]: 1 };
+      }
+      return prev;
+    });
   };
 
   const handleOpenHistoryPanel = (scheme: Scheme) => {
@@ -318,8 +323,10 @@ export default function DashboardPage() {
     setIsHistoryPanelOpen(true);
   };
 
-
+  console.log('DashboardPage: Preparing to render JSX');
+  // Checking parsing before this line
   return (
+    <React.Fragment>
     <div className="flex flex-col gap-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
@@ -412,77 +419,95 @@ export default function DashboardPage() {
               )}
 
               {recordableIndividualSchemes.length > 0 && (
-                <div className="max-h-[400px] overflow-y-auto pr-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {recordableIndividualSchemes.map((schemeInfo) => {
-                      const { scheme } = schemeInfo;
-                      const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
-                      const paymentsMade = scheme.paymentsMadeCount || 0;
-                      const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
-                      const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+                  {recordableIndividualSchemes.map((schemeInfo) => {
+                    const { scheme } = schemeInfo;
+                    const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
+                    const paymentsMade = scheme.paymentsMadeCount || 0;
+                    const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
+                    const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
 
-                      return (
-                        <div key={scheme.id} className="p-4 border rounded-lg shadow-sm bg-card space-y-3">
+                    return (
+                        <div
+                          key={scheme.id}
+                          className="bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between min-h-[320px] max-w-sm w-full"
+                        >
                           
-                          <div className="mb-1">
-                            <div className="flex justify-between items-center">
-                                <Link href={`/schemes/${scheme.id}`} className="font-semibold text-primary hover:underline text-lg truncate">
-                                  {scheme.customerName}
-                                </Link>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
-                                    <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                    <span className="sr-only">View Transaction History</span>
-                                </Button>
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono text-sm sm:text-base tracking-wider text-foreground/90 font-medium">
+                              {scheme.id.toUpperCase()}
+                            </span>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleOpenHistoryPanel(scheme)}>
+                              <History className="h-4 w-4" />
+                              <span className="sr-only">View Transaction History</span>
+                            </Button>
+                          </div>
+                        
+                          
+                          <div className="my-3">
+                            <Link href={`/schemes/${scheme.id}`} className="block">
+                                <p className="text-xl font-headline font-semibold text-primary hover:underline truncate" title={scheme.customerName}>
+                                {scheme.customerName}
+                                </p>
+                            </Link>
+                             <p className="text-xs text-muted-foreground mt-1">Starts: <strong>{formatDate(scheme.startDate, 'dd MMM yyyy')}</strong></p>
+                            <div className="text-xs text-muted-foreground mt-1.5 space-y-1">
+                             
+                              <p>Installment: <strong>{formatCurrency(scheme.monthlyPaymentAmount)}</strong></p>
+                              <p>Duration: <strong>{scheme.durationMonths} Months</strong></p>
                             </div>
-                            <p className="text-xs font-mono text-muted-foreground mt-0.5">ID: {scheme.id.toUpperCase()}</p>
                           </div>
+                        
                           
-                          <div className="text-xs space-y-0.5">
-                             <p><span className="text-muted-foreground">Started:</span> <strong className="text-foreground">{formatDate(scheme.startDate, 'dd MMM yyyy')}</strong></p>
-                             <p><span className="text-muted-foreground">Monthly:</span> <strong className="text-foreground">{formatCurrency(scheme.monthlyPaymentAmount)}</strong></p>
-                          </div>
-
-                          <div className="mt-2">
+                          <div className="my-3">
                             <SegmentedProgressBar
                                 scheme={scheme}
                                 paidMonthsCount={paymentsMade}
                                 monthsToRecord={currentMonthsToPay}
+                                className="h-2" 
                             />
-                            <p className="text-xs text-muted-foreground mt-1 text-center">
-                              {paymentsMade} / {scheme.durationMonths} months paid
+                            <p className="text-xs text-muted-foreground mt-1.5 text-center">
+                              {paymentsMade} / {scheme.durationMonths} paid
+                              {currentMonthsToPay > 0 && ` (+${currentMonthsToPay} to record)`}
                             </p>
                           </div>
                           
+                          
                           {maxMonthsToRecord > 0 ? (
-                            <div className="mt-3 space-y-3">
+                            <div className="mt-auto space-y-2.5"> 
                               <div className="flex items-center justify-center gap-2">
-                                <span className="text-sm font-medium text-muted-foreground">Record:</span>
+                                <span className="text-xs font-medium text-muted-foreground">Record:</span>
                                 <Button
-                                  variant="outline" size="icon" className="h-7 w-7"
+                                  variant="outline" size="icon" className="h-7 w-7 rounded-full"
                                   onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
                                   disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                                > <Minus className="h-3 w-3" /> </Button>
-                                <span className="w-6 text-center font-medium text-sm tabular-nums">{currentMonthsToPay}</span>
+                                > <Minus className="h-3.5 w-3.5" /> </Button>
+                                <span className="w-6 text-center font-semibold text-sm tabular-nums">{currentMonthsToPay}</span>
                                 <Button
-                                  variant="outline" size="icon" className="h-7 w-7"
+                                  variant="outline" size="icon" className="h-7 w-7 rounded-full"
                                   onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
                                   disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                                > <Plus className="h-3 w-3" /> </Button>
-                                <span className="text-sm text-muted-foreground">month(s)</span>
+                                > <Plus className="h-3.5 w-3.5" /> </Button>
+                                <span className="text-xs text-muted-foreground">month(s)</span>
                               </div>
 
                               <Button
                                 size="default" 
-                                className="w-full"
+                                className="w-full font-semibold"
                                 onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
-                                disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
+                                disabled={currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
                               >
                                 {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
-                                Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment{currentMonthsToPay === 1 ? '' : 's'} ({formatCurrency(liveTotalAmount)})
+                                Pay {currentMonthsToPay > 0 ? `${currentMonthsToPay} Installment${currentMonthsToPay > 1 ? 's': ''} (${formatCurrency(liveTotalAmount)})` : "Installment(s)"}
                               </Button>
                             </div>
                           ) : (
-                            <p className="text-sm text-green-600 font-medium text-center py-2 mt-3">All payments recorded for this scheme.</p>
+                             <div className="mt-auto text-center py-3">
+                                <span className="text-sm font-medium text-green-600 dark:text-green-500 inline-flex items-center gap-1.5">
+                                    <CheckCircle className="h-4 w-4"/>
+                                    All Installments Paid
+                                </span>
+                            </div>
                           )}
                         </div>
                       );
@@ -681,6 +706,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+    </React.Fragment>
   );
 }
 
