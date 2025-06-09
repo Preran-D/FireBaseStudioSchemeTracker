@@ -31,6 +31,7 @@ export function EditGroupNameDialog({ isOpen, onClose, onSubmit, currentGroupNam
     defaultValues: {
       newGroupName: currentGroupName || '',
     },
+    mode: 'onTouched',
   });
 
   useEffect(() => {

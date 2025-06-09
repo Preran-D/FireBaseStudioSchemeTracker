@@ -51,6 +51,7 @@ export function AssignGroupDialog({ isOpen, onClose, scheme, existingGroupNames,
       existingGroupName: scheme.customerGroupName || '',
       newGroupName: '',
     },
+    mode: 'onTouched',
   });
 
   const assignmentType = form.watch('assignmentType');
@@ -187,4 +188,3 @@ export function AssignGroupDialog({ isOpen, onClose, scheme, existingGroupNames,
     </Dialog>
   );
 }
-

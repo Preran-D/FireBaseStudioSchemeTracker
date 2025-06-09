@@ -105,6 +105,7 @@ export function SchemeForm({ onSubmit, initialData, isLoading, existingGroupName
   const form = useForm<SchemeFormValues>({ // Use Zod validated type here
     resolver: zodResolver(schemeFormSchema),
     defaultValues: getResolvedDefaultValues(),
+    mode: 'onTouched',
   });
   
   useEffect(() => {

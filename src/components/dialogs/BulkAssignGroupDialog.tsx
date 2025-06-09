@@ -57,6 +57,7 @@ export function BulkAssignGroupDialog({
       existingGroupName: existingGroupNames.length > 0 ? existingGroupNames[0] : '',
       newGroupName: '',
     },
+    mode: 'onTouched',
   });
 
   const assignmentType = form.watch('assignmentType');

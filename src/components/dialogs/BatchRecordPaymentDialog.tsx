@@ -56,6 +56,7 @@ export function BatchRecordPaymentDialog({
       paymentDate: new Date(),
       modeOfPayment: [],
     },
+    mode: 'onTouched',
   });
 
   const recordablePayments = useMemo(() => {
@@ -288,4 +289,3 @@ export function BatchRecordPaymentDialog({
     </Dialog>
   );
 }
-

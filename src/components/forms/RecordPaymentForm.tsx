@@ -40,6 +40,7 @@ export function RecordPaymentForm({ payment, onSubmit, isLoading, isEdit = false
       amountPaid: payment.amountPaid || payment.amountExpected,
       modeOfPayment: payment.modeOfPayment || [],
     },
+    mode: 'onTouched',
   });
 
   const handleSubmit = (values: RecordPaymentFormValues) => {

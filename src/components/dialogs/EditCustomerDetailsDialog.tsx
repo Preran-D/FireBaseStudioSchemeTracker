@@ -61,6 +61,7 @@ export function EditCustomerDetailsDialog({
       customerPhone: currentPhone || '',
       customerAddress: currentAddress || '',
     },
+    mode: 'onTouched',
   });
 
   useEffect(() => {
