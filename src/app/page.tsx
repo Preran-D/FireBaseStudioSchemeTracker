@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, Edit, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, Edit, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History } from 'lucide-react'; // Added History
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data';
@@ -15,8 +15,9 @@ import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as Rech
 import { useToast } from '@/hooks/use-toast';
 import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
-import { Progress } from '@/components/ui/progress';
 import { QuickIndividualBatchDialog, type QuickIndividualBatchSubmitDetails } from '@/components/dialogs/QuickIndividualBatchDialog';
+import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar'; // New Import
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; // New Import
 
 
 interface GroupWithRecordablePayments {
@@ -46,6 +47,9 @@ export default function DashboardPage() {
   const [paymentContextForDialog, setPaymentContextForDialog] = useState<PaymentContextForDialog | null>(null);
   const [isQuickIndividualBatchDialogOpen, setIsQuickIndividualBatchDialogOpen] = useState(false);
   const [isProcessingQuickIndividualBatch, setIsProcessingQuickIndividualBatch] = useState(false);
+
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false); // New state for history panel
+  const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null); // New state for history panel
 
 
   const loadSchemesData = useCallback(() => {
@@ -213,8 +217,8 @@ export default function DashboardPage() {
       const maxMonths = schemeDuration - (paymentsMade || 0);
       let newMonths = currentMonths + delta;
       if (newMonths < 1) newMonths = 1;
-      if (newMonths > maxMonths) newMonths = maxMonths; // Ensure not exceeding total remaining
-      if (maxMonths <= 0) newMonths = 0; // If no months to pay, set to 0
+      if (newMonths > maxMonths) newMonths = maxMonths; 
+      if (maxMonths <= 0) newMonths = 0; 
       return { ...prev, [schemeId]: newMonths };
     });
   };
@@ -287,6 +291,11 @@ export default function DashboardPage() {
     setPaymentContextForDialog(null);
     loadSchemesData(); 
     setMonthsToPayForScheme(prev => ({ ...prev, [scheme.id]: 1 }));
+  };
+
+  const handleOpenHistoryPanel = (scheme: Scheme) => {
+    setSchemeForHistory(scheme);
+    setIsHistoryPanelOpen(true);
   };
 
 
@@ -362,11 +371,10 @@ export default function DashboardPage() {
             {recordableIndividualSchemes.length > 0 ? (
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
                 {recordableIndividualSchemes.map((schemeInfo) => {
-                  const { scheme, firstRecordablePayment } = schemeInfo;
+                  const { scheme } = schemeInfo;
                   const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
                   const paymentsMade = scheme.paymentsMadeCount || 0;
                   const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
-                  const progressPercentage = maxMonthsToRecord > 0 ? (paymentsMade / scheme.durationMonths) * 100 : 100;
                   const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
 
                   return (
@@ -375,19 +383,28 @@ export default function DashboardPage() {
                         <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
                           {scheme.customerName}
                         </Link>
-                        <span className="font-semibold text-accent text-lg">
-                          {scheme.id.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="font-semibold text-accent text-lg">
+                            {scheme.id.toUpperCase()}
+                            </span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
+                                <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                <span className="sr-only">View Transaction History</span>
+                            </Button>
+                        </div>
                       </div>
                       
                       <div className="flex items-center gap-3">
-                        <Progress value={progressPercentage} className="h-2 flex-grow" />
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months paid</span>
+                        <SegmentedProgressBar 
+                            scheme={scheme}
+                            paidMonthsCount={paymentsMade}
+                            monthsToRecord={currentMonthsToPay}
+                        />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months</span>
                       </div>
 
                       <div className="text-sm text-muted-foreground">
                          Monthly Payment: {formatCurrency(scheme.monthlyPaymentAmount)}
-                         {maxMonthsToRecord > 0 && ` (Next: ${formatCurrency(firstRecordablePayment.amountExpected)} due ${formatDate(firstRecordablePayment.dueDate)})`}
                       </div>
                       
                       {maxMonthsToRecord > 0 ? (
@@ -507,6 +524,12 @@ export default function DashboardPage() {
         />
       )}
 
+      <SchemeHistoryPanel
+        isOpen={isHistoryPanelOpen}
+        onClose={() => setIsHistoryPanelOpen(false)}
+        scheme={schemeForHistory}
+      />
+
 
       <div className="grid gap-8 grid-cols-1 md:grid-cols-2">
         <Card>
@@ -612,4 +635,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
