@@ -150,23 +150,30 @@ body {
 
 
 @media print {
-  body * {
-    visibility: hidden !important;
+  body, html { /* Reset body and html for print */
     margin: 0 !important;
     padding: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-    background: white !important; 
+    background: white !important;
     color: black !important;
+    width: auto !important; /* Let page size dictate width */
+    height: auto !important; /* Let page size dictate height */
   }
 
-  #printableLabelArea, #printableLabelArea * {
+  body * { /* Hide all descendants of body initially */
+    visibility: hidden !important;
+    box-shadow: none !important;
+    border: none !important;
+    /* Avoid broad margin/padding resets here if they interfere with #printableLabelArea's own content */
+  }
+
+  #printableLabelArea, #printableLabelArea * { /* Make printable area and its children visible */
     visibility: visible !important;
     font-family: Arial, sans-serif !important; /* Ensure consistent font for print */
+    /* color and background should be inherited or explicitly set if needed */
   }
 
   #printableLabelArea {
-    position: absolute !important; /* Changed from fixed for better print flow */
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 62mm !important;
@@ -174,18 +181,27 @@ body {
     overflow: hidden !important;
     padding: 2mm !important; 
     box-sizing: border-box !important;
-    border: none !important; /* No border for actual print, was 1px dashed #ccc for debugging */
     background-color: white !important; 
-    page-break-after: always !important; /* Ensure only one label per page if multiple calls */
+    color: black !important; /* Explicitly set text color for the label content */
+    page-break-after: always !important; /* Ensure only one label per page */
+    /* Remove any borders or shadows if they were part of screen style */
+    border: none !important;
+    box-shadow: none !important;
   }
   
-  /* Hide the dialog and its overlay during print */
+  /* Hide specific non-printable UI elements using visibility */
+  /* Using display:none on parents of #printableLabelArea will hide it too. */
   div[role="dialog"],
   div[data-radix-dialog-overlay],
-  header, /* Hide main app header */
-  aside /* Hide main app sidebar if any */ {
-    display: none !important;
-    visibility: hidden !important;
+  header, 
+  aside {
+    visibility: hidden !important; /* Changed from display: none */
+    /* If they have explicit dimensions, might need to set to 0 or position off-screen */
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
   }
 
   @page {
@@ -193,3 +209,4 @@ body {
     margin: 0 !important;
   }
 }
+
