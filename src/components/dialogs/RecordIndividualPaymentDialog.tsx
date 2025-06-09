@@ -26,19 +26,19 @@ import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 import Link from 'next/link';
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; // Import the panel
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
   'Card': CreditCard,
-  'Cash': Landmark, // Using Landmark as a proxy for cash/bank
+  'Cash': Landmark, 
   'UPI': Smartphone,
-  'System Closure': AlertCircle, // Should not be selectable here
+  'System Closure': AlertCircle, 
 };
 
 
 const recordIndividualPaymentFormSchema = z.object({
   paymentDate: z.date({ required_error: 'Payment date is required.' }),
-  // modeOfPayment is now handled per scheme
 });
 
 type RecordIndividualPaymentFormValues = z.infer<typeof recordIndividualPaymentFormSchema>;
@@ -70,6 +70,10 @@ export function RecordIndividualPaymentDialog({
   const [monthsToPayPerScheme, setMonthsToPayPerScheme] = useState<{ [schemeId: string]: number }>({});
   const [paymentModePerScheme, setPaymentModePerScheme] = useState<{ [schemeId: string]: PaymentMode[] }>({});
 
+  const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
+  const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
+
+
   const form = useForm<RecordIndividualPaymentFormValues>({
     resolver: zodResolver(recordIndividualPaymentFormSchema),
     defaultValues: {
@@ -85,6 +89,8 @@ export function RecordIndividualPaymentDialog({
       setMonthsToPayPerScheme({});
       setPaymentModePerScheme({});
       setSearchTerm('');
+      setIsSchemePeekPanelOpen(false); // Close panel when dialog re-opens
+      setSchemeForPeekPanel(null);
     }
   }, [isOpen, form]);
 
@@ -136,10 +142,8 @@ export function RecordIndividualPaymentDialog({
       const newModes = { ...prevModes };
       if (checked) {
         if (!newModes[schemeId]) {
-          newModes[schemeId] = []; // Initialize with empty array or a default like ['Cash']
+          newModes[schemeId] = [];
         }
-      } else {
-        // Optionally clear modes when unchecking: delete newModes[schemeId];
       }
       return newModes;
     });
@@ -194,15 +198,23 @@ export function RecordIndividualPaymentDialog({
         atLeastOneSchemeHasMonths = true;
         const modes = paymentModePerScheme[schemeId] || [];
         if (modes.length === 0) {
-          return true; // Disabled if a scheme with months > 0 has no payment mode
+          return true; 
         }
       }
     }
-    if (!atLeastOneSchemeHasMonths && selectedSchemeIds.length > 0) return true; // Disabled if schemes are selected but all have 0 months to pay
+    if (!atLeastOneSchemeHasMonths && selectedSchemeIds.length > 0) return true; 
 
-    return !form.formState.isValid; // Check if paymentDate is valid
+    return !form.formState.isValid; 
   }, [isLoading, selectedSchemeIds, monthsToPayPerScheme, paymentModePerScheme, form.formState.isValid]);
 
+  const handleShowSchemePeek = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, schemeId: string) => {
+    event.preventDefault();
+    const schemeToShow = allRecordableSchemes.find(s => s.id === schemeId);
+    if (schemeToShow) {
+      setSchemeForPeekPanel(schemeToShow);
+      setIsSchemePeekPanelOpen(true);
+    }
+  };
 
   const handleSubmit = (values: RecordIndividualPaymentFormValues) => {
     let paymentsToSubmit = 0;
@@ -222,7 +234,6 @@ export function RecordIndividualPaymentDialog({
       }
     });
      if (paymentsToSubmit === 0 && selectedSchemeIds.length > 0) {
-        // This case should be caught by isSubmissionDisabled, but good to have a log.
         console.warn("Submit called with selected schemes but no valid payment configurations (0 months or no payment mode).");
         return;
     }
@@ -231,6 +242,7 @@ export function RecordIndividualPaymentDialog({
   if (!isOpen) return null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
@@ -251,7 +263,7 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
         
-        <div className="flex-1 min-h-0 h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 h-0 overflow-y-auto"> {/* Changed from ScrollArea */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
@@ -279,10 +291,10 @@ export function RecordIndividualPaymentDialog({
                     />
                     <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
                         <div className="flex justify-between items-start mb-0.5">
-                            <Link href={`/schemes/${scheme.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} 
+                            <a href={`/schemes/${scheme.id}`} onClick={(e) => handleShowSchemePeek(e, scheme.id)}
                                 className="font-medium text-primary hover:underline text-sm flex items-center">
-                            {scheme.customerName} <ExternalLink className="h-3 w-3 ml-1"/>
-                            </Link>
+                              {scheme.customerName} <ExternalLink className="h-3 w-3 ml-1"/>
+                            </a>
                             <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -428,6 +440,11 @@ export function RecordIndividualPaymentDialog({
         </Form>
       </DialogContent>
     </Dialog>
+    <SchemeHistoryPanel 
+        isOpen={isSchemePeekPanelOpen} 
+        onClose={() => setIsSchemePeekPanelOpen(false)} 
+        scheme={schemeForPeekPanel} 
+    />
+    </>
   );
 }
-
