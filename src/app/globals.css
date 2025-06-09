@@ -61,35 +61,35 @@ body {
 
   .dark {
     /* Deep Ocean Theme (Placeholder - PRD Style is Light Only) */
-    --background: 220 40% 10%; 
-    --foreground: 210 30% 90%; 
+    --background: 220 40% 10%;
+    --foreground: 210 30% 90%;
 
-    --muted: 220 30% 20%;    
-    --muted-foreground: 210 25% 65%; 
+    --muted: 220 30% 20%;
+    --muted-foreground: 210 25% 65%;
 
-    --popover: 220 40% 12%;    
+    --popover: 220 40% 12%;
     --popover-foreground: 210 30% 90%;
 
-    --card: 220 35% 18%;       
-    --card-foreground: 210 30% 88%; 
+    --card: 220 35% 18%;
+    --card-foreground: 210 30% 88%;
 
-    --border: 220 25% 30%;    
-    --input: 220 25% 25%;     
+    --border: 220 25% 30%;
+    --input: 220 25% 25%;
 
     --primary: 177 45% 60%;   /* Brighter Desaturated Cyan for Dark Mode */
-    --primary-foreground: 220 40% 10%; 
+    --primary-foreground: 220 40% 10%;
 
-    --secondary: 210 50% 45%;  
-    --secondary-foreground: 210 20% 95%; 
+    --secondary: 210 50% 45%;
+    --secondary-foreground: 210 20% 95%;
 
     --accent: 276 60% 65%;     /* Brighter Violet for Dark Mode */
-    --accent-foreground: 220 40% 10%; 
+    --accent-foreground: 220 40% 10%;
 
-    --destructive: 0 70% 55%;   
-    --destructive-foreground: 0 0% 100%; 
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --ring: 177 45% 60%; 
-    
+    --ring: 177 45% 60%;
+
     /* Chart colors for dark theme */
     --chart-1: 177 45% 60%;
     --chart-2: 276 60% 65%;
@@ -138,15 +138,15 @@ body {
   position: absolute !important;
   left: -9999px !important;
   top: -9999px !important;
-  width: 62mm; 
+  width: 62mm;
   height: 29mm;
-  background-color: white; 
-  color: black; 
-  font-family: Arial, sans-serif !important; 
-  padding: 1mm !important; 
+  background-color: white;
+  color: black;
+  font-family: Arial, sans-serif !important;
+  padding: 1mm !important;
   box-sizing: border-box !important;
-  overflow: hidden; 
-  z-index: -1; 
+  overflow: hidden;
+  z-index: -1;
 }
 
 #printableLabelArea #labelCustomerName,
@@ -156,12 +156,12 @@ body {
   display: block;
   color: black;
   background-color: white;
-  margin: 0.5mm 0 !important; 
+  margin: 0.5mm 0 !important;
   font-family: Arial, sans-serif !important;
-  line-height: 1.1 !important; 
+  line-height: 1.1 !important;
 }
 #printableLabelArea #labelCustomerName {
-  font-size: 9pt !important; 
+  font-size: 9pt !important;
   font-weight: bold !important;
 }
 #printableLabelArea #labelSchemeId,
@@ -173,67 +173,97 @@ body {
 
 @media print {
   html, body {
-    width: auto !important; /* Let @page define dimensions */
-    height: auto !important; /* Let @page define dimensions */
+    width: 62mm !important; /* Force page size for print */
+    height: 29mm !important;/* Force page size for print */
     margin: 0 !important;
     padding: 0 !important;
-    background: white !important; 
-    color: black !important; 
-    -webkit-print-color-adjust: exact !important; 
-    print-color-adjust: exact !important; 
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: hidden !important; /* Prevent scrollbars on the print page */
   }
 
-  body * {
+  /* Hide common page elements */
+  body > header, /* Main app header */
+  body > aside,  /* Main app sidebar */
+  body > main,   /* Main content area */
+  div[data-radix-dialog-overlay], /* ShadCN Dialog overlay */
+  nav, footer /* Generic nav/footer elements */
+  {
+    display: none !important;
+  }
+
+  /* Ensure the dialog content container itself is visible and acts as the print page */
+  div[role="dialog"] {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute !important; /* Changed from fixed to absolute */
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important; /* Take full width of the forced page size */
+    height: 100% !important;/* Take full height of the forced page size */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    overflow: hidden !important; /* Important to clip to this size */
+    z-index: 9999 !important; /* Bring to front */
+  }
+
+  /* Hide all direct children of the dialog initially */
+  div[role="dialog"] > * {
     display: none !important;
     visibility: hidden !important;
   }
 
-  #printableLabelArea, 
-  #printableLabelArea * {
-    display: block !important; 
+  /* Now, specifically show the printableLabelArea and its content */
+  #printableLabelArea {
+    display: block !important;
     visibility: visible !important;
+    position: relative !important; /* Position relative to its parent (the dialog) */
+    width: 100% !important; /* Take full width of its parent (dialog) */
+    height: 100% !important;/* Take full height of its parent (dialog) */
+    margin: 0 !important;
+    padding: 1mm !important; /* Inner padding for the label content */
+    box-sizing: border-box !important;
     font-family: Arial, sans-serif !important;
     color: black !important;
-    background-color: white !important; /* Ensure background is white for label elements too */
+    background-color: white !important;
+    border: 1px solid blue !important; /* DIAGNOSTIC BORDER */
+    /* overflow: hidden !important; */ /* Keep commented for now to see overflow */
+    page-break-after: always !important; /* Ensure it's the only page */
   }
 
-  #printableLabelArea {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 62mm !important;
-    height: 29mm !important;
-    margin: 0 !important;
-    padding: 1mm !important; /* Reduced padding */
-    box-sizing: border-box !important;
-    /* overflow: hidden !important; Temporarily removed for diagnosis */
-    border: 1px solid blue !important; /* Diagnostic border */
-    page-break-after: always !important; 
-    box-shadow: none !important;
-  }
-  
-  #printableLabelArea #labelCustomerName, 
+  #printableLabelArea *,
+  #printableLabelArea #labelCustomerName,
   #printableLabelArea #labelSchemeId,
   #printableLabelArea #labelStartDate,
   #printableLabelArea #labelAmount {
-    margin: 0.5mm 0 !important; 
+    display: block !important; /* Ensure children are block */
+    visibility: visible !important; /* Ensure children are visible */
+    font-family: Arial, sans-serif !important;
+    color: black !important;
+    background-color: white !important;
+    margin: 0.5mm 0 !important;
     padding: 0 !important;
-    line-height: 1.1 !important; 
-    color: black !important; 
+    line-height: 1.1 !important;
   }
+
   #printableLabelArea #labelCustomerName {
-    font-size: 9pt !important; 
+    font-size: 9pt !important;
     font-weight: bold !important;
   }
   #printableLabelArea #labelSchemeId,
   #printableLabelArea #labelStartDate,
   #printableLabelArea #labelAmount {
-    font-size: 7pt !important; 
+    font-size: 7pt !important;
   }
 
   @page {
     size: 62mm 29mm !important;
-    margin: 0 !important; 
+    margin: 0 !important;
   }
 }
 
