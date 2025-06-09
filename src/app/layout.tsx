@@ -4,7 +4,8 @@ import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import AppLayout from '@/components/layout/AppLayout';
-import { ThemeProvider } from '@/hooks/useTheme'; // Import ThemeProvider
+import { ThemeProvider } from '@/hooks/useTheme';
+import { SideContextWrapper } from '@/components/ui/sidebar'; // Import the provider
 
 const inter = Inter({
   subsets: ['latin'],
@@ -33,9 +34,11 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}>
         <ThemeProvider>
-          <AppLayout>
-            {children}
-          </AppLayout>
+          <SideContextWrapper> {/* Wrap AppLayout with the Sidebar context provider */}
+            <AppLayout>
+              {children}
+            </AppLayout>
+          </SideContextWrapper>
           <Toaster />
         </ThemeProvider>
       </body>

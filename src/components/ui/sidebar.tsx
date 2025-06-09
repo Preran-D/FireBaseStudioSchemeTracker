@@ -1,77 +1,244 @@
+'use client';
 
-"use client"
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { ChevronLeft, PanelLeftOpen } from 'lucide-react';
+import Link from 'next/link';
 
-import * as React from "react"
-// Component might be unused now, keeping for potential future use or if other parts depend on its types/helpers.
-// For now, its direct usage in AppLayout is removed.
+import { cn } from '@/lib/utils';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-// Minimal content to avoid breaking imports if anything else references types from here.
-// If confirmed as fully unused, this file could be deleted.
-
-// Exporting a few common types/hooks if they were used elsewhere, otherwise this can be empty.
-const SidebarContext = React.createContext<null>(null)
-function useSidebar() {
-  return React.useContext(SidebarContext)
+interface SidebarContextProps {
+  isOpen: boolean;
+  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isMobile: boolean; // Will be false for this implementation
 }
 
-export { useSidebar }
-// Add other exports if necessary or leave as is if this file is effectively deprecated.
-// For instance, if specific variant types or utility functions from here were public:
-// export { type SidebarProps, sidebarVariants } from './actual-sidebar-code-if-any-remains';
+const SidebarContext = React.createContext<SidebarContextProps | undefined>(undefined);
 
-// If this component is truly no longer needed, it's best to remove it from the project.
-// For now, providing a minimal stub.
+export function useSidebar() {
+  const context = React.useContext(SidebarContext);
+  if (!context) {
+    throw new Error('useSidebar must be used within a SidebarProvider');
+  }
+  return context;
+}
 
-// If you want to keep the full code for potential future use, but not have it active,
-// you can comment out the main component exports or rename them.
-// For this exercise, I'm assuming we are phasing it out and providing a minimal stub.
+export function SideContextWrapper({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = React.useState(false); // Default to collapsed (rail)
+  const isMobile = false; // Simplified, not implementing mobile overlay for now
 
-// If the intent was to completely remove the sidebar UI component and its logic:
+  return (
+    <SidebarContext.Provider value={{ isOpen, setIsOpen, isMobile }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
 
-/**
- * Sidebar component is no longer in use as navigation has moved to TopNavigation.
- * This file is kept temporarily to prevent breaking imports in other UI files if any exist,
- * but should be reviewed for complete removal.
- */
+const sidebarVariants = cva(
+  "fixed inset-y-0 left-0 z-40 flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out",
+  {
+    variants: {
+      state: {
+        open: "w-60", // Expanded width
+        closed: "w-16", // Collapsed (rail) width
+      },
+    },
+    defaultVariants: {
+      state: "closed",
+    },
+  }
+);
 
-export const SideContextWrapper: React.FC<React.PropsWithChildren<{}>> = ({ children }) => <>{children}</>;
-export const Sidebar: React.FC<React.PropsWithChildren<{} & {collapsible?: string, variant?: string, className?:string}>> = ({ children }) => <div className="hidden">{children}</div>;
-export const SidebarHeader: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <div className="hidden">{children}</div>;
-export const SidebarContent: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <div className="hidden">{children}</div>;
-export const SidebarFooter: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <div className="hidden">{children}</div>;
-export const SidebarInset: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <main className="flex-1">{children}</main>;
-export const SidebarTrigger: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <button className="hidden">{children}</button>;
-export const SidebarMenu: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <ul className="hidden">{children}</ul>;
-export const SidebarMenuItem: React.FC<React.PropsWithChildren<{className?: string}>> = ({ children }) => <li className="hidden">{children}</li>;
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof sidebarVariants> {}
 
-interface SidebarMenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  asChild?: boolean;
-  tooltip?: { children: React.ReactNode; className?: string };
+const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
+  ({ className, children, ...props }, ref) => {
+    const { isOpen } = useSidebar();
+    return (
+      <aside
+        ref={ref}
+        data-state={isOpen ? "open" : "closed"}
+        className={cn(sidebarVariants({ state: isOpen ? "open" : "closed" }), className)}
+        {...props}
+      >
+        {children}
+      </aside>
+    );
+  }
+);
+Sidebar.displayName = "Sidebar";
+
+const SidebarHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, children, ...props }, ref) => {
+    const { isOpen } = useSidebar();
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "flex h-16 items-center border-b border-sidebar-border px-4 shrink-0", // Added shrink-0
+          isOpen ? "justify-between" : "justify-center",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+SidebarHeader.displayName = "SidebarHeader";
+
+const SidebarContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, children, ...props }, ref) => (
+    <div ref={ref} className={cn("flex-1 overflow-y-auto p-2", className)} {...props}>
+      {children}
+    </div>
+  )
+);
+SidebarContent.displayName = "SidebarContent";
+
+const SidebarFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, children, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn("mt-auto border-t border-sidebar-border p-4 shrink-0", className)} // Added shrink-0
+      {...props}
+    >
+      {children}
+    </div>
+  )
+);
+SidebarFooter.displayName = "SidebarFooter";
+
+const SidebarMenu = React.forwardRef<HTMLUListElement, React.HTMLAttributes<HTMLUListElement>>(
+  ({ className, children, ...props }, ref) => (
+    <ul ref={ref} className={cn("space-y-1", className)} {...props}>
+      {children}
+    </ul>
+  )
+);
+SidebarMenu.displayName = "SidebarMenu";
+
+const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.HTMLAttributes<HTMLLIElement>>(
+  ({ className, children, ...props }, ref) => (
+    <li ref={ref} className={cn("", className)} {...props}>
+      {children}
+    </li>
+  )
+);
+SidebarMenuItem.displayName = "SidebarMenuItem";
+
+interface SidebarMenuButtonProps extends React.HTMLAttributes<HTMLElement> {
+  href?: string;
+  icon?: React.ReactNode;
+  tooltipLabel: string;
+  children: React.ReactNode; // This will be the label text
   className?: string;
+  isActive?: boolean; // Optional prop for active state
 }
-export const SidebarMenuButton = React.forwardRef<
-  HTMLElement,
-  React.PropsWithChildren<SidebarMenuButtonProps>
->(({ children }, ref) => <button ref={ref as React.Ref<HTMLButtonElement>} className="hidden">{children}</button>);
 
+const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButtonProps>(
+  ({ href, icon, tooltipLabel, children, className, isActive, ...props }, ref) => {
+    const { isOpen } = useSidebar();
+    const Comp = href ? Link : 'button';
+
+    const buttonContent = (
+      <>
+        {icon && <span className={cn("flex-shrink-0", isOpen ? "mr-3" : "mr-0")}>{icon}</span>}
+        <span className={cn("truncate transition-opacity duration-200", isOpen ? "opacity-100" : "opacity-0 w-0")}>
+          {children}
+        </span>
+      </>
+    );
+
+    const buttonElement = (
+      // @ts-ignore TODO: Fix type for Comp with ref
+      <Comp
+        ref={ref}
+        href={href!} // Assert href is present if Comp is Link
+        className={cn(
+          buttonVariants({ variant: 'ghost', size: 'default' }),
+          "w-full h-10 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-sidebar-ring",
+          isOpen ? "justify-start px-3" : "justify-center px-0",
+          isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+          className
+        )}
+        {...(href ? {} : { type: 'button' })}
+        {...props}
+      >
+        {buttonContent}
+      </Comp>
+    );
+
+    if (!isOpen) {
+      return (
+        <TooltipProvider delayDuration={100}>
+          <Tooltip>
+            <TooltipTrigger asChild>{buttonElement}</TooltipTrigger>
+            <TooltipContent side="right" className="bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border shadow-lg">
+              <p>{tooltipLabel}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+    return buttonElement;
+  }
+);
 SidebarMenuButton.displayName = "SidebarMenuButton";
 
+const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ComponentProps<typeof Button>>(
+  ({ className, children, ...props }, ref) => {
+    const { isOpen, setIsOpen } = useSidebar();
+    return (
+      <Button
+        ref={ref}
+        variant="ghost"
+        size="icon"
+        className={cn("h-9 w-9 text-foreground hover:bg-accent/80", className)}
+        onClick={() => setIsOpen(!isOpen)}
+        {...props}
+      >
+        {isOpen ? <ChevronLeft className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
+        <span className="sr-only">{isOpen ? "Collapse sidebar" : "Expand sidebar"}</span>
+      </Button>
+    );
+  }
+);
+SidebarTrigger.displayName = "SidebarTrigger";
 
-// If you need to keep the types/variants for other potential UI elements that might reuse them:
-// import { Slot } from "@radix-ui/react-slot"
-// import { VariantProps, cva } from "class-variance-authority"
-// import { PanelLeft, X } from "lucide-react"
-// import { useIsMobile } from "@/hooks/use-mobile"
-// import { cn } from "@/lib/utils"
-// import { Button } from "@/components/ui/button"
-// import { Input } from "@/components/ui/input"
-// import { Separator } from "@/components/ui/separator"
-// import { Sheet, SheetContent } from "@/components/ui/sheet"
-// import { Skeleton } from "@/components/ui/skeleton"
-// import {
-//   Tooltip,
-//   TooltipContent,
-//   TooltipProvider,
-//   TooltipTrigger,
-// } from "@/components/ui/tooltip"
-// ... (rest of the original sidebar code if needed for type exports)
+const SidebarInset = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, children, ...props }, ref) => {
+    const { isOpen } = useSidebar();
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "transition-all duration-300 ease-in-out flex-1 flex flex-col", // Added flex-1 and flex-col
+          isOpen ? "md:ml-60" : "md:ml-16", // Use md prefix for responsive margin
+          "ml-0", // For mobile, sidebar might overlay or be hidden, so no margin
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+SidebarInset.displayName = "SidebarInset";
+
+export {
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarInset,
+};
