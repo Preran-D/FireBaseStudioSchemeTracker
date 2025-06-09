@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Added this import
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -30,10 +30,10 @@ import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import {
   updateMockSchemePayment,
   recordNextDuePaymentsForCustomerGroup,
-  getMockSchemes, // To get all schemes if not passed directly or for group details
+  getMockSchemes, 
 } from '@/lib/mock-data';
-import { cn, formatDate, formatCurrency, getPaymentStatus, calculateSchemeTotals, getSchemeStatus } from '@/lib/utils';
-import { formatISO, parseISO } from 'date-fns';
+import { cn, formatCurrency, getPaymentStatus, calculateSchemeTotals, getSchemeStatus } from '@/lib/utils';
+import { format, formatISO, parseISO } from 'date-fns'; // Added format from date-fns
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
@@ -52,15 +52,15 @@ interface EnhancedRecordableSchemeInfo {
 
 interface GroupWithRecordablePayments {
   groupName: string;
-  schemes: Scheme[]; // All schemes in this group
-  recordableSchemeCount: number; // Count of schemes in this group that have a next payment due
+  schemes: Scheme[]; 
+  recordableSchemeCount: number; 
 }
 
 interface AddPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  allSchemes: Scheme[]; // Pass all schemes from the parent
-  onPaymentRecorded: () => void; // Callback to refresh data on parent
+  allSchemes: Scheme[]; 
+  onPaymentRecorded: () => void; 
 }
 
 export function AddPaymentDialog({
@@ -76,7 +76,7 @@ export function AddPaymentDialog({
   const [batchGroupSearchTerm, setBatchGroupSearchTerm] = useState('');
 
   const [monthsToPayForScheme, setMonthsToPayForScheme] = useState<{ [schemeId: string]: number }>({});
-  const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({}); // key: schemeId or groupName
+  const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({});
 
   const form = useForm<AddPaymentFormValues>({
     resolver: zodResolver(addPaymentFormSchema),
@@ -87,10 +87,10 @@ export function AddPaymentDialog({
     mode: 'onTouched',
   });
 
-  // Re-process schemes from props whenever they change (e.g., after a payment)
+  
   const processedSchemes = useMemo(() => {
     return parentSchemes.map(s => {
-      // Ensure calculations are fresh if not already done by parent
+      
       const tempS = { ...s };
       tempS.payments.forEach(p => p.status = getPaymentStatus(p, tempS.startDate));
       const totals = calculateSchemeTotals(tempS);
@@ -144,7 +144,7 @@ export function AddPaymentDialog({
     processedSchemes.forEach(scheme => {
       if (scheme.customerGroupName && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         let hasRecordablePaymentForThisScheme = false;
-        // Logic to find if scheme has a recordable payment (first unpaid after all previous are paid)
+        
         for (let i = 0; i < scheme.payments.length; i++) {
             const payment = scheme.payments[i];
             if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -171,7 +171,7 @@ export function AddPaymentDialog({
   }, [processedSchemes, batchGroupSearchTerm]);
 
   useEffect(() => {
-    // Initialize or update monthsToPayForScheme when recordableIndividualSchemes change
+    
     setMonthsToPayForScheme(prev => {
       const newMonthsToPay = { ...prev };
       recordableIndividualSchemes.forEach(({ scheme }) => {
@@ -226,8 +226,8 @@ export function AddPaymentDialog({
         title: "Payments Recorded",
         description: `${successfulRecords} payment(s) totaling ${formatCurrency(totalAmountRecorded)} for ${schemeInfo.scheme.customerName} (Scheme: ${schemeId.toUpperCase()}) recorded. ${errors > 0 ? `${errors} error(s).` : ''}`
       });
-      onPaymentRecorded(); // Refresh dashboard data
-      setMonthsToPayForScheme(prev => ({ ...prev, [schemeId]: 1 })); // Reset counter for this scheme
+      onPaymentRecorded(); 
+      setMonthsToPayForScheme(prev => ({ ...prev, [schemeId]: 1 })); 
     } else if (errors > 0) {
       toast({ title: "Error Recording Payments", description: `${errors} error(s) occurred. No payments were recorded.`, variant: "destructive" });
     } else {
@@ -241,20 +241,19 @@ export function AddPaymentDialog({
     const result = recordNextDuePaymentsForCustomerGroup(group.groupName, {
       paymentDate: formatISO(paymentData.paymentDate),
       modeOfPayment: paymentData.modeOfPayment,
-      // schemeIdsToRecord: could be implemented with checkboxes per scheme in group
+      
     });
 
     toast({
       title: "Batch Payment Processed",
       description: `Recorded ${result.paymentsRecordedCount} payment(s) for group "${group.groupName}", totaling ${formatCurrency(result.totalRecordedAmount)}.`,
     });
-    onPaymentRecorded(); // Refresh dashboard data
+    onPaymentRecorded(); 
     setProcessingStates(prev => ({ ...prev, [group.groupName]: false }));
   };
   
   const onSubmitCommonForm = (formData: AddPaymentFormValues) => {
-    // This function is called when a specific pay button is clicked.
-    // The actual scheme/group info is passed directly to the handlers.
+    
     console.log("Common payment details validated:", formData);
   };
 
@@ -287,7 +286,7 @@ export function AddPaymentDialog({
                             className={cn('w-full justify-start text-left font-normal', !field.value && 'text-muted-foreground')}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? formatDate(field.value) : <span>Pick a date</span>}
+                            {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
@@ -353,7 +352,7 @@ export function AddPaymentDialog({
                   {individualSearchTerm.trim() && recordableIndividualSchemes.length === 0 && <p className="text-muted-foreground text-center py-3">No matching recordable schemes.</p>}
                   {!individualSearchTerm.trim() && <p className="text-muted-foreground text-center py-3">Search to list recordable schemes.</p>}
                   
-                  <ScrollArea className="h-[calc(90vh-400px)] min-h-[200px]"> {/* Adjust height as needed */}
+                  <ScrollArea className="h-[calc(90vh-400px)] min-h-[200px]"> 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {recordableIndividualSchemes.map((schemeInfo) => {
                       const { scheme } = schemeInfo;
@@ -367,13 +366,13 @@ export function AddPaymentDialog({
                         <div key={scheme.id} className="p-3 border rounded-lg bg-card flex flex-col text-xs">
                           <div className="flex justify-between items-start mb-1">
                             <span className="font-mono text-xs sm:text-sm tracking-wider text-foreground/90 font-medium block">{scheme.id.toUpperCase()}</span>
-                            {/* History button could be added if needed */}
+                            
                           </div>
                           <Link href={`/schemes/${scheme.id}`} target="_blank" rel="noopener noreferrer" className="block mb-1">
                             <p className="text-sm font-headline font-semibold text-primary hover:underline truncate" title={scheme.customerName}>{scheme.customerName}</p>
                           </Link>
                           <div className="flex justify-between items-baseline mt-1 text-xs">
-                            <p className="text-muted-foreground">Starts: <span className="font-semibold text-foreground">{formatDate(scheme.startDate, 'dd MMM yy')}</span></p>
+                            <p className="text-muted-foreground">Starts: <span className="font-semibold text-foreground">{format(parseISO(scheme.startDate), 'dd MMM yy')}</span></p>
                             <p className="font-semibold text-foreground">{formatCurrency(scheme.monthlyPaymentAmount)}</p>
                           </div>
                           <div className="my-1.5">
@@ -416,7 +415,7 @@ export function AddPaymentDialog({
                   {batchGroupSearchTerm.trim() && groupsWithRecordablePayments.length === 0 && <p className="text-muted-foreground text-center py-3">No matching groups with recordable payments.</p>}
                   {!batchGroupSearchTerm.trim() && groupsWithRecordablePayments.length === 0 && <p className="text-muted-foreground text-center py-3">No groups eligible for batch payment.</p>}
                   
-                  <ScrollArea className="h-[calc(90vh-400px)] min-h-[200px]"> {/* Adjust height as needed */}
+                  <ScrollArea className="h-[calc(90vh-400px)] min-h-[200px]"> 
                     <div className="space-y-2">
                     {groupsWithRecordablePayments.map(group => {
                       const isProcessing = processingStates[group.groupName];
@@ -443,7 +442,7 @@ export function AddPaymentDialog({
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={onClose}>Close</Button>
               </DialogClose>
-              {/* No global submit button, actions are per-item/group */}
+              
             </DialogFooter>
           </form>
         </Form>
@@ -451,4 +450,3 @@ export function AddPaymentDialog({
     </Dialog>
   );
 }
-
