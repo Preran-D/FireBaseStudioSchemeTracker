@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter } from 'lucide-react';
+import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Printer } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
 import { Badge } from '@/components/ui/badge';
+import { PrintLabelDialog } from '@/components/dialogs/PrintLabelDialog';
 
 const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 
@@ -61,6 +62,10 @@ export default function SchemeDetailsPage() {
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   
   const [activeAccordionItem, setActiveAccordionItem] = useState<string | undefined>(schemeIdFromUrl);
+
+  const [isPrintLabelDialogOpen, setIsPrintLabelDialogOpen] = useState(false);
+  const [schemeForLabelPrint, setSchemeForLabelPrint] = useState<Scheme | null>(null);
+
 
   const loadSchemeData = useCallback(() => {
     if (schemeIdFromUrl) {
@@ -176,6 +181,11 @@ export default function SchemeDetailsPage() {
     }
     setIsAssignGroupDialogOpen(false);
     setIsUpdatingGroup(false);
+  };
+
+  const handleOpenPrintLabelDialog = (targetScheme: Scheme) => {
+    setSchemeForLabelPrint(targetScheme);
+    setIsPrintLabelDialogOpen(true);
   };
   
   const customerSummaryStats = useMemo(() => {
@@ -401,7 +411,15 @@ export default function SchemeDetailsPage() {
                                     </TableBody>
                                     </Table>
                                 </div>
-                                <div className="flex justify-end mt-4">
+                                <div className="flex justify-between items-center mt-4">
+                                    <Button 
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleOpenPrintLabelDialog(s)}
+                                        disabled={isLoading}
+                                    >
+                                        <Printer className="mr-2 h-4 w-4" /> Print Label
+                                    </Button>
                                     <Button 
                                       size="sm"
                                       variant="destructive"
@@ -640,6 +658,17 @@ export default function SchemeDetailsPage() {
           isLoading={isUpdatingGroup}
         />
       )}
+      {schemeForLabelPrint && (
+        <PrintLabelDialog
+            isOpen={isPrintLabelDialogOpen}
+            onClose={() => {
+                setIsPrintLabelDialogOpen(false);
+                setSchemeForLabelPrint(null);
+            }}
+            scheme={schemeForLabelPrint}
+        />
+      )}
     </div>
   );
 }
+
