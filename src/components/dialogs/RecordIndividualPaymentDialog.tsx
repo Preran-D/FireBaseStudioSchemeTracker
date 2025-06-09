@@ -82,9 +82,9 @@ export function RecordIndividualPaymentDialog({
   }, [isOpen, form]);
 
   const filteredSchemes = useMemo(() => {
-    const currentSelectedSchemes = allRecordableSchemes
+    const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
-      .sort((a,b) => { // Keep selected items sorted by original order or name for stability
+      .sort((a,b) => { // Keep selected items sorted by original order for stability
         const indexA = allRecordableSchemes.findIndex(scheme => scheme.id === a.id);
         const indexB = allRecordableSchemes.findIndex(scheme => scheme.id === b.id);
         return indexA - indexB;
@@ -101,7 +101,14 @@ export function RecordIndividualPaymentDialog({
           s.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    return [...currentSelectedSchemes, ...filteredUnselectedItems];
+    // Sort unselected items by customer name, then by start date
+    filteredUnselectedItems.sort((a,b) => {
+      const nameCompare = a.customerName.localeCompare(b.customerName);
+      if (nameCompare !== 0) return nameCompare;
+      return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
+    });
+
+    return [...selectedItems, ...filteredUnselectedItems];
   }, [allRecordableSchemes, searchTerm, selectedSchemeIds]);
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
@@ -117,9 +124,6 @@ export function RecordIndividualPaymentDialog({
             newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       } else {
-        // Optionally, you might want to remove the entry if unchecked, 
-        // or keep it if you want to preserve the last count if re-checked.
-        // For now, let's clear it to ensure it defaults to 1 if re-checked.
         delete newMonths[schemeId];
       }
       return newMonths;
@@ -187,7 +191,7 @@ export function RecordIndividualPaymentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative my-3">
+        <div className="relative my-3 flex-shrink-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by customer name or scheme ID..."
@@ -198,7 +202,7 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="flex-grow border rounded-md p-1 min-h-[200px] max-h-[calc(90vh-380px)]"> {/* Adjusted max-height */}
+        <ScrollArea className="flex-1 min-h-0 border rounded-md p-1"> {/* Changed classes here */}
           {filteredSchemes.length === 0 && (
             <p className="text-center text-muted-foreground py-6">
               {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
@@ -225,7 +229,7 @@ export function RecordIndividualPaymentDialog({
                       checked={isSelected}
                       onCheckedChange={(checked) => handleSchemeSelectionToggle(scheme.id, !!checked)}
                       disabled={isLoading || maxMonthsForThisScheme <= 0}
-                      className="mt-1"
+                      className="mt-1 flex-shrink-0"
                     />
                     <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
                         <div className="flex justify-between items-start mb-0.5">
@@ -253,11 +257,11 @@ export function RecordIndividualPaymentDialog({
                     <div className="mt-2 flex items-center justify-between gap-2 p-2 border-t border-primary/20">
                       <span className="text-xs font-medium">Months to Pay:</span>
                       <div className="flex items-center gap-1.5">
-                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleMonthsToPayChange(scheme.id, -1)} disabled={currentMonthsToPay <= 1 || isLoading}>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, -1)} disabled={currentMonthsToPay <= 1 || isLoading}>
                           <Minus className="h-3 w-3" />
                         </Button>
                         <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentMonthsToPay}</span>
-                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleMonthsToPayChange(scheme.id, 1)} disabled={currentMonthsToPay >= maxMonthsForThisScheme || isLoading}>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, 1)} disabled={currentMonthsToPay >= maxMonthsForThisScheme || isLoading}>
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
@@ -274,7 +278,7 @@ export function RecordIndividualPaymentDialog({
         </ScrollArea>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-3">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-3 flex-shrink-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
