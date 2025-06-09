@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react'; // Ensured React is imported
+import React, { useEffect, useState, useMemo, useCallback } from 'react'; // Ensure React is imported
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -326,7 +326,7 @@ export default function DashboardPage() {
   console.log('DashboardPage: Preparing to render JSX');
   // Checking parsing before this line
   return (
-    <React.Fragment>
+    <>
     <div className="flex flex-col gap-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
@@ -418,7 +418,7 @@ export default function DashboardPage() {
                    <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
               )}
 
-              {recordableIndividualSchemes.length > 0 && (
+              {recordableIndividualSchemes.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
                   {recordableIndividualSchemes.map((schemeInfo) => {
                     const { scheme } = schemeInfo;
@@ -513,8 +513,8 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                </div>
-              )}
+                ) : null
+              }
             </TabsContent>
             <TabsContent value="batch" className="mt-6">
               <div className="relative mb-4">
@@ -706,7 +706,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
-    </React.Fragment>
+    </>
   );
 }
-
