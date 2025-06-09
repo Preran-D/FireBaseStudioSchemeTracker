@@ -421,74 +421,65 @@ export default function DashboardPage() {
                     const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
 
                     return (
-                      <div key={scheme.id} className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-3">
-                        <div className="flex justify-between items-start">
-                          <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
+                      <div key={scheme.id} className="p-4 border rounded-lg shadow-sm bg-card space-y-3">
+                        
+                        <div className="flex justify-between items-center mb-1">
+                          <Link href={`/schemes/${scheme.id}`} className="font-semibold text-primary hover:underline text-lg">
                             {scheme.customerName}
                           </Link>
-                          <div className="flex items-center gap-2 text-right">
-                              <span className="font-semibold text-accent text-lg">
-                              {scheme.id.toUpperCase()}
-                              </span>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
-                                  <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                  <span className="sr-only">View Transaction History</span>
-                              </Button>
-                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
+                              <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                              <span className="sr-only">View Transaction History</span>
+                          </Button>
                         </div>
                         
-                        <div className="text-sm font-bold">
-                            Started: {formatDate(scheme.startDate, 'dd MMM yyyy')}
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                           <p>ID: <span className="font-medium text-foreground">{scheme.id.toUpperCase()}</span></p>
+                           <p>Started: <span className="font-medium text-foreground">{formatDate(scheme.startDate, 'dd MMM yyyy')}</span></p>
+                           <p>Monthly: <span className="font-medium text-foreground">{formatCurrency(scheme.monthlyPaymentAmount)}</span></p>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="mt-2">
                           <SegmentedProgressBar
                               scheme={scheme}
                               paidMonthsCount={paymentsMade}
                               monthsToRecord={currentMonthsToPay}
                           />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months</span>
+                          <p className="text-xs text-muted-foreground mt-1 text-center">
+                            {paymentsMade} / {scheme.durationMonths} months paid
+                          </p>
                         </div>
-
-                        <div className="text-sm text-muted-foreground">
-                           Monthly Payment: {formatCurrency(scheme.monthlyPaymentAmount)}
-                        </div>
-
+                        
                         {maxMonthsToRecord > 0 ? (
-                          <>
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm">Record:</span>
-                                <Button
-                                  variant="outline" size="icon" className="h-7 w-7"
-                                  onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
-                                  disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                                > <Minus className="h-3 w-3" /> </Button>
-                                <span className="w-5 text-center font-medium text-sm">{currentMonthsToPay}</span>
-                                <Button
-                                  variant="outline" size="icon" className="h-7 w-7"
-                                  onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
-                                  disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                                > <Plus className="h-3 w-3" /> </Button>
-                                <span className="text-sm">month(s)</span>
-                              </div>
-                              {/* Total amount display removed from here */}
+                          <div className="mt-3 space-y-2">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-sm font-medium">Record:</span>
+                              <Button
+                                variant="outline" size="icon" className="h-7 w-7"
+                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
+                                disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                              > <Minus className="h-3 w-3" /> </Button>
+                              <span className="w-6 text-center font-medium text-sm tabular-nums">{currentMonthsToPay}</span>
+                              <Button
+                                variant="outline" size="icon" className="h-7 w-7"
+                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
+                                disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                              > <Plus className="h-3 w-3" /> </Button>
+                              <span className="text-sm">month(s)</span>
                             </div>
 
-                            <div className="flex justify-center pt-1">
-                              <Button
-                                size="sm"
-                                onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
-                                disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
-                                className="w-full sm:w-auto"
-                              >
-                                {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
-                                Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment{currentMonthsToPay === 1 ? '' : 's'} ({formatCurrency(liveTotalAmount)})
-                              </Button>
-                            </div>
-                          </>
+                            <Button
+                              size="default" 
+                              className="w-full"
+                              onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
+                              disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
+                            >
+                              {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
+                              Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment{currentMonthsToPay === 1 ? '' : 's'} ({formatCurrency(liveTotalAmount)})
+                            </Button>
+                          </div>
                         ) : (
-                          <p className="text-sm text-green-600 font-medium text-center py-2">All payments recorded for this scheme.</p>
+                          <p className="text-sm text-green-600 font-medium text-center py-2 mt-3">All payments recorded for this scheme.</p>
                         )}
                       </div>
                     );
