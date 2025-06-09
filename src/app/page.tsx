@@ -460,21 +460,21 @@ export default function DashboardPage() {
                           </div>
                         
                           
-                          <div className="mt-3 mb-1.5">
+                          <div className="mt-3 mb-1">
                             <SegmentedProgressBar
                                 scheme={scheme}
                                 paidMonthsCount={paymentsMade}
                                 monthsToRecord={currentMonthsToPay}
                                 className="h-2" 
                             />
-                            <p className="text-xs text-muted-foreground mt-1.5 text-center">
+                            <p className="text-xs text-muted-foreground mt-1 text-center">
                               {paymentsMade} / {scheme.durationMonths} paid
                             </p>
                           </div>
                           
                           
                           {maxMonthsToRecord > 0 ? (
-                            <div className="mt-auto space-y-2.5"> 
+                            <div className="mt-auto space-y-1.5"> 
                               <div className="flex items-center justify-center gap-2">
                                 <span className="text-xs font-medium text-muted-foreground">Record:</span>
                                 <Button
