@@ -414,9 +414,9 @@ export default function DashboardPage() {
                    <p className="text-muted-foreground py-4 text-center">No matching recordable schemes found for "{individualSchemeSearchTerm}".</p>
               ) : null}
 
-              {!individualSchemeSearchTerm.trim() && (
+              {!individualSchemeSearchTerm.trim() ? (
                    <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
-              )}
+              ) : null}
 
               {recordableIndividualSchemes.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
@@ -430,7 +430,7 @@ export default function DashboardPage() {
                     return (
                         <div
                           key={scheme.id}
-                          className="max-w-sm w-full bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col min-h-[320px]"
+                          className="max-w-sm w-full bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col min-h-[300px]"
                         >
                           
                           <div>
@@ -513,8 +513,7 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                ) : null
-              }
+              ) : null}
             </TabsContent>
             <TabsContent value="batch" className="mt-6">
               <div className="relative mb-4">
