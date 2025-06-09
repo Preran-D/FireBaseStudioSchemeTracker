@@ -5,7 +5,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History, Search } from 'lucide-react'; // Added Search
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TrendingUp, Users, AlertTriangle, DollarSign, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus, History, Search } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data';
@@ -18,7 +19,7 @@ import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymen
 import { QuickIndividualBatchDialog, type QuickIndividualBatchSubmitDetails } from '@/components/dialogs/QuickIndividualBatchDialog';
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
-import { Input } from '@/components/ui/input'; // Added Input
+import { Input } from '@/components/ui/input';
 
 
 interface GroupWithRecordablePayments {
@@ -52,13 +53,14 @@ export default function DashboardPage() {
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
 
-  const [individualSchemeSearchTerm, setIndividualSchemeSearchTerm] = useState(''); // New state for individual scheme search
+  const [individualSchemeSearchTerm, setIndividualSchemeSearchTerm] = useState('');
+  const [activePaymentTab, setActivePaymentTab] = useState('individual');
 
 
   const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-      const totals = calculateSchemeTotals(s); 
+      const totals = calculateSchemeTotals(s);
       const status = getSchemeStatus(s);
       return { ...s, ...totals, status };
     });
@@ -170,15 +172,15 @@ export default function DashboardPage() {
 
   const recordableIndividualSchemes = useMemo((): EnhancedRecordableSchemeInfo[] => {
     if (!individualSchemeSearchTerm.trim()) {
-      return []; // Return empty if search term is empty
+      return [];
     }
 
     const searchTermLower = individualSchemeSearchTerm.toLowerCase();
-    
+
     const result: EnhancedRecordableSchemeInfo[] = [];
     schemes
-      .filter(s => 
-        s.customerName.toLowerCase().includes(searchTermLower) || 
+      .filter(s =>
+        s.customerName.toLowerCase().includes(searchTermLower) ||
         s.id.toLowerCase().includes(searchTermLower)
       )
       .forEach(s => {
@@ -231,8 +233,8 @@ export default function DashboardPage() {
       const maxMonths = schemeDuration - (paymentsMade || 0);
       let newMonths = currentMonths + delta;
       if (newMonths < 1) newMonths = 1;
-      if (newMonths > maxMonths) newMonths = maxMonths; 
-      if (maxMonths <= 0) newMonths = 0; 
+      if (newMonths > maxMonths) newMonths = maxMonths;
+      if (maxMonths <= 0) newMonths = 0;
       return { ...prev, [schemeId]: newMonths };
     });
   };
@@ -273,7 +275,7 @@ export default function DashboardPage() {
         if (getPaymentStatus(paymentToRecord, scheme.startDate) !== 'Paid') {
           const updatedScheme = updateMockSchemePayment(scheme.id, paymentToRecord.id, {
             paymentDate: details.paymentDate,
-            amountPaid: paymentToRecord.amountExpected, 
+            amountPaid: paymentToRecord.amountExpected,
             modeOfPayment: details.modeOfPayment,
           });
           if (updatedScheme) {
@@ -285,7 +287,7 @@ export default function DashboardPage() {
         }
       } else {
         errors++;
-        break; 
+        break;
       }
     }
 
@@ -299,11 +301,11 @@ export default function DashboardPage() {
     } else {
        toast({ title: "No Payments Recorded", description: "No new payments were recorded for this scheme.", variant: "default" });
     }
-    
+
     setIsProcessingQuickIndividualBatch(false);
     setIsQuickIndividualBatchDialogOpen(false);
     setPaymentContextForDialog(null);
-    loadSchemesData(); 
+    loadSchemesData();
     setMonthsToPayForScheme(prev => ({ ...prev, [scheme.id]: 1 }));
   };
 
@@ -372,160 +374,156 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-              <ListChecks className="h-6 w-6 text-primary" />
-              Record Payments (Individual Schemes)
-            </CardTitle>
-            <CardDescription>Search for a customer or scheme ID to record payments.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                placeholder="Search by customer name or scheme ID..."
-                value={individualSchemeSearchTerm}
-                onChange={(e) => setIndividualSchemeSearchTerm(e.target.value)}
-                className="pl-10"
-                />
-            </div>
-            
-            {individualSchemeSearchTerm.trim() && recordableIndividualSchemes.length === 0 && (
-                 <p className="text-muted-foreground py-4 text-center">No matching recordable schemes found for "{individualSchemeSearchTerm}".</p>
-            )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ListChecks className="h-6 w-6 text-primary" />
+            Record Payment
+          </CardTitle>
+          <CardDescription>Record payments for individual schemes or by customer group.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activePaymentTab} onValueChange={setActivePaymentTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="individual">Individual</TabsTrigger>
+              <TabsTrigger value="batch">Batch (Group)</TabsTrigger>
+            </TabsList>
+            <TabsContent value="individual" className="mt-6">
+              <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                  placeholder="Search by customer name or scheme ID..."
+                  value={individualSchemeSearchTerm}
+                  onChange={(e) => setIndividualSchemeSearchTerm(e.target.value)}
+                  className="pl-10"
+                  />
+              </div>
 
-            {!individualSchemeSearchTerm.trim() && (
-                 <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
-            )}
+              {individualSchemeSearchTerm.trim() && recordableIndividualSchemes.length === 0 && (
+                   <p className="text-muted-foreground py-4 text-center">No matching recordable schemes found for "{individualSchemeSearchTerm}".</p>
+              )}
 
-            {recordableIndividualSchemes.length > 0 && (
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {recordableIndividualSchemes.map((schemeInfo) => {
-                  const { scheme } = schemeInfo;
-                  const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
-                  const paymentsMade = scheme.paymentsMadeCount || 0;
-                  const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
-                  const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
+              {!individualSchemeSearchTerm.trim() && (
+                   <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
+              )}
 
-                  return (
-                    <div key={scheme.id} className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-3">
-                      <div className="flex justify-between items-center">
-                        <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
-                          {scheme.customerName}
-                        </Link>
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold text-accent text-lg">
-                            {scheme.id.toUpperCase()}
-                            </span>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
-                                <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                                <span className="sr-only">View Transaction History</span>
-                            </Button>
+              {recordableIndividualSchemes.length > 0 && (
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                  {recordableIndividualSchemes.map((schemeInfo) => {
+                    const { scheme } = schemeInfo;
+                    const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
+                    const paymentsMade = scheme.paymentsMadeCount || 0;
+                    const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
+                    const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
+
+                    return (
+                      <div key={scheme.id} className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-3">
+                        <div className="flex justify-between items-center">
+                          <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
+                            {scheme.customerName}
+                          </Link>
+                          <div className="flex items-center gap-2">
+                              <span className="font-semibold text-accent text-lg">
+                              {scheme.id.toUpperCase()}
+                              </span>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenHistoryPanel(scheme)}>
+                                  <History className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                  <span className="sr-only">View Transaction History</span>
+                              </Button>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <SegmentedProgressBar 
-                            scheme={scheme}
-                            paidMonthsCount={paymentsMade}
-                            monthsToRecord={currentMonthsToPay}
-                        />
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months</span>
-                      </div>
 
-                      <div className="text-sm text-muted-foreground">
-                         Monthly Payment: {formatCurrency(scheme.monthlyPaymentAmount)}
-                      </div>
-                      
-                      {maxMonthsToRecord > 0 ? (
-                        <>
-                          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm">Record:</span>
+                        <div className="flex items-center gap-3">
+                          <SegmentedProgressBar
+                              scheme={scheme}
+                              paidMonthsCount={paymentsMade}
+                              monthsToRecord={currentMonthsToPay}
+                          />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months</span>
+                        </div>
+
+                        <div className="text-sm text-muted-foreground">
+                           Monthly Payment: {formatCurrency(scheme.monthlyPaymentAmount)}
+                        </div>
+
+                        {maxMonthsToRecord > 0 ? (
+                          <>
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">Record:</span>
+                                <Button
+                                  variant="outline" size="icon" className="h-7 w-7"
+                                  onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
+                                  disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                                > <Minus className="h-3 w-3" /> </Button>
+                                <span className="w-5 text-center font-medium text-sm">{currentMonthsToPay}</span>
+                                <Button
+                                  variant="outline" size="icon" className="h-7 w-7"
+                                  onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
+                                  disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                                > <Plus className="h-3 w-3" /> </Button>
+                                <span className="text-sm">month(s)</span>
+                              </div>
+                              <div className="text-sm font-semibold text-primary">
+                                Total: {formatCurrency(liveTotalAmount)}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-center pt-1">
                               <Button
-                                variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
-                                disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                              > <Minus className="h-3 w-3" /> </Button>
-                              <span className="w-5 text-center font-medium text-sm">{currentMonthsToPay}</span>
-                              <Button 
-                                variant="outline" size="icon" className="h-7 w-7"
-                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
-                                disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                              > <Plus className="h-3 w-3" /> </Button>
-                              <span className="text-sm">month(s)</span>
+                                size="sm"
+                                onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
+                                disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
+                                className="w-full sm:w-auto"
+                              >
+                                {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
+                                Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment(s)
+                              </Button>
                             </div>
-                            <div className="text-sm font-semibold text-primary">
-                              Total: {formatCurrency(liveTotalAmount)}
-                            </div>
-                          </div>
-
-                          <div className="flex justify-center pt-1">
-                            <Button
-                              size="sm"
-                              onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
-                              disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
-                              className="w-full sm:w-auto"
-                            >
-                              {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
-                              Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment(s)
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-sm text-green-600 font-medium text-center py-2">All payments recorded for this scheme.</p>
-                      )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-green-600 font-medium text-center py-2">All payments recorded for this scheme.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="batch" className="mt-6">
+              {groupsWithRecordablePayments.length > 0 ? (
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {groupsWithRecordablePayments.map(group => (
+                    <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-lg hover:shadow-md transition-shadow bg-card">
+                      <div>
+                        <p className="text-lg font-semibold text-primary">
+                          <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="hover:underline">
+                            {group.groupName}
+                          </Link>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {group.recordableSchemeCount} scheme(s) with next payment due.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedGroupForBatch(group)}
+                        disabled={isBatchRecordingGroup || isProcessingQuickIndividualBatch}
+                        className="mt-2 sm:mt-0"
+                      >
+                        <ListChecks className="mr-2 h-4 w-4" /> Record Batch
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-              <Users2 className="h-6 w-6 text-primary" />
-              Batch Payment Actions (By Group)
-            </CardTitle>
-            <CardDescription>Record next due payments for all eligible schemes within a customer group.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {groupsWithRecordablePayments.length > 0 ? (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {groupsWithRecordablePayments.map(group => (
-                  <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-lg hover:shadow-md transition-shadow bg-card">
-                    <div>
-                      <p className="text-lg font-semibold text-primary">
-                        <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="hover:underline">
-                          {group.groupName}
-                        </Link>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {group.recordableSchemeCount} scheme(s) with next payment due.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setSelectedGroupForBatch(group)}
-                      disabled={isBatchRecordingGroup || isProcessingQuickIndividualBatch}
-                      className="mt-2 sm:mt-0"
-                    >
-                      <ListChecks className="mr-2 h-4 w-4" /> Record Batch
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
 
       {selectedGroupForBatch && (
