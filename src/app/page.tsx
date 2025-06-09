@@ -430,7 +430,7 @@ export default function DashboardPage() {
                     return (
                         <div
                           key={scheme.id}
-                          className="bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between min-h-[320px] max-w-sm w-full"
+                          className="max-w-sm w-full bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col min-h-[320px]"
                         >
                           
                           <div>
@@ -474,7 +474,7 @@ export default function DashboardPage() {
                           
                           
                           {maxMonthsToRecord > 0 ? (
-                            <div className="mt-auto space-y-1.5"> 
+                            <div className="mt-3 space-y-1.5"> 
                               <div className="flex items-center justify-center gap-2">
                                 <span className="text-xs font-medium text-muted-foreground">Record:</span>
                                 <Button
@@ -502,7 +502,7 @@ export default function DashboardPage() {
                               </Button>
                             </div>
                           ) : (
-                             <div className="mt-auto text-center py-3">
+                             <div className="mt-3 text-center py-3">
                                 <span className="text-sm font-medium text-green-600 dark:text-green-500 inline-flex items-center gap-1.5">
                                     <CheckCircle className="h-4 w-4"/>
                                     All Installments Paid
@@ -709,3 +709,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
