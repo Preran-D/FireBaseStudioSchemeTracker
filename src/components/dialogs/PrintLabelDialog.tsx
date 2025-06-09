@@ -18,50 +18,41 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
   const printableContentRef = React.useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
-    if (printableContentRef.current && scheme) {
-      // Clear previous content
-      printableContentRef.current.innerHTML = '';
-
-      // Create and append elements
-      const nameEl = document.createElement('h3');
-      nameEl.id = "print-customer-name"; // Keep ID if CSS targets it, otherwise can be removed
-      nameEl.style.fontSize = '10pt';
-      nameEl.style.fontWeight = 'bold';
-      nameEl.style.margin = '0 0 2px 0';
-      nameEl.style.whiteSpace = 'nowrap';
-      nameEl.style.overflow = 'hidden';
-      nameEl.style.textOverflow = 'ellipsis';
-      nameEl.textContent = scheme.customerName;
-      printableContentRef.current.appendChild(nameEl);
-
-      const idEl = document.createElement('p');
-      idEl.id = "print-scheme-id";
-      idEl.style.fontSize = '8pt';
-      idEl.style.margin = '1px 0';
-      idEl.textContent = `ID: ${scheme.id.toUpperCase()}`;
-      printableContentRef.current.appendChild(idEl);
-
-      const startDateEl = document.createElement('p');
-      startDateEl.id = "print-start-date";
-      startDateEl.style.fontSize = '8pt';
-      startDateEl.style.margin = '1px 0';
-      startDateEl.textContent = `Starts: ${formatDate(scheme.startDate)}`;
-      printableContentRef.current.appendChild(startDateEl);
-      
-      const amountEl = document.createElement('p');
-      amountEl.id = "print-amount";
-      amountEl.style.fontSize = '8pt';
-      amountEl.style.margin = '1px 0';
-      amountEl.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
-      printableContentRef.current.appendChild(amountEl);
-      
-      console.log("PrintLabelDialog: Attempting to print. Printable area HTML:", printableContentRef.current.innerHTML);
-      window.print();
-    } else {
-      console.error("PrintLabelDialog: printableContentRef.current is null or scheme data is missing.");
-      if (!printableContentRef.current) alert("Error: Printable area not found. Cannot print.");
-      if (!scheme) alert("Error: Scheme data not available. Cannot print.");
+    if (!printableContentRef.current) {
+      console.error("PrintLabelDialog Error: printableContentRef.current is null.");
+      alert("Error: Printable area not found. Cannot print.");
+      return;
     }
+    if (!scheme) {
+      console.error("PrintLabelDialog Error: Scheme data is missing.");
+      alert("Error: Scheme data not available. Cannot print.");
+      return;
+    }
+
+    // Clear previous content
+    printableContentRef.current.innerHTML = '';
+
+    // Create and append elements, relying on CSS for print styling
+    const nameEl = document.createElement('h3');
+    nameEl.textContent = scheme.customerName;
+    printableContentRef.current.appendChild(nameEl);
+
+    const idEl = document.createElement('p');
+    idEl.textContent = `ID: ${scheme.id.toUpperCase()}`;
+    printableContentRef.current.appendChild(idEl);
+
+    const startDateEl = document.createElement('p');
+    startDateEl.textContent = `Starts: ${formatDate(scheme.startDate)}`;
+    printableContentRef.current.appendChild(startDateEl);
+    
+    const amountEl = document.createElement('p');
+    amountEl.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
+    printableContentRef.current.appendChild(amountEl);
+    
+    // Log the content that will be printed for debugging
+    console.log("PrintLabelDialog: HTML for printing:", printableContentRef.current.innerHTML);
+    
+    window.print();
   };
 
   if (!isOpen) return null;
@@ -99,7 +90,7 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
             </span>
         </div>
 
-        {/* Div for actual printing - positioned off-screen by CSS by default */}
+        {/* Div for actual printing - positioned off-screen by CSS for screen view */}
         <div id="printableLabelArea" ref={printableContentRef}>
           {/* Content will be dynamically inserted by handlePrint */}
         </div>
