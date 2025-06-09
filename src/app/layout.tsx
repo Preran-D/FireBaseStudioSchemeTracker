@@ -1,8 +1,10 @@
+
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import AppLayout from '@/components/layout/AppLayout'; // Will create this component
+import AppLayout from '@/components/layout/AppLayout';
+import { ThemeProvider } from '@/hooks/useTheme'; // Import ThemeProvider
 
 const inter = Inter({
   subsets: ['latin'],
@@ -30,10 +32,12 @@ export default function RootLayout({
         {/* Additional head elements if needed */}
       </head>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}>
-        <AppLayout>
-          {children}
-        </AppLayout>
-        <Toaster />
+        <ThemeProvider>
+          <AppLayout>
+            {children}
+          </AppLayout>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,17 +1,55 @@
 
+'use client'; // Add this directive
+
 import type { PropsWithChildren } from 'react';
 import { SideContextWrapper, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarInset, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, Users2, DatabaseZap } from 'lucide-react'; 
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Sun, Moon } from 'lucide-react'; 
 import { AppLogo } from '@/components/shared/AppLogo';
+import { useTheme } from '@/hooks/useTheme';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
   { href: '/transactions', label: 'Transactions', icon: Repeat }, 
-  { href: '/groups', label: 'Groups', icon: Users2 },
+  { href: '/groups', label: 'Groups', icon: UsersRound },
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme(); // resolvedTheme removed as it's not used directly here
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setTheme("light")} className={theme === 'light' ? 'font-semibold bg-muted' : ''}>
+          Light
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")} className={theme === 'dark' ? 'font-semibold bg-muted' : ''}>
+          Dark
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")} className={theme === 'system' ? 'font-semibold bg-muted' : ''}>
+          System
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 
 export default function AppLayout({ children }: PropsWithChildren) {
   return (
@@ -32,7 +70,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
                     asChild
                     tooltip={{ 
                       children: item.label, 
-                      className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border shadow-lg" // Enhanced tooltip style
+                      className:"bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border shadow-lg"
                     }}
                     className="justify-start"
                   >
@@ -56,7 +94,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
           <div className="flex-1">
             {/* Breadcrumbs or page title can go here if needed in future */}
           </div>
-          {/* Notifications and User Avatar Dropdowns removed */}
+          <ThemeToggle />
         </header>
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </SidebarInset>
