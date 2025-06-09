@@ -436,6 +436,10 @@ export default function DashboardPage() {
                               </Button>
                           </div>
                         </div>
+                        
+                        <div className="text-sm">
+                            <strong>Started:</strong> {formatDate(scheme.startDate, 'dd MMM yyyy')}
+                        </div>
 
                         <div className="flex items-center gap-3">
                           <SegmentedProgressBar
