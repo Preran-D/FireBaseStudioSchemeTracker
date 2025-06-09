@@ -25,7 +25,7 @@ import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
-import Link from 'next/link';
+// import Link from 'next/link'; // Link is not used directly for navigation here
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; 
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
@@ -57,6 +57,7 @@ interface RecordIndividualPaymentDialogProps {
   allGroups: GroupDetail[]; 
   onSubmit: (details: IndividualPaymentDetails) => void;
   isLoading?: boolean;
+  initialSearchTerm?: string;
 }
 
 export function RecordIndividualPaymentDialog({
@@ -66,6 +67,7 @@ export function RecordIndividualPaymentDialog({
   allGroups,
   onSubmit,
   isLoading,
+  initialSearchTerm,
 }: RecordIndividualPaymentDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
@@ -83,32 +85,16 @@ export function RecordIndividualPaymentDialog({
     },
     mode: 'onTouched',
   });
-
-  useEffect(() => {
-    if (isOpen) {
-      form.reset({ paymentDate: new Date() });
-      setSelectedSchemeIds([]);
-      setMonthsToPayPerScheme({});
-      setPaymentModePerScheme({});
-      setSearchTerm('');
-      setIsSchemePeekPanelOpen(false); 
-      setSchemeForPeekPanel(null);
-    }
-  }, [isOpen, form]);
-
-  const handleSearchTermChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newSearchTerm = event.target.value;
-    setSearchTerm(newSearchTerm);
-
-    const lowerSearchTerm = newSearchTerm.toLowerCase();
-    const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerSearchTerm);
+  
+  const triggerGroupSelection = (groupName: string) => {
+    const lowerGroupName = groupName.toLowerCase();
+    const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerGroupName);
 
     if (matchedGroup) {
       const groupSchemeIds = matchedGroup.schemes
-        .filter(s => allRecordableSchemes.some(rs => rs.id === s.id)) // Ensure they are in the recordable list
+        .filter(s => allRecordableSchemes.some(rs => rs.id === s.id)) 
         .map(s => s.id);
       
-      // Preserve existing selections and add new ones from the group
       const currentSelected = new Set(selectedSchemeIds);
       groupSchemeIds.forEach(id => currentSelected.add(id));
       const newSelectedIds = Array.from(currentSelected);
@@ -117,19 +103,42 @@ export function RecordIndividualPaymentDialog({
       const newMonths = { ...monthsToPayPerScheme };
       const newModes = { ...paymentModePerScheme };
 
-      groupSchemeIds.forEach(id => { // Iterate over schemes matched from group
-        if (!newMonths[id]) { // Only initialize if not already set by user
+      groupSchemeIds.forEach(id => {
+        if (!newMonths[id]) { 
           const scheme = allRecordableSchemes.find(s => s.id === id);
           const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
           newMonths[id] = maxMonths > 0 ? 1 : 0;
         }
-        if (!newModes[id]) { // Only initialize if not already set by user
-          newModes[id] = ['Cash']; // Default for newly group-selected
+        if (!newModes[id]) { 
+          newModes[id] = ['Cash']; 
         }
       });
       setMonthsToPayPerScheme(newMonths);
       setPaymentModePerScheme(newModes);
     }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      form.reset({ paymentDate: new Date() });
+      setSelectedSchemeIds([]);
+      setMonthsToPayPerScheme({});
+      setPaymentModePerScheme({});
+      setIsSchemePeekPanelOpen(false); 
+      setSchemeForPeekPanel(null);
+      if (initialSearchTerm) {
+        setSearchTerm(initialSearchTerm);
+        triggerGroupSelection(initialSearchTerm); // Automatically trigger group selection logic
+      } else {
+        setSearchTerm('');
+      }
+    }
+  }, [isOpen, form, initialSearchTerm]); // allGroups and allRecordableSchemes are stable or handled by parent
+
+  const handleSearchTermChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newSearchTerm = event.target.value;
+    setSearchTerm(newSearchTerm);
+    triggerGroupSelection(newSearchTerm);
   };
   
   const filteredSchemes = useMemo(() => {
@@ -138,7 +147,7 @@ export function RecordIndividualPaymentDialog({
       .sort((a,b) => { 
         const indexA = selectedSchemeIds.indexOf(a.id);
         const indexB = selectedSchemeIds.indexOf(b.id);
-        return indexA - indexB; // Keep selection order
+        return indexA - indexB; 
       });
       
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
@@ -147,16 +156,17 @@ export function RecordIndividualPaymentDialog({
       const lowerSearchTerm = searchTerm.toLowerCase();
       const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerSearchTerm);
 
-      // If a group is matched, we don't further filter unselectedItems by search term for individual matching
-      // because the group members are already brought to the 'selected' list (or should be).
-      // If no group matched, then filter unselectedItems by individual customer/scheme ID.
       if (!matchedGroup) { 
         unselectedItems = unselectedItems.filter(
           (s) =>
             s.customerName.toLowerCase().includes(lowerSearchTerm) ||
             s.id.toLowerCase().includes(lowerSearchTerm) ||
-            (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm) && s.customerGroupName.toLowerCase() !== lowerSearchTerm) // Don't re-filter by group name if it's already the search
+            (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm) && s.customerGroupName.toLowerCase() !== lowerSearchTerm)
         );
+      } else {
+         // If a group is matched by search term, unselectedItems should still be available for individual searching
+         // but not re-filtered by the same group name.
+         unselectedItems = unselectedItems.filter(s => s.customerGroupName?.toLowerCase() !== lowerSearchTerm);
       }
     }
     
@@ -182,17 +192,15 @@ export function RecordIndividualPaymentDialog({
             newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       }
-      // Optionally: else { delete newMonths[schemeId]; } // Clear if unchecking
       return newMonths;
     });
     setPaymentModePerScheme((prevModes) => {
       const newModes = { ...prevModes };
       if (checked) {
         if (!newModes[schemeId]) {
-          newModes[schemeId] = ['Cash']; // Default mode for newly selected
+          newModes[schemeId] = ['Cash']; 
         }
       }
-      // Optionally: else { delete newModes[schemeId]; } // Clear if unchecking
       return newModes;
     });
   };
@@ -285,13 +293,6 @@ export function RecordIndividualPaymentDialog({
         console.warn("Submit called with selected schemes but no valid payment configurations (0 months or no payment mode).");
         return;
     }
-    if (paymentsToSubmit > 0) { 
-      // Optionally, clear selections after successful partial submission or let user manage
-      // For example, to clear only successfully submitted schemes:
-      // setSelectedSchemeIds(prev => prev.filter(id => !submittedSuccessfullySchemeIds.includes(id)));
-      // Or just close the dialog:
-      // onClose(); 
-    }
   };
 
   if (!isOpen) return null;
@@ -318,7 +319,7 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
         
-        <div className="flex-1 min-h-0 h-0 overflow-y-auto"> {/* Scrollable scheme list area */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
@@ -428,7 +429,7 @@ export function RecordIndividualPaymentDialog({
         </div>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-auto flex-shrink-0"> {/* Payment form area */}
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-auto flex-shrink-0">
              <FormField
                 control={form.control}
                 name="paymentDate"
