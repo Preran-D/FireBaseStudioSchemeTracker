@@ -437,8 +437,8 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         
-                        <div className="text-sm">
-                            <strong>Started:</strong> {formatDate(scheme.startDate, 'dd MMM yyyy')}
+                        <div className="text-sm font-bold">
+                            Started: {formatDate(scheme.startDate, 'dd MMM yyyy')}
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -472,9 +472,7 @@ export default function DashboardPage() {
                                 > <Plus className="h-3 w-3" /> </Button>
                                 <span className="text-sm">month(s)</span>
                               </div>
-                              <div className="text-sm font-semibold text-primary">
-                                Total: {formatCurrency(liveTotalAmount)}
-                              </div>
+                              {/* Total amount display removed from here */}
                             </div>
 
                             <div className="flex justify-center pt-1">
@@ -485,7 +483,7 @@ export default function DashboardPage() {
                                 className="w-full sm:w-auto"
                               >
                                 {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
-                                Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment(s)
+                                Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment{currentMonthsToPay === 1 ? '' : 's'} ({formatCurrency(liveTotalAmount)})
                               </Button>
                             </div>
                           </>
