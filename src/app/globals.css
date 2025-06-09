@@ -25,87 +25,87 @@ body {
     --border: 240 5.9% 90%;    /* Light Gray Border */
     --input: 240 5.9% 90%;     /* Light Gray Input Background */
 
-    --primary: 180 70% 45%;   /* Darker Teal for better contrast on light bg */
+    --primary: 177 38% 53%;   /* Desaturated Cyan - HSL from #5FB3AC */
     --primary-foreground: 0 0% 100%; /* White */
 
     --secondary: 240 4.8% 95.9%;  /* Light Gray */
     --secondary-foreground: 240 10% 3.9%; /* Dark Slate Gray for text on secondary */
 
-    --accent: 30 85% 55%;     /* Darker Vibrant Orange/Amber */
+    --accent: 276 51% 58%;     /* Violet - HSL from #9961C7 */
     --accent-foreground: 0 0% 100%; /* White */
 
     --destructive: 0 84.2% 60.2%;   /* Standard Saturated Red */
     --destructive-foreground: 0 0% 100%; /* White text on destructive elements */
 
-    --ring: 180 70% 45%; /* Darker Teal for rings/focus indicators */
+    --ring: 177 38% 53%; /* Desaturated Cyan for rings/focus indicators */
 
     --radius: 0.5rem;
 
     /* Chart colors for light theme */
-    --chart-1: 180 70% 45%; /* Primary - Darker Teal */
-    --chart-2: 30 85% 55%;  /* Accent - Darker Orange/Amber */
-    --chart-3: 280 60% 65%; /* Purple - slightly adjusted */
-    --chart-4: 45 90% 50%;  /* Gold/Yellow - slightly adjusted */
-    --chart-5: 210 50% 40%; /* Secondary - Darker Steel Blue */
+    --chart-1: 177 38% 53%; /* Primary - Desaturated Cyan */
+    --chart-2: 276 51% 58%;  /* Accent - Violet */
+    --chart-3: 280 60% 65%; /* A Lighter Purple */
+    --chart-4: 45 90% 50%;  /* Gold/Yellow */
+    --chart-5: 210 50% 40%; /* Steel Blue */
 
     /* Sidebar specific theme for light mode */
-    --sidebar-background: 240 10% 98%;  /* Very light gray, almost white */
-    --sidebar-foreground: 240 10% 20%; /* Dark gray text */
-    --sidebar-primary: 180 70% 45%;    /* Active item bg - Darker Teal */
+    --sidebar-background: 176 38% 95%; /* Very Light Cyan (Lighter version of #E0F4F3) */
+    --sidebar-foreground: 177 38% 20%; /* Darker Cyan for text */
+    --sidebar-primary: 177 38% 53%;    /* Active item bg - Desaturated Cyan */
     --sidebar-primary-foreground: 0 0% 100%; /* Active item text - White */
-    --sidebar-accent: 240 5.9% 90%;     /* Hover bg - Light Gray */
-    --sidebar-accent-foreground: 180 70% 40%; /* Hover text - Darker Teal */
-    --sidebar-border: 240 5.9% 85%;     /* Border - slightly darker gray */
-    --sidebar-ring: 30 85% 55%;       /* Ring for focus on sidebar items - Accent Orange */
+    --sidebar-accent: 177 38% 88%;     /* Hover bg - Lighter Desaturated Cyan */
+    --sidebar-accent-foreground: 177 38% 40%; /* Hover text - Darker Desaturated Cyan */
+    --sidebar-border: 177 38% 80%;     /* Border - Light Desaturated Cyan */
+    --sidebar-ring: 276 51% 58%;       /* Ring for focus on sidebar items - Violet */
   }
 
   .dark {
-    /* Deep Ocean Theme */
-    --background: 220 40% 10%; /* Very Dark Desaturated Blue */
-    --foreground: 210 30% 90%; /* Light Bluish Grey */
+    /* Deep Ocean Theme (Placeholder - PRD Style is Light Only) */
+    --background: 220 40% 10%; 
+    --foreground: 210 30% 90%; 
 
-    --muted: 220 30% 20%;    /* Darker Muted Blue */
-    --muted-foreground: 210 25% 65%; /* Medium Grey */
+    --muted: 220 30% 20%;    
+    --muted-foreground: 210 25% 65%; 
 
-    --popover: 220 40% 12%;    /* Slightly Lighter Dark Blue for Popovers */
+    --popover: 220 40% 12%;    
     --popover-foreground: 210 30% 90%;
 
-    --card: 220 35% 18%;       /* Dark Blue Card Background */
-    --card-foreground: 210 30% 88%; /* Foreground for Card text */
+    --card: 220 35% 18%;       
+    --card-foreground: 210 30% 88%; 
 
-    --border: 220 25% 30%;    /* Muted Blue Border */
-    --input: 220 25% 25%;     /* Dark Input Background */
+    --border: 220 25% 30%;    
+    --input: 220 25% 25%;     
 
-    --primary: 180 70% 55%;   /* Bright Teal */
-    --primary-foreground: 220 40% 10%; /* Dark Background color for contrast on primary elements */
+    --primary: 177 45% 60%;   /* Brighter Desaturated Cyan for Dark Mode */
+    --primary-foreground: 220 40% 10%; 
 
-    --secondary: 210 50% 45%;  /* Medium Steel Blue */
-    --secondary-foreground: 210 20% 95%; /* Very Light Grey for text on secondary elements */
+    --secondary: 210 50% 45%;  
+    --secondary-foreground: 210 20% 95%; 
 
-    --accent: 30 85% 60%;     /* Vibrant Orange/Amber */
-    --accent-foreground: 220 40% 10%; /* Dark Background color for contrast on accent elements */
+    --accent: 276 60% 65%;     /* Brighter Violet for Dark Mode */
+    --accent-foreground: 220 40% 10%; 
 
-    --destructive: 0 70% 55%;   /* Saturated Red */
-    --destructive-foreground: 0 0% 100%; /* White text on destructive elements */
+    --destructive: 0 70% 55%;   
+    --destructive-foreground: 0 0% 100%; 
 
-    --ring: 180 70% 55%; /* Teal for rings/focus indicators */
+    --ring: 177 45% 60%; 
     
     /* Chart colors for dark theme */
-    --chart-1: 180 70% 55%;
-    --chart-2: 30 85% 60%;
-    --chart-3: 280 60% 70%;
-    --chart-4: 45 90% 55%;
-    --chart-5: 210 50% 45%;
+    --chart-1: 177 45% 60%;
+    --chart-2: 276 60% 65%;
+    --chart-3: 280 50% 70%;
+    --chart-4: 45 80% 60%;
+    --chart-5: 210 40% 50%;
 
     /* Sidebar specific theme for dark mode */
-    --sidebar-background: 220 40% 8%;
-    --sidebar-foreground: 210 25% 80%;
-    --sidebar-primary: 180 70% 55%;
-    --sidebar-primary-foreground: 220 40% 10%;
-    --sidebar-accent: 220 30% 22%;
-    --sidebar-accent-foreground: 180 70% 75%;
-    --sidebar-border: 220 25% 25%;
-    --sidebar-ring: 30 85% 60%;
+    --sidebar-background: 220 40% 8%; /* Darker base for sidebar */
+    --sidebar-foreground: 177 30% 80%; /* Cyanish light text */
+    --sidebar-primary: 177 45% 60%;    /* Active item bg - Brighter Desaturated Cyan */
+    --sidebar-primary-foreground: 220 40% 10%; /* Dark text on active */
+    --sidebar-accent: 220 30% 22%;     /* Hover bg - Muted Dark Blue */
+    --sidebar-accent-foreground: 177 45% 75%; /* Hover text - Lighter Cyan */
+    --sidebar-border: 220 25% 25%;     /* Border */
+    --sidebar-ring: 276 60% 65%;       /* Ring for focus - Violet */
   }
 }
 
@@ -135,7 +135,7 @@ body {
 
 /* Screen styles for printableLabelArea: position it off-screen */
 #printableLabelArea {
-  position: absolute !important; /* Important to override potential other positionings */
+  position: absolute !important;
   left: -9999px !important;
   top: -9999px !important;
   width: 62mm; 
@@ -143,42 +143,60 @@ body {
   background-color: white; 
   color: black; 
   font-family: Arial, sans-serif !important; 
-  padding: 2mm !important; 
+  padding: 1mm !important; /* Reduced padding */
   box-sizing: border-box !important;
   overflow: hidden; 
-  z-index: -1; /* Ensure it's behind everything on screen */
+  z-index: -1; 
+}
+
+/* Pre-defined static elements within printableLabelArea for screen (though off-screen) */
+#printableLabelArea #labelCustomerName,
+#printableLabelArea #labelSchemeId,
+#printableLabelArea #labelStartDate,
+#printableLabelArea #labelAmount {
+  display: block;
+  color: black;
+  background-color: white;
+  margin: 0.5mm 0 !important; /* Reduced margins */
+  font-family: Arial, sans-serif !important;
+  line-height: 1.1 !important; /* Slightly tighter line height */
+}
+#printableLabelArea #labelCustomerName {
+  font-size: 9pt !important; /* Reduced font size */
+  font-weight: bold !important;
+}
+#printableLabelArea #labelSchemeId,
+#printableLabelArea #labelStartDate,
+#printableLabelArea #labelAmount {
+  font-size: 7pt !important; /* Reduced font size */
 }
 
 
 @media print {
-  /* Reset and force label size on html and body */
   html, body {
     width: 62mm !important;
-    height: 29mm !important; /* Or use 'auto' if @page size is more reliable */
+    height: 29mm !important;
     overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
-    color: black !important; /* Ensures text is black on white */
-    -webkit-print-color-adjust: exact !important; /* For Chrome/Safari */
-    print-color-adjust: exact !important; /* Standard */
+    color: black !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important; 
   }
 
-  /* Hide ALL elements by default */
   body * {
     display: none !important;
-    visibility: hidden !important; /* Belt and suspenders */
+    visibility: hidden !important;
   }
 
-  /* Make ONLY #printableLabelArea and its direct children visible and flow normally */
-  /* Using #printableLabelArea *, #printableLabelArea is more specific than body * */
   #printableLabelArea, 
   #printableLabelArea * {
-    display: block !important; /* Or appropriate display type for children if needed */
+    display: block !important; 
     visibility: visible !important;
     font-family: Arial, sans-serif !important;
     color: black !important;
-    background-color: white !important; /* Ensure children also have white background */
+    background-color: white !important;
   }
 
   #printableLabelArea {
@@ -188,34 +206,35 @@ body {
     width: 62mm !important;
     height: 29mm !important;
     margin: 0 !important;
-    padding: 2mm !important; 
+    padding: 1mm !important; /* Reduced padding */
     box-sizing: border-box !important;
-    overflow: hidden !important; /* Crucial to prevent its content from causing overflow */
-    page-break-after: always !important; /* Ensure it's the only thing on its page */
+    overflow: hidden !important; 
+    page-break-after: always !important; 
     border: none !important;
     box-shadow: none !important;
   }
   
-  /* Explicitly style elements within the printable area if needed */
-  #printableLabelArea h3, #printableLabelArea p {
-    margin: 1mm 0 !important; /* Adjust margins for label content */
+  #printableLabelArea #labelCustomerName, /* Targeting the specific IDs */
+  #printableLabelArea #labelSchemeId,
+  #printableLabelArea #labelStartDate,
+  #printableLabelArea #labelAmount {
+    margin: 0.5mm 0 !important; /* Reduced margins */
     padding: 0 !important;
-    line-height: 1.2 !important;
-    color: black !important; /* Ensure text is black */
+    line-height: 1.1 !important; /* Slightly tighter line height */
+    color: black !important; 
   }
-  #printableLabelArea h3 {
-    font-size: 10pt !important;
+  #printableLabelArea #labelCustomerName {
+    font-size: 9pt !important; /* Reduced font size */
     font-weight: bold !important;
   }
-  #printableLabelArea p {
-    font-size: 8pt !important;
+  #printableLabelArea #labelSchemeId,
+  #printableLabelArea #labelStartDate,
+  #printableLabelArea #labelAmount {
+    font-size: 7pt !important; /* Reduced font size */
   }
 
-
-  /* Define the page size */
   @page {
     size: 62mm 29mm !important;
-    margin: 0 !important; /* No margin for the page itself */
+    margin: 0 !important; 
   }
 }
-
