@@ -7,14 +7,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel as RHFFormLabel, FormMessage } from '@/components/ui/form'; // Renamed FormLabel to RHFFormLabel to avoid conflict
+import { Label } from '@/components/ui/label'; // Import generic Label
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CalendarIcon, Loader2, AlertTriangle, ListChecks, ExternalLink } from 'lucide-react'; 
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme'; 
-import { formatISO, parseISO, format } from 'date-fns'; // Added format from date-fns
+import { formatISO, parseISO, format } from 'date-fns';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input'; 
@@ -208,7 +209,7 @@ export function BatchRecordPaymentDialog({
 
         {displayGroupSelector && (
           <div className="my-3">
-            <FormLabel>Select Group</FormLabel>
+            <Label>Select Group</Label> 
             <Select onValueChange={handleGroupSelect} value={currentSelectedGroup?.groupName || ""}>
               <SelectTrigger className="w-full mt-1">
                 <SelectValue placeholder="Choose a group to process..." />
@@ -308,7 +309,7 @@ export function BatchRecordPaymentDialog({
                       name="paymentDate"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Payment Date (for all selected)</FormLabel>
+                          <RHFFormLabel>Payment Date (for all selected)</RHFFormLabel>
                           <Popover>
                             <PopoverTrigger asChild>
                               <FormControl>
@@ -342,7 +343,7 @@ export function BatchRecordPaymentDialog({
                       render={() => (
                         <FormItem>
                           <div className="mb-2">
-                            <FormLabel>Mode of Payment (for all selected)</FormLabel>
+                            <RHFFormLabel>Mode of Payment (for all selected)</RHFFormLabel>
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-2">
                             {paymentModes.map((mode) => (
@@ -363,7 +364,7 @@ export function BatchRecordPaymentDialog({
                                         disabled={isLoading}
                                       />
                                     </FormControl>
-                                    <FormLabel className="font-normal">{mode}</FormLabel>
+                                    <RHFFormLabel className="font-normal">{mode}</RHFFormLabel>
                                   </FormItem>
                                 )}
                               />
