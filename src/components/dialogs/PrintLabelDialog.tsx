@@ -17,10 +17,17 @@ interface PrintLabelDialogProps {
 export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogProps) {
   const printableContentRef = React.useRef<HTMLDivElement>(null);
 
+  // Refs for the static elements within the printable area
+  const customerNameRef = React.useRef<HTMLHeadingElement>(null);
+  const schemeIdRef = React.useRef<HTMLParagraphElement>(null);
+  const startDateRef = React.useRef<HTMLParagraphElement>(null);
+  const amountRef = React.useRef<HTMLParagraphElement>(null);
+
+
   const handlePrint = () => {
-    if (!printableContentRef.current) {
-      console.error("PrintLabelDialog Error: printableContentRef.current is null.");
-      alert("Error: Printable area not found. Cannot print.");
+    if (!printableContentRef.current || !customerNameRef.current || !schemeIdRef.current || !startDateRef.current || !amountRef.current) {
+      console.error("PrintLabelDialog Error: One or more refs for printable content are null.");
+      alert("Error: Printable area or its elements not found. Cannot print.");
       return;
     }
     if (!scheme) {
@@ -29,27 +36,12 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
       return;
     }
 
-    // Clear previous content
-    printableContentRef.current.innerHTML = '';
-
-    // Create and append elements, relying on CSS for print styling
-    const nameEl = document.createElement('h3');
-    nameEl.textContent = scheme.customerName;
-    printableContentRef.current.appendChild(nameEl);
-
-    const idEl = document.createElement('p');
-    idEl.textContent = `ID: ${scheme.id.toUpperCase()}`;
-    printableContentRef.current.appendChild(idEl);
-
-    const startDateEl = document.createElement('p');
-    startDateEl.textContent = `Starts: ${formatDate(scheme.startDate)}`;
-    printableContentRef.current.appendChild(startDateEl);
+    // Populate the static elements
+    customerNameRef.current.textContent = scheme.customerName;
+    schemeIdRef.current.textContent = `ID: ${scheme.id.toUpperCase()}`;
+    startDateRef.current.textContent = `Starts: ${formatDate(scheme.startDate)}`;
+    amountRef.current.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
     
-    const amountEl = document.createElement('p');
-    amountEl.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
-    printableContentRef.current.appendChild(amountEl);
-    
-    // Log the content that will be printed for debugging
     console.log("PrintLabelDialog: HTML for printing:", printableContentRef.current.innerHTML);
     
     window.print();
@@ -92,7 +84,11 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
 
         {/* Div for actual printing - positioned off-screen by CSS for screen view */}
         <div id="printableLabelArea" ref={printableContentRef}>
-          {/* Content will be dynamically inserted by handlePrint */}
+          {/* Static elements to be populated by JS */}
+          <h3 ref={customerNameRef}></h3>
+          <p ref={schemeIdRef}></p>
+          <p ref={startDateRef}></p>
+          <p ref={amountRef}></p>
         </div>
 
         <DialogFooter className="pt-4">
