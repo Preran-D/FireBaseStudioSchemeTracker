@@ -433,27 +433,29 @@ export default function DashboardPage() {
                           className="bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between min-h-[320px] max-w-sm w-full"
                         >
                           
-                          <div className="flex justify-between items-center">
-                            <span className="font-mono text-sm sm:text-base tracking-wider text-foreground/90 font-medium">
-                              {scheme.id.toUpperCase()}
-                            </span>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleOpenHistoryPanel(scheme)}>
-                              <History className="h-4 w-4" />
-                              <span className="sr-only">View Transaction History</span>
-                            </Button>
-                          </div>
+                          <div>
+                            <div className="flex justify-between items-start mb-1">
+                                <span className="font-mono text-sm sm:text-base tracking-wider text-foreground/90 font-medium block">
+                                {scheme.id.toUpperCase()}
+                                </span>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary -mt-1 -mr-1" onClick={() => handleOpenHistoryPanel(scheme)}>
+                                <History className="h-4 w-4" />
+                                <span className="sr-only">View Transaction History</span>
+                                </Button>
+                            </div>
                         
-                          
-                          <div className="my-3">
-                            <Link href={`/schemes/${scheme.id}`} className="block">
+                            <Link href={`/schemes/${scheme.id}`} className="block mb-2">
                                 <p className="text-xl font-headline font-semibold text-primary hover:underline truncate" title={scheme.customerName}>
                                 {scheme.customerName}
                                 </p>
                             </Link>
-                             <p className="text-xs text-muted-foreground mt-1">Starts: <strong>{formatDate(scheme.startDate, 'dd MMM yyyy')}</strong></p>
-                            <div className="text-xs text-muted-foreground mt-1.5 space-y-1">
-                             
-                              <p>Installment: <strong>{formatCurrency(scheme.monthlyPaymentAmount)}</strong></p>
+                            <div className="flex justify-between items-center mt-2 text-sm">
+                                <p className="text-muted-foreground">
+                                Starts: <span className="font-semibold text-foreground">{formatDate(scheme.startDate, 'dd MMM yyyy')}</span>
+                                </p>
+                                <p className="font-semibold text-foreground">
+                                {formatCurrency(scheme.monthlyPaymentAmount)}
+                                </p>
                             </div>
                           </div>
                         
