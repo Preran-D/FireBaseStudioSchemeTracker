@@ -1,4 +1,6 @@
 
+// This file is no longer used by the dashboard and can be removed if not needed elsewhere.
+// To remove, delete this file and remove its import from src/ai/dev.ts
 'use server';
 /**
  * @fileOverview Provides AI-driven recommendations for the scheme dashboard.
@@ -95,3 +97,4 @@ const dashboardRecommendationsFlow = ai.defineFlow(
   }
 );
 
+    

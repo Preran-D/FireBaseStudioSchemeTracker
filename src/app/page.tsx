@@ -5,24 +5,28 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2, Lightbulb, CheckCircle, AlertCircleIcon } from 'lucide-react'; 
+import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2, PackageCheck, ListChecks } from 'lucide-react'; 
 import Link from 'next/link';
-import type { Scheme, Payment } from '@/types/scheme';
-import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; 
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
+import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
+import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data'; 
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { useToast } from '@/hooks/use-toast';
 import { isPast, parseISO, differenceInDays, formatISO, subDays } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
-import { getDashboardRecommendations, type DashboardInsightsInput, type DashboardRecommendationsOutput } from '@/ai/flows/dashboard-recommendations-flow';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm'; // Added for individual payment recording
 
 interface GroupWithRecordablePayments {
   groupName: string;
   schemes: Scheme[]; 
   recordableSchemeCount: number; 
+}
+
+interface RecordablePaymentInfo extends Payment {
+  customerName: string;
+  schemeId: string;
+  schemeStartDate: string;
 }
 
 export default function DashboardPage() {
@@ -31,9 +35,8 @@ export default function DashboardPage() {
   const [isBatchRecording, setIsBatchRecording] = useState(false);
   const [selectedGroupForBatch, setSelectedGroupForBatch] = useState<GroupWithRecordablePayments | null>(null);
 
-  const [aiRecommendations, setAiRecommendations] = useState<DashboardRecommendationsOutput | null>(null);
-  const [isFetchingRecommendations, setIsFetchingRecommendations] = useState(false);
-  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<RecordablePaymentInfo | null>(null);
+  const [isRecordingIndividualPayment, setIsRecordingIndividualPayment] = useState(false);
 
 
   const loadSchemesData = useCallback(() => {
@@ -49,58 +52,7 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    const loadedSchemes = loadSchemesData();
-    
-    // AI Recommendations Fetching Logic
-    if (loadedSchemes.length > 0) {
-      setIsFetchingRecommendations(true);
-      setRecommendationError(null);
-
-      const totalActive = loadedSchemes.filter(s => s.status === 'Active' || s.status === 'Overdue').length;
-      const totalOverdueSchemes = loadedSchemes.filter(s => s.status === 'Overdue').length;
-      const totalOverdueAmount = loadedSchemes
-        .filter(s => s.status === 'Overdue')
-        .reduce((sum, s) => sum + (s.totalRemaining || 0), 0);
-      
-      const upcomingIn30Days = loadedSchemes
-        .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
-        .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 30 && !isPast(parseISO(p.dueDate)))
-        .length;
-
-      const newOverdueLast7Days = loadedSchemes
-        .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
-        .filter(p => {
-            const paymentIsOverdue = getPaymentStatus(p, p.schemeStartDate) === 'Overdue';
-            if (!paymentIsOverdue) return false;
-            // Check if due date was within the last 7 days
-            return differenceInDays(new Date(), parseISO(p.dueDate)) <= 7 && differenceInDays(new Date(), parseISO(p.dueDate)) >= 0;
-        }).length;
-      
-      const totalExpectedAll = loadedSchemes.reduce((sum,s) => sum + (s.payments.reduce((ps, p) => ps + p.amountExpected, 0)), 0);
-      const totalCollectedAll = loadedSchemes.reduce((sum,s) => sum + (s.totalCollected || 0), 0);
-      const averagePaymentCollectedPercentage = totalExpectedAll > 0 ? Math.round((totalCollectedAll / totalExpectedAll) * 100) : 0;
-
-
-      const insightsInput: DashboardInsightsInput = {
-        totalActiveSchemes: totalActive,
-        totalOverdueSchemes: totalOverdueSchemes,
-        totalOverdueAmount: totalOverdueAmount,
-        numberOfUpcomingPaymentsNext30Days: upcomingIn30Days,
-        numberOfNewOverduePaymentsLast7Days: newOverdueLast7Days,
-        averagePaymentCollectedPercentage: averagePaymentCollectedPercentage,
-        // commonPaymentDelays: "Some payments are 1-2 days late, especially for new customers." // Example, could be derived
-      };
-
-      getDashboardRecommendations(insightsInput)
-        .then(setAiRecommendations)
-        .catch(err => {
-          console.error("Error fetching AI recommendations:", err);
-          setRecommendationError("Could not load AI recommendations at this time.");
-        })
-        .finally(() => setIsFetchingRecommendations(false));
-    }
-
-
+    loadSchemesData();
   }, [loadSchemesData]);
 
   const summaryStats = useMemo(() => {
@@ -117,7 +69,7 @@ export default function DashboardPage() {
       totalSchemes: schemes.length,
       activeSchemesCount: activeSchemes.length,
       totalCollected,
-      totalPending: totalExpectedFromActive - totalCollected, // Only consider pending from active schemes
+      totalPending: totalExpectedFromActive - totalCollected, 
       totalOverdueAmount,
       completedSchemesCount: schemes.filter(s => s.status === 'Completed').length,
     };
@@ -188,7 +140,42 @@ export default function DashboardPage() {
     })).filter(g => g.recordableSchemeCount > 0);
   }, [schemes]);
 
-  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: any[]; schemeIdsToRecord: string[] }) => {
+
+  const recordableIndividualSchemes = useMemo(() => {
+    const payments: RecordablePaymentInfo[] = [];
+    schemes.forEach(scheme => {
+      if (scheme.status === 'Active' || scheme.status === 'Overdue') { // Only active or overdue schemes
+        let firstUnpaidRecordableIndex = -1;
+        for (let i = 0; i < scheme.payments.length; i++) {
+          if (getPaymentStatus(scheme.payments[i], scheme.startDate) !== 'Paid') {
+            let allPreviousPaid = true;
+            for (let j = 0; j < i; j++) {
+              if (getPaymentStatus(scheme.payments[j], scheme.startDate) !== 'Paid') {
+                allPreviousPaid = false;
+                break;
+              }
+            }
+            if (allPreviousPaid) {
+              firstUnpaidRecordableIndex = i;
+              break;
+            }
+          }
+        }
+        if (firstUnpaidRecordableIndex !== -1) {
+          payments.push({
+            ...scheme.payments[firstUnpaidRecordableIndex],
+            customerName: scheme.customerName,
+            schemeId: scheme.id,
+            schemeStartDate: scheme.startDate,
+          });
+        }
+      }
+    });
+    return payments.sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
+  }, [schemes]);
+
+
+  const handleBatchRecordSubmit = (details: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord: string[] }) => {
     if (!selectedGroupForBatch) return;
     setIsBatchRecording(true);
     const result = recordNextDuePaymentsForCustomerGroup(selectedGroupForBatch.groupName, details);
@@ -201,6 +188,21 @@ export default function DashboardPage() {
     setSelectedGroupForBatch(null);
     setIsBatchRecording(false);
     loadSchemesData(); 
+  };
+
+  const handleIndividualPaymentRecord = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
+    if (!selectedPaymentForRecord) return;
+    setIsRecordingIndividualPayment(true);
+    const updatedScheme = updateMockSchemePayment(selectedPaymentForRecord.schemeId, selectedPaymentForRecord.id, data);
+    
+    if (updatedScheme) {
+      toast({ title: 'Payment Recorded', description: `Payment for ${selectedPaymentForRecord.customerName} (Month ${selectedPaymentForRecord.monthNumber}) recorded.` });
+      loadSchemesData(); // Refresh all data
+    } else {
+      toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
+    }
+    setSelectedPaymentForRecord(null);
+    setIsRecordingIndividualPayment(false);
   };
 
 
@@ -255,126 +257,101 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed Schemes</CardTitle>
-            <CalendarCheck className="h-5 w-5 text-blue-400" /> 
+            <PackageCheck className="h-5 w-5 text-blue-400" /> 
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{summaryStats.completedSchemesCount}</div>
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2">
-            <Lightbulb className="h-6 w-6 text-primary" /> 
-            AI-Powered Recommendations
-          </CardTitle>
-          <CardDescription>Actionable insights to improve your scheme collections.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isFetchingRecommendations && (
-            <div className="space-y-3">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-5/6" />
-              <Skeleton className="h-8 w-1/2 mt-2" />
-              <Skeleton className="h-6 w-full" />
-            </div>
-          )}
-          {recommendationError && !isFetchingRecommendations && (
-            <div className="flex flex-col items-center justify-center py-6 text-destructive">
-              <AlertCircleIcon className="h-10 w-10 mb-2" />
-              <p className="font-semibold">Error Loading Recommendations</p>
-              <p className="text-sm">{recommendationError}</p>
-            </div>
-          )}
-          {!isFetchingRecommendations && !recommendationError && aiRecommendations && (
-            <div className="space-y-6">
-              {aiRecommendations.positiveObservations && aiRecommendations.positiveObservations.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-green-600 mb-2 flex items-center gap-2"><CheckCircle className="h-5 w-5"/>Positive Observations</h3>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                    {aiRecommendations.positiveObservations.map((obs, index) => <li key={`pos-${index}`}>{obs}</li>)}
-                  </ul>
-                </div>
-              )}
-              {aiRecommendations.areasForAttention && aiRecommendations.areasForAttention.length > 0 && (
-                 <div>
-                  <h3 className="text-lg font-semibold text-orange-600 mb-2 flex items-center gap-2"><AlertTriangle className="h-5 w-5"/>Areas for Attention</h3>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                    {aiRecommendations.areasForAttention.map((area, index) => <li key={`att-${index}`}>{area}</li>)}
-                  </ul>
-                </div>
-              )}
-              {aiRecommendations.recommendations && aiRecommendations.recommendations.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-primary mb-2">Actionable Recommendations</h3>
-                  <div className="space-y-4">
-                    {aiRecommendations.recommendations.map((rec, index) => (
-                      <div key={`rec-${index}`} className="p-4 border rounded-lg shadow-sm bg-card">
-                        <div className="flex justify-between items-start mb-1">
-                          <h4 className="font-semibold text-md">{rec.title}</h4>
-                          <Badge 
-                            variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'secondary' : 'outline'}
-                            className={
-                              rec.priority === 'High' ? 'bg-red-100 text-red-700 border-red-300' :
-                              rec.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
-                              'bg-blue-100 text-blue-700 border-blue-300'
-                            }
-                          >
-                            {rec.priority} Priority
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{rec.description}</p>
-                      </div>
-                    ))}
+      
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2">
+              <ListChecks className="h-6 w-6 text-primary" /> 
+              Record Next Due Payments (Individual Schemes)
+            </CardTitle>
+            <CardDescription>Quickly record the next payment for individual schemes that are due.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recordableIndividualSchemes.length > 0 ? (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {recordableIndividualSchemes.map(paymentInfo => (
+                  <div key={paymentInfo.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-lg hover:shadow-md transition-shadow bg-card">
+                    <div>
+                      <p className="font-semibold text-accent">
+                        <Link href={`/schemes/${paymentInfo.schemeId}`} className="hover:underline">
+                          {paymentInfo.customerName}
+                        </Link>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Scheme ID: {paymentInfo.schemeId.toUpperCase()} - Month {paymentInfo.monthNumber}
+                      </p>
+                      <p className="text-sm">
+                        Due: {formatDate(paymentInfo.dueDate)} - Amount: {formatCurrency(paymentInfo.amountExpected)}
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setSelectedPaymentForRecord(paymentInfo)}
+                      disabled={isRecordingIndividualPayment || isBatchRecording}
+                      className="mt-2 sm:mt-0"
+                    >
+                      <Edit className="mr-2 h-4 w-4" /> Record Payment
+                    </Button>
                   </div>
-                </div>
-              )}
-               {!aiRecommendations.recommendations?.length && !aiRecommendations.positiveObservations?.length && !aiRecommendations.areasForAttention?.length && (
-                <p className="text-muted-foreground text-center py-4">No specific recommendations or observations at this time. Keep up the good work!</p>
-               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-4 text-center">No individual schemes currently eligible for next payment recording.</p>
+            )}
+          </CardContent>
+        </Card>
 
-       <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2">
-            <Users2 className="h-6 w-6 text-primary" /> 
-            Batch Payment Actions (By Group)
-          </CardTitle>
-          <CardDescription>Record next due payments for all eligible schemes within a customer group.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {groupsWithRecordablePayments.length > 0 ? (
-            <div className="space-y-3">
-              {groupsWithRecordablePayments.map(group => (
-                <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 border rounded-lg hover:shadow-lg transition-shadow">
-                  <div>
-                    <p className="text-lg font-semibold text-accent">{group.groupName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {group.recordableSchemeCount} scheme(s) with next payment due.
-                    </p>
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2">
+              <Users2 className="h-6 w-6 text-primary" /> 
+              Batch Payment Actions (By Group)
+            </CardTitle>
+            <CardDescription>Record next due payments for all eligible schemes within a customer group.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {groupsWithRecordablePayments.length > 0 ? (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {groupsWithRecordablePayments.map(group => (
+                  <div key={group.groupName} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-lg hover:shadow-md transition-shadow bg-card">
+                    <div>
+                      <p className="text-lg font-semibold text-primary">
+                        <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="hover:underline">
+                          {group.groupName}
+                        </Link>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {group.recordableSchemeCount} scheme(s) with next payment due.
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setSelectedGroupForBatch(group)}
+                      disabled={isBatchRecording || isRecordingIndividualPayment}
+                      className="mt-2 sm:mt-0"
+                    >
+                      <Edit className="mr-2 h-4 w-4" /> Record Batch
+                    </Button>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    onClick={() => setSelectedGroupForBatch(group)}
-                    disabled={isBatchRecording}
-                    className="mt-2 sm:mt-0"
-                  >
-                    <Edit className="mr-2 h-4 w-4" /> Record Batch
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-4 text-center">No customer groups currently eligible for batch payment recording.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
 
       {selectedGroupForBatch && (
         <BatchRecordPaymentDialog
@@ -384,6 +361,14 @@ export default function DashboardPage() {
           onClose={() => setSelectedGroupForBatch(null)}
           onSubmit={handleBatchRecordSubmit}
           isLoading={isBatchRecording}
+        />
+      )}
+
+      {selectedPaymentForRecord && (
+        <RecordPaymentForm
+          payment={selectedPaymentForRecord}
+          onSubmit={handleIndividualPaymentRecord}
+          isLoading={isRecordingIndividualPayment}
         />
       )}
 
@@ -440,7 +425,9 @@ export default function DashboardPage() {
                 <TableBody>
                   {upcomingPaymentsList.map((payment) => (
                     <TableRow key={payment.id}>
-                      <TableCell className="font-medium">{payment.customerName}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link href={`/schemes/${payment.schemeId}`} className="hover:underline">{payment.customerName}</Link>
+                      </TableCell>
                       <TableCell>{formatDate(payment.dueDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
                     </TableRow>
@@ -456,7 +443,8 @@ export default function DashboardPage() {
       
       <Card className="md:col-span-2"> 
           <CardHeader>
-            <CardTitle className="font-headline">Overdue Payments</CardTitle>
+            <CardTitle className="font-headline">Recent Overdue Payments</CardTitle>
+            <CardDescription>Top 5 most recently due payments that are overdue.</CardDescription>
           </CardHeader>
           <CardContent>
             {overduePaymentsList.length > 0 ? (
@@ -471,7 +459,9 @@ export default function DashboardPage() {
                 <TableBody>
                   {overduePaymentsList.map((payment) => (
                     <TableRow key={payment.id} className="text-destructive hover:bg-destructive/10">
-                      <TableCell className="font-medium">{payment.customerName}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link href={`/schemes/${payment.schemeId}`} className="hover:underline">{payment.customerName}</Link>
+                      </TableCell>
                       <TableCell>{formatDate(payment.dueDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
                     </TableRow>
@@ -487,3 +477,4 @@ export default function DashboardPage() {
   );
 }
 
+    
