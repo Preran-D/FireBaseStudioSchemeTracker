@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -81,14 +82,25 @@ export function RecordIndividualPaymentDialog({
   }, [isOpen, form]);
 
   const filteredSchemes = useMemo(() => {
-    if (!searchTerm) return allRecordableSchemes;
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    return allRecordableSchemes.filter(
-      (s) =>
-        s.customerName.toLowerCase().includes(lowerSearchTerm) ||
-        s.id.toLowerCase().includes(lowerSearchTerm)
-    );
-  }, [allRecordableSchemes, searchTerm]);
+    // Get all schemes whose IDs are in selectedSchemeIds, preserving their order from allRecordableSchemes
+    const currentSelectedSchemes = allRecordableSchemes.filter(s => selectedSchemeIds.includes(s.id));
+    
+    // Get all schemes whose IDs are NOT in selectedSchemeIds
+    const unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
+
+    let filteredUnselectedItems = unselectedItems;
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      // Filter ONLY the unselected items
+      filteredUnselectedItems = unselectedItems.filter(
+        (s) =>
+          s.customerName.toLowerCase().includes(lowerSearchTerm) ||
+          s.id.toLowerCase().includes(lowerSearchTerm)
+      );
+    }
+    // The final list is selected items first, then filtered unselected items
+    return [...currentSelectedSchemes, ...filteredUnselectedItems];
+  }, [allRecordableSchemes, searchTerm, selectedSchemeIds]);
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
     setSelectedSchemeIds((prevIds) =>
@@ -97,7 +109,7 @@ export function RecordIndividualPaymentDialog({
     setInstallmentsPerScheme((prevInstallments) => {
       const newInstallments = { ...prevInstallments };
       if (checked) {
-        if (!newInstallments[schemeId]) { // Only set to 1 if not already set (e.g. re-selecting)
+        if (!newInstallments[schemeId]) { 
             const scheme = allRecordableSchemes.find(s => s.id === schemeId);
             const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
             newInstallments[schemeId] = maxMonths > 0 ? 1 : 0;
@@ -119,7 +131,7 @@ export function RecordIndividualPaymentDialog({
       const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
 
       if (newInstallmentsCount < 1 && maxMonths > 0) newInstallmentsCount = 1;
-      if (newInstallmentsCount < 0 && maxMonths <=0 ) newInstallmentsCount = 0; // Can't go below 0 if no months to record
+      if (newInstallmentsCount < 0 && maxMonths <=0 ) newInstallmentsCount = 0; 
       if (newInstallmentsCount > maxMonths) newInstallmentsCount = maxMonths;
       
       return { ...prevInstallments, [schemeId]: newInstallmentsCount };
@@ -151,18 +163,14 @@ export function RecordIndividualPaymentDialog({
       }
     });
      if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0)) {
-        // If schemes are selected but all have 0 installments
-        // This case should ideally be prevented by disabling the submit button
         console.warn("Submit called with selected schemes but zero installments for all.");
         return;
     }
-    // onClose(); // Consider if dialog should close automatically or wait for toast/user
   };
 
   if (!isOpen) return null;
   
   const noSchemesSelectedOrNoInstallments = selectedSchemeIds.length === 0 || selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0);
-
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -241,11 +249,11 @@ export function RecordIndividualPaymentDialog({
                     <div className="mt-2 flex items-center justify-between gap-2 p-2 border-t border-primary/20">
                       <span className="text-xs font-medium">Installments:</span>
                       <div className="flex items-center gap-1.5">
-                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-full" type="button" onClick={() => handleInstallmentChange(scheme.id, -1)} disabled={currentInstallments <= 1 || isLoading}>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleInstallmentChange(scheme.id, -1)} disabled={currentInstallments <= 1 || isLoading}>
                           <Minus className="h-3 w-3" />
                         </Button>
                         <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentInstallments}</span>
-                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-full" type="button" onClick={() => handleInstallmentChange(scheme.id, 1)} disabled={currentInstallments >= maxMonthsForThisScheme || isLoading}>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleInstallmentChange(scheme.id, 1)} disabled={currentInstallments >= maxMonthsForThisScheme || isLoading}>
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
@@ -274,10 +282,10 @@ export function RecordIndividualPaymentDialog({
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
+                            type="button"
                             variant={'outline'}
                             className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
                             disabled={isLoading}
-                            type="button"
                           >
                             {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
@@ -365,3 +373,5 @@ export function RecordIndividualPaymentDialog({
     </Dialog>
   );
 }
+
+    
