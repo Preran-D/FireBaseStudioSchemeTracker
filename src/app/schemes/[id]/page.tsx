@@ -37,10 +37,11 @@ interface SelectedPaymentContext extends Payment {
   schemeIdToUpdate: string;
 }
 
-export default function SchemeDetailsPage({ params: urlParams }: { params: { id: string } }) {
+export default function SchemeDetailsPage() {
   const router = useRouter();
+  const params = useParams();
   const { toast } = useToast();
-  const schemeIdFromUrl = urlParams.id as string;
+  const schemeIdFromUrl = params.id as string;
 
   const [scheme, setScheme] = useState<Scheme | null>(null);
   const [allSchemesForThisCustomer, setAllSchemesForThisCustomer] = useState<Scheme[]>([]);
@@ -671,5 +672,4 @@ export default function SchemeDetailsPage({ params: urlParams }: { params: { id:
   );
 }
 
-
-    
+      
