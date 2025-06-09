@@ -84,7 +84,7 @@ export function RecordIndividualPaymentDialog({
   const filteredSchemes = useMemo(() => {
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
-      .sort((a,b) => { // Keep selected items sorted by original order for stability
+      .sort((a,b) => { 
         const indexA = allRecordableSchemes.findIndex(scheme => scheme.id === a.id);
         const indexB = allRecordableSchemes.findIndex(scheme => scheme.id === b.id);
         return indexA - indexB;
@@ -101,7 +101,7 @@ export function RecordIndividualPaymentDialog({
           s.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    // Sort unselected items by customer name, then by start date
+    
     filteredUnselectedItems.sort((a,b) => {
       const nameCompare = a.customerName.localeCompare(b.customerName);
       if (nameCompare !== 0) return nameCompare;
@@ -124,7 +124,8 @@ export function RecordIndividualPaymentDialog({
             newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       } else {
-        delete newMonths[schemeId];
+        // Keep the monthsToPay value even if unchecked, so if re-checked, it remembers.
+        // To clear it, uncomment: delete newMonths[schemeId];
       }
       return newMonths;
     });
@@ -183,7 +184,7 @@ export function RecordIndividualPaymentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="font-headline">Record Individual Payment(s)</DialogTitle>
           <DialogDescription>
@@ -202,13 +203,8 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 border rounded-md p-1"> {/* Changed classes here */}
-          {filteredSchemes.length === 0 && (
-            <p className="text-center text-muted-foreground py-6">
-              {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
-            </p>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-2">
+        <ScrollArea className="flex-1 min-h-0 border rounded-md"> 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3"> {/* Added p-3 here for items */}
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
               const currentMonthsToPay = monthsToPayPerScheme[scheme.id] || 0;
@@ -230,6 +226,7 @@ export function RecordIndividualPaymentDialog({
                       onCheckedChange={(checked) => handleSchemeSelectionToggle(scheme.id, !!checked)}
                       disabled={isLoading || maxMonthsForThisScheme <= 0}
                       className="mt-1 flex-shrink-0"
+                      type="button"
                     />
                     <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
                         <div className="flex justify-between items-start mb-0.5">
@@ -274,6 +271,11 @@ export function RecordIndividualPaymentDialog({
                 </div>
               );
             })}
+             {filteredSchemes.length === 0 && (
+              <p className="text-center text-muted-foreground py-6 col-span-1 md:col-span-2">
+                {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
+              </p>
+            )}
           </div>
         </ScrollArea>
         
@@ -338,6 +340,7 @@ export function RecordIndividualPaymentDialog({
                                     field.onChange(newValue);
                                   }}
                                   disabled={isLoading}
+                                  type="button"
                                 />
                               </FormControl>
                               <FormLabel className="font-normal text-sm">{mode}</FormLabel>
@@ -381,4 +384,3 @@ export function RecordIndividualPaymentDialog({
     </Dialog>
   );
 }
-    
