@@ -164,6 +164,7 @@ export function RecordIndividualPaymentDialog({
               return (
                 <button
                   key={scheme.id}
+                  type="button" // Ensure these buttons don't submit any outer form
                   onClick={() => handleSchemeSelect(scheme)}
                   disabled={isLoading}
                   className={cn(
@@ -215,6 +216,7 @@ export function RecordIndividualPaymentDialog({
                               variant={'outline'}
                               className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
                               disabled={isLoading}
+                              type="button"
                             >
                               {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
@@ -277,9 +279,9 @@ export function RecordIndividualPaymentDialog({
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-md bg-muted/40">
                     <div className="flex items-center gap-2">
                         <FormLabel className="text-sm">Installments to Pay:</FormLabel>
-                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => handleChangeMonthsToPay(-1)} disabled={numberOfMonthsToPay <= 1 || isLoading}><Minus className="h-3.5 w-3.5" /></Button>
+                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" type="button" onClick={() => handleChangeMonthsToPay(-1)} disabled={numberOfMonthsToPay <= 1 || isLoading}><Minus className="h-3.5 w-3.5" /></Button>
                         <span className="w-6 text-center font-semibold text-sm tabular-nums">{numberOfMonthsToPay}</span>
-                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => handleChangeMonthsToPay(1)} disabled={numberOfMonthsToPay >= maxMonthsToRecordForSelected || isLoading}><Plus className="h-3.5 w-3.5" /></Button>
+                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" type="button" onClick={() => handleChangeMonthsToPay(1)} disabled={numberOfMonthsToPay >= maxMonthsToRecordForSelected || isLoading}><Plus className="h-3.5 w-3.5" /></Button>
                     </div>
                     <p className="text-sm font-semibold">Total: {formatCurrency(totalAmountForSelectedMonths)}</p>
                 </div>

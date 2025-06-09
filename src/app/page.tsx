@@ -212,9 +212,11 @@ export default function DashboardPage() {
           });
           if (updatedScheme) { successfulRecords++; totalAmountRecorded += paymentToRecord.amountExpected; } else { errors++; }
         } else {
+          // This case should ideally not be hit if numberOfMonths is calculated correctly
+          // based on available payments to record.
           errors++;
         }
-      } else { errors++; break; }
+      } else { errors++; break; } // Trying to record more months than available in the scheme
     }
 
     if (successfulRecords > 0) {
@@ -259,10 +261,10 @@ export default function DashboardPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setIsIndividualPayDialogOpen(true)} disabled={recordableIndividualSchemesForDialog.length === 0}>
-                 <UserPlus className="mr-2 h-4 w-4" /> Record Individual Payment
+                 <UserPlus className="mr-2 h-4 w-4" /> Individual
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsBatchPayDialogOpen(true)} disabled={groupsForBatchPayDialog.length === 0}>
-                <Users className="mr-2 h-4 w-4" /> Record Batch (Group) Payment
+                <Users className="mr-2 h-4 w-4" /> Group
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
