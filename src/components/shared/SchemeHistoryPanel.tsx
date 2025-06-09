@@ -31,7 +31,7 @@ export function SchemeHistoryPanel({ isOpen, onClose, scheme }: SchemeHistoryPan
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col">
+      <SheetContent className="w-full sm:max-w-lg flex flex-col z-[51]"> {/* Added z-[51] to ensure it's above dialog overlay */}
         <SheetHeader className="pr-8"> {/* Add padding to avoid overlap with close button */}
           <SheetTitle className="font-headline">Transaction History</SheetTitle>
           <SheetDescription>

@@ -6,16 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, ChevronDown, UserPlus, ListFilter } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, ChevronDown, UserPlus, ListFilter, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
-import { getMockSchemes, updateMockSchemePayment, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data';
+import { getMockSchemes, updateMockSchemePayment, recordNextDuePaymentsForCustomerGroup, getGroupDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
-import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
+// import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog'; // No longer used
 import { RecordIndividualPaymentDialog, type IndividualPaymentDetails } from '@/components/dialogs/RecordIndividualPaymentDialog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,8 +28,7 @@ export default function DashboardPage() {
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
   
-  const [isIndividualPayDialogOpen, setIsIndividualPayDialogOpen] = useState(false);
-  const [isBatchPayDialogOpen, setIsBatchPayDialogOpen] = useState(false);
+  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false); // Unified dialog state
   const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({});
 
 
@@ -42,7 +41,7 @@ export default function DashboardPage() {
       return { ...tempS, ...totals, status };
     });
     setSchemes(loadedSchemesInitial);
-    return loadedSchemesInitial;
+    // No need to return here unless specifically used by caller of loadSchemesData
   }, []);
 
   useEffect(() => {
@@ -129,40 +128,15 @@ export default function DashboardPage() {
       });
   }, [schemes]);
 
-  const groupsForBatchPayDialog = useMemo((): GroupDetail[] => {
-    const groupsMap = new Map<string, { schemes: Scheme[]; customerNames: Set<string>; recordableSchemeCount: number }>();
-    schemes.forEach(scheme => {
-      if (scheme.customerGroupName && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
-        let hasRecordablePaymentForThisScheme = false;
-        for (let i = 0; i < scheme.payments.length; i++) {
-            const payment = scheme.payments[i];
-            if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
-                let allPreviousPaid = true;
-                for (let j = 0; j < i; j++) { if (getPaymentStatus(scheme.payments[j], scheme.startDate) !== 'Paid') { allPreviousPaid = false; break; } }
-                if (allPreviousPaid) { hasRecordablePaymentForThisScheme = true; break; }
-            }
-        }
-        const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], customerNames: new Set(), recordableSchemeCount: 0 };
-        groupEntry.schemes.push(scheme); 
-        groupEntry.customerNames.add(scheme.customerName);
-        if (hasRecordablePaymentForThisScheme) { groupEntry.recordableSchemeCount++; }
-        groupsMap.set(scheme.customerGroupName, groupEntry);
-      }
-    });
-    return Array.from(groupsMap.entries())
-      .map(([groupName, data]) => ({ 
-          groupName, 
-          schemes: data.schemes,
-          customerNames: Array.from(data.customerNames).sort(),
-          totalSchemesInGroup: data.schemes.length,
-          recordableSchemeCount: data.recordableSchemeCount 
-      }))
-      .filter(g => g.recordableSchemeCount > 0)
-      .sort((a,b) => a.groupName.localeCompare(b.groupName));
-  }, [schemes]);
+  const allGroupsForDialog = useMemo(() => {
+    // Ensure this is called and data is fresh when schemes change.
+    // If getGroupDetails depends on the current state of schemes, it should be re-calculated.
+    // For now, assuming getGroupDetails fetches based on the persisted MOCK_SCHEMES.
+    return getGroupDetails();
+  }, [schemes]); // Re-calculate when schemes change if getGroupDetails is dependent
 
 
-  const handleIndividualPaymentSubmit = async (details: IndividualPaymentDetails) => {
+  const handlePaymentSubmit = async (details: IndividualPaymentDetails) => {
     const { schemeId, paymentDate, modeOfPayment, numberOfMonths } = details;
     const schemeToUpdate = schemes.find(s => s.id === schemeId);
 
@@ -207,16 +181,14 @@ export default function DashboardPage() {
         if (getPaymentStatus(paymentToRecord, schemeToUpdate.startDate) !== 'Paid') {
           const updatedScheme = updateMockSchemePayment(schemeId, paymentToRecord.id, {
             paymentDate: paymentDate,
-            amountPaid: paymentToRecord.amountExpected,
+            amountPaid: paymentToRecord.amountExpected, // Full payment is recorded
             modeOfPayment: modeOfPayment,
           });
           if (updatedScheme) { successfulRecords++; totalAmountRecorded += paymentToRecord.amountExpected; } else { errors++; }
         } else {
-          // This case should ideally not be hit if numberOfMonths is calculated correctly
-          // based on available payments to record.
           errors++;
         }
-      } else { errors++; break; } // Trying to record more months than available in the scheme
+      } else { errors++; break; } 
     }
 
     if (successfulRecords > 0) {
@@ -224,26 +196,14 @@ export default function DashboardPage() {
         title: "Payments Recorded",
         description: `${successfulRecords} payment(s) totaling ${formatCurrency(totalAmountRecorded)} for ${schemeToUpdate.customerName} (Scheme: ${schemeId.toUpperCase()}) recorded. ${errors > 0 ? `${errors} error(s).` : ''}`
       });
-      loadSchemesData();
+      loadSchemesData(); // Crucial to reload schemes to reflect updates
     } else if (errors > 0) {
       toast({ title: "Error Recording Payments", description: `${errors} error(s) occurred. Some payments might not have been recorded.`, variant: "destructive" });
     } else {
       toast({ title: "No Payments Recorded", description: "No new payments were recorded for this scheme." });
     }
     setProcessingStates(prev => ({ ...prev, [schemeId]: false }));
-    setIsIndividualPayDialogOpen(false);
-  };
-
-  const handleBatchPaySubmit = (details: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord: string[], groupName?: string }) => {
-    const result = recordNextDuePaymentsForCustomerGroup(details.groupName || "N/A_GROUP_FOR_TOAST", details);
-    
-    toast({
-      title: "Batch Payment Processed",
-      description: `Recorded ${result.paymentsRecordedCount} payment(s) totaling ${formatCurrency(result.totalRecordedAmount)} for group "${details.groupName}".`,
-    });
-    
-    loadSchemesData();
-    setIsBatchPayDialogOpen(false);
+    // Dialog closure is handled by the dialog itself or user action.
   };
 
 
@@ -253,21 +213,9 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
         <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="lg" variant="default">
-                <ListChecksIcon className="mr-2 h-5 w-5" /> Add Payment <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsIndividualPayDialogOpen(true)} disabled={recordableIndividualSchemesForDialog.length === 0}>
-                 <UserPlus className="mr-2 h-4 w-4" /> Individual
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsBatchPayDialogOpen(true)} disabled={groupsForBatchPayDialog.length === 0}>
-                <Users className="mr-2 h-4 w-4" /> Group
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <Button size="lg" variant="default" onClick={() => setIsPayDialogOpen(true)} disabled={recordableIndividualSchemesForDialog.length === 0}>
+                <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
+            </Button>
           <Link href="/schemes/new">
             <Button size="lg" variant="outline">
               <ListFilter className="mr-2 h-5 w-5" /> Add New Scheme
@@ -388,26 +336,15 @@ export default function DashboardPage() {
       </Card>
     </div>
 
-    {isIndividualPayDialogOpen && (
+    {isPayDialogOpen && (
       <RecordIndividualPaymentDialog
-        isOpen={isIndividualPayDialogOpen}
-        onClose={() => setIsIndividualPayDialogOpen(false)}
+        isOpen={isPayDialogOpen}
+        onClose={() => setIsPayDialogOpen(false)}
         allRecordableSchemes={recordableIndividualSchemesForDialog}
-        onSubmit={handleIndividualPaymentSubmit}
+        allGroups={allGroupsForDialog} // Pass group data
+        onSubmit={handlePaymentSubmit} // Unified submit handler
         isLoading={Object.values(processingStates).some(s => s)}
       />
-    )}
-
-    {isBatchPayDialogOpen && groupsForBatchPayDialog.length > 0 && (
-        <BatchRecordPaymentDialog
-            groupDisplayName={groupsForBatchPayDialog.length === 1 ? groupsForBatchPayDialog[0].groupName : undefined}
-            schemesInGroup={groupsForBatchPayDialog.length === 1 ? groupsForBatchPayDialog[0].schemes : undefined}
-            allEligibleGroups={groupsForBatchPayDialog.length > 1 ? groupsForBatchPayDialog : EMPTY_GROUP_DETAIL_ARRAY}
-            isOpen={isBatchPayDialogOpen}
-            onClose={() => setIsBatchPayDialogOpen(false)}
-            onSubmit={handleBatchPaySubmit}
-            isLoading={Object.values(processingStates).some(s => s)}
-        />
     )}
     </>
   );

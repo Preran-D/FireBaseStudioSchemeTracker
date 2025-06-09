@@ -20,13 +20,13 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, CreditCard, Landmark, Smartphone } from 'lucide-react';
+import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, CreditCard, Landmark, Smartphone, Users } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
-import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
+import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 import Link from 'next/link';
-import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; // Import the panel
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; 
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
@@ -54,6 +54,7 @@ interface RecordIndividualPaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   allRecordableSchemes: Scheme[];
+  allGroups: GroupDetail[]; 
   onSubmit: (details: IndividualPaymentDetails) => void;
   isLoading?: boolean;
 }
@@ -62,6 +63,7 @@ export function RecordIndividualPaymentDialog({
   isOpen,
   onClose,
   allRecordableSchemes,
+  allGroups,
   onSubmit,
   isLoading,
 }: RecordIndividualPaymentDialogProps) {
@@ -89,29 +91,73 @@ export function RecordIndividualPaymentDialog({
       setMonthsToPayPerScheme({});
       setPaymentModePerScheme({});
       setSearchTerm('');
-      setIsSchemePeekPanelOpen(false); // Close panel when dialog re-opens
+      setIsSchemePeekPanelOpen(false); 
       setSchemeForPeekPanel(null);
     }
   }, [isOpen, form]);
 
+  const handleSearchTermChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newSearchTerm = event.target.value;
+    setSearchTerm(newSearchTerm);
+
+    const lowerSearchTerm = newSearchTerm.toLowerCase();
+    const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerSearchTerm);
+
+    if (matchedGroup) {
+      const groupSchemeIds = matchedGroup.schemes
+        .filter(s => allRecordableSchemes.some(rs => rs.id === s.id)) // Ensure they are in the recordable list
+        .map(s => s.id);
+      
+      // Preserve existing selections and add new ones from the group
+      const currentSelected = new Set(selectedSchemeIds);
+      groupSchemeIds.forEach(id => currentSelected.add(id));
+      const newSelectedIds = Array.from(currentSelected);
+      setSelectedSchemeIds(newSelectedIds);
+
+      const newMonths = { ...monthsToPayPerScheme };
+      const newModes = { ...paymentModePerScheme };
+
+      groupSchemeIds.forEach(id => { // Iterate over schemes matched from group
+        if (!newMonths[id]) { // Only initialize if not already set by user
+          const scheme = allRecordableSchemes.find(s => s.id === id);
+          const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
+          newMonths[id] = maxMonths > 0 ? 1 : 0;
+        }
+        if (!newModes[id]) { // Only initialize if not already set by user
+          newModes[id] = ['Cash']; // Default for newly group-selected
+        }
+      });
+      setMonthsToPayPerScheme(newMonths);
+      setPaymentModePerScheme(newModes);
+    }
+  };
+  
   const filteredSchemes = useMemo(() => {
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
       .sort((a,b) => { 
         const indexA = selectedSchemeIds.indexOf(a.id);
         const indexB = selectedSchemeIds.indexOf(b.id);
-        return indexA - indexB;
+        return indexA - indexB; // Keep selection order
       });
       
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      unselectedItems = unselectedItems.filter(
-        (s) =>
-          s.customerName.toLowerCase().includes(lowerSearchTerm) ||
-          s.id.toLowerCase().includes(lowerSearchTerm)
-      );
+      const matchedGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerSearchTerm);
+
+      // If a group is matched, we don't further filter unselectedItems by search term for individual matching
+      // because the group members are already brought to the 'selected' list (or should be).
+      // If no group matched, then filter unselectedItems by individual customer/scheme ID.
+      if (!matchedGroup) { 
+        unselectedItems = unselectedItems.filter(
+          (s) =>
+            s.customerName.toLowerCase().includes(lowerSearchTerm) ||
+            s.id.toLowerCase().includes(lowerSearchTerm) ||
+            (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm) && s.customerGroupName.toLowerCase() !== lowerSearchTerm) // Don't re-filter by group name if it's already the search
+        );
+      }
     }
     
     unselectedItems.sort((a,b) => {
@@ -121,7 +167,7 @@ export function RecordIndividualPaymentDialog({
     });
 
     return [...selectedItems, ...unselectedItems];
-  }, [allRecordableSchemes, searchTerm, selectedSchemeIds]);
+  }, [allRecordableSchemes, searchTerm, selectedSchemeIds, allGroups]);
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
     setSelectedSchemeIds((prevIds) =>
@@ -136,15 +182,17 @@ export function RecordIndividualPaymentDialog({
             newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       }
+      // Optionally: else { delete newMonths[schemeId]; } // Clear if unchecking
       return newMonths;
     });
     setPaymentModePerScheme((prevModes) => {
       const newModes = { ...prevModes };
       if (checked) {
         if (!newModes[schemeId]) {
-          newModes[schemeId] = [];
+          newModes[schemeId] = ['Cash']; // Default mode for newly selected
         }
       }
+      // Optionally: else { delete newModes[schemeId]; } // Clear if unchecking
       return newModes;
     });
   };
@@ -237,6 +285,13 @@ export function RecordIndividualPaymentDialog({
         console.warn("Submit called with selected schemes but no valid payment configurations (0 months or no payment mode).");
         return;
     }
+    if (paymentsToSubmit > 0) { 
+      // Optionally, clear selections after successful partial submission or let user manage
+      // For example, to clear only successfully submitted schemes:
+      // setSelectedSchemeIds(prev => prev.filter(id => !submittedSuccessfullySchemeIds.includes(id)));
+      // Or just close the dialog:
+      // onClose(); 
+    }
   };
 
   if (!isOpen) return null;
@@ -246,24 +301,24 @@ export function RecordIndividualPaymentDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="font-headline">Record Individual Payment(s)</DialogTitle>
+          <DialogTitle className="font-headline">Record Payment(s)</DialogTitle>
           <DialogDescription>
-            Search, select schemes, specify months to pay and payment mode for each.
+            Search by customer, scheme ID, or group name. Select schemes, specify months to pay and payment mode for each.
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative my-3 flex-shrink-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by customer name or scheme ID..."
+            placeholder="Search by customer, scheme ID, or group name..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchTermChange}
             className="pl-9"
             disabled={isLoading}
           />
         </div>
         
-        <div className="flex-1 min-h-0 h-0 overflow-y-auto"> {/* Changed from ScrollArea */}
+        <div className="flex-1 min-h-0 h-0 overflow-y-auto"> {/* Scrollable scheme list area */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
@@ -282,12 +337,12 @@ export function RecordIndividualPaymentDialog({
                 >
                   <div className="flex items-start gap-3">
                     <Checkbox
+                      type="button"
                       id={`scheme-select-${scheme.id}`}
                       checked={isSelected}
                       onCheckedChange={(checked) => handleSchemeSelectionToggle(scheme.id, !!checked)}
                       disabled={isLoading || maxMonthsForThisScheme <= 0}
                       className="mt-1 flex-shrink-0"
-                      type="button"
                     />
                     <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
                         <div className="flex justify-between items-start mb-0.5">
@@ -298,6 +353,7 @@ export function RecordIndividualPaymentDialog({
                             <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
+                            {scheme.customerGroupName && <><Users className="h-3 w-3 inline mr-1 text-muted-foreground"/>{scheme.customerGroupName} <br/></>}
                             Start Date: {formatDate(scheme.startDate, 'dd MMM yyyy')}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -336,11 +392,11 @@ export function RecordIndividualPaymentDialog({
                               return (
                                 <div key={mode} className="flex items-center space-x-1.5">
                                   <Checkbox
+                                    type="button"
                                     id={`mop-${scheme.id}-${mode}`}
                                     checked={currentPaymentModes.includes(mode)}
                                     onCheckedChange={(checked) => handlePaymentModeChange(scheme.id, mode, !!checked)}
                                     disabled={isLoading}
-                                    type="button"
                                   />
                                   <label htmlFor={`mop-${scheme.id}-${mode}`} className="text-xs font-normal flex items-center gap-1 cursor-pointer">
                                     {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -372,7 +428,7 @@ export function RecordIndividualPaymentDialog({
         </div>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-auto flex-shrink-0">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-auto flex-shrink-0"> {/* Payment form area */}
              <FormField
                 control={form.control}
                 name="paymentDate"
