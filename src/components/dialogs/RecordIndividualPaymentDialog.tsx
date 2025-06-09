@@ -61,7 +61,7 @@ export function RecordIndividualPaymentDialog({
 }: RecordIndividualPaymentDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
-  const [installmentsPerScheme, setInstallmentsPerScheme] = useState<{ [schemeId: string]: number }>({});
+  const [monthsToPayPerScheme, setMonthsToPayPerScheme] = useState<{ [schemeId: string]: number }>({});
 
   const form = useForm<RecordIndividualPaymentFormValues>({
     resolver: zodResolver(recordIndividualPaymentFormSchema),
@@ -76,29 +76,31 @@ export function RecordIndividualPaymentDialog({
     if (isOpen) {
       form.reset({ paymentDate: new Date(), modeOfPayment: [] });
       setSelectedSchemeIds([]);
-      setInstallmentsPerScheme({});
+      setMonthsToPayPerScheme({});
       setSearchTerm('');
     }
   }, [isOpen, form]);
 
   const filteredSchemes = useMemo(() => {
-    // Get all schemes whose IDs are in selectedSchemeIds, preserving their order from allRecordableSchemes
-    const currentSelectedSchemes = allRecordableSchemes.filter(s => selectedSchemeIds.includes(s.id));
-    
-    // Get all schemes whose IDs are NOT in selectedSchemeIds
+    const currentSelectedSchemes = allRecordableSchemes
+      .filter(s => selectedSchemeIds.includes(s.id))
+      .sort((a,b) => { // Keep selected items sorted by original order or name for stability
+        const indexA = allRecordableSchemes.findIndex(scheme => scheme.id === a.id);
+        const indexB = allRecordableSchemes.findIndex(scheme => scheme.id === b.id);
+        return indexA - indexB;
+      });
+      
     const unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
     let filteredUnselectedItems = unselectedItems;
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      // Filter ONLY the unselected items
       filteredUnselectedItems = unselectedItems.filter(
         (s) =>
           s.customerName.toLowerCase().includes(lowerSearchTerm) ||
           s.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
-    // The final list is selected items first, then filtered unselected items
     return [...currentSelectedSchemes, ...filteredUnselectedItems];
   }, [allRecordableSchemes, searchTerm, selectedSchemeIds]);
 
@@ -106,53 +108,56 @@ export function RecordIndividualPaymentDialog({
     setSelectedSchemeIds((prevIds) =>
       checked ? [...prevIds, schemeId] : prevIds.filter((id) => id !== schemeId)
     );
-    setInstallmentsPerScheme((prevInstallments) => {
-      const newInstallments = { ...prevInstallments };
+    setMonthsToPayPerScheme((prevMonths) => {
+      const newMonths = { ...prevMonths };
       if (checked) {
-        if (!newInstallments[schemeId]) { 
+        if (!newMonths[schemeId]) { 
             const scheme = allRecordableSchemes.find(s => s.id === schemeId);
             const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
-            newInstallments[schemeId] = maxMonths > 0 ? 1 : 0;
+            newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       } else {
-        delete newInstallments[schemeId];
+        // Optionally, you might want to remove the entry if unchecked, 
+        // or keep it if you want to preserve the last count if re-checked.
+        // For now, let's clear it to ensure it defaults to 1 if re-checked.
+        delete newMonths[schemeId];
       }
-      return newInstallments;
+      return newMonths;
     });
   };
 
-  const handleInstallmentChange = (schemeId: string, delta: number) => {
+  const handleMonthsToPayChange = (schemeId: string, delta: number) => {
     const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
     if (!scheme) return;
 
-    setInstallmentsPerScheme((prevInstallments) => {
-      const currentInstallments = prevInstallments[schemeId] || 0;
-      let newInstallmentsCount = currentInstallments + delta;
+    setMonthsToPayPerScheme((prevMonths) => {
+      const currentMonths = prevMonths[schemeId] || 0;
+      let newMonthsCount = currentMonths + delta;
       const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
 
-      if (newInstallmentsCount < 1 && maxMonths > 0) newInstallmentsCount = 1;
-      if (newInstallmentsCount < 0 && maxMonths <=0 ) newInstallmentsCount = 0; 
-      if (newInstallmentsCount > maxMonths) newInstallmentsCount = maxMonths;
+      if (newMonthsCount < 1 && maxMonths > 0) newMonthsCount = 1;
+      if (newMonthsCount < 0 && maxMonths <=0 ) newMonthsCount = 0; 
+      if (newMonthsCount > maxMonths) newMonthsCount = maxMonths;
       
-      return { ...prevInstallments, [schemeId]: newInstallmentsCount };
+      return { ...prevMonths, [schemeId]: newMonthsCount };
     });
   };
   
   const totalAmountForSelectedSchemes = useMemo(() => {
     return selectedSchemeIds.reduce((total, schemeId) => {
       const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
-      const installments = installmentsPerScheme[schemeId] || 0;
-      if (scheme && installments > 0) {
-        return total + scheme.monthlyPaymentAmount * installments;
+      const months = monthsToPayPerScheme[schemeId] || 0;
+      if (scheme && months > 0) {
+        return total + scheme.monthlyPaymentAmount * months;
       }
       return total;
     }, 0);
-  }, [selectedSchemeIds, installmentsPerScheme, allRecordableSchemes]);
+  }, [selectedSchemeIds, monthsToPayPerScheme, allRecordableSchemes]);
 
   const handleSubmit = (values: RecordIndividualPaymentFormValues) => {
     selectedSchemeIds.forEach((schemeId) => {
       const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
-      const numberOfMonths = installmentsPerScheme[schemeId];
+      const numberOfMonths = monthsToPayPerScheme[schemeId];
       if (scheme && numberOfMonths > 0) {
         onSubmit({
           schemeId: scheme.id,
@@ -162,15 +167,15 @@ export function RecordIndividualPaymentDialog({
         });
       }
     });
-     if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0)) {
-        console.warn("Submit called with selected schemes but zero installments for all.");
+     if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (monthsToPayPerScheme[id] || 0) === 0)) {
+        console.warn("Submit called with selected schemes but zero months for all.");
         return;
     }
   };
 
   if (!isOpen) return null;
   
-  const noSchemesSelectedOrNoInstallments = selectedSchemeIds.length === 0 || selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0);
+  const noSchemesSelectedOrNoMonths = selectedSchemeIds.length === 0 || selectedSchemeIds.every(id => (monthsToPayPerScheme[id] || 0) === 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -193,7 +198,7 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="flex-grow border rounded-md p-1 min-h-[200px] max-h-[calc(90vh-350px)]">
+        <ScrollArea className="flex-grow border rounded-md p-1 min-h-[200px] max-h-[calc(90vh-380px)]"> {/* Adjusted max-height */}
           {filteredSchemes.length === 0 && (
             <p className="text-center text-muted-foreground py-6">
               {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
@@ -202,10 +207,8 @@ export function RecordIndividualPaymentDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-2">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
-              const currentInstallments = installmentsPerScheme[scheme.id] || 0;
+              const currentMonthsToPay = monthsToPayPerScheme[scheme.id] || 0;
               const maxMonthsForThisScheme = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
-              const nextPayment = scheme.payments.find(p => getPaymentStatus(p, scheme.startDate) !== 'Paid' && 
-                                  scheme.payments.slice(0, p.monthNumber - 1).every(prevP => getPaymentStatus(prevP, scheme.startDate) === 'Paid'));
 
               return (
                 <div
@@ -232,36 +235,37 @@ export function RecordIndividualPaymentDialog({
                             </Link>
                             <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
                         </div>
-                        {nextPayment && (
-                            <p className="text-xs text-muted-foreground">
-                                Next Due: {formatDate(nextPayment.dueDate, 'dd MMM')}, Amt: {formatCurrency(nextPayment.amountExpected)}
-                            </p>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                            Start Date: {formatDate(scheme.startDate, 'dd MMM yyyy')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Monthly Amt: {formatCurrency(scheme.monthlyPaymentAmount)}
+                        </p>
                     </label>
                   </div>
                   
                   <div className="my-1.5">
-                    <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={isSelected ? currentInstallments : 0} className="h-1.5" />
+                    <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={isSelected ? currentMonthsToPay : 0} className="h-1.5" />
                     <p className="text-xs text-muted-foreground mt-0.5 text-center">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths} paid</p>
                   </div>
 
                   {isSelected && maxMonthsForThisScheme > 0 && (
                     <div className="mt-2 flex items-center justify-between gap-2 p-2 border-t border-primary/20">
-                      <span className="text-xs font-medium">Installments:</span>
+                      <span className="text-xs font-medium">Months to Pay:</span>
                       <div className="flex items-center gap-1.5">
-                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleInstallmentChange(scheme.id, -1)} disabled={currentInstallments <= 1 || isLoading}>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleMonthsToPayChange(scheme.id, -1)} disabled={currentMonthsToPay <= 1 || isLoading}>
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentInstallments}</span>
-                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleInstallmentChange(scheme.id, 1)} disabled={currentInstallments >= maxMonthsForThisScheme || isLoading}>
+                        <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentMonthsToPay}</span>
+                        <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleMonthsToPayChange(scheme.id, 1)} disabled={currentMonthsToPay >= maxMonthsForThisScheme || isLoading}>
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
-                       <span className="text-xs font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentInstallments)}</span>
+                       <span className="text-xs font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentMonthsToPay)}</span>
                     </div>
                   )}
                   {isSelected && maxMonthsForThisScheme <= 0 && (
-                     <p className="text-xs text-green-600 font-medium text-center p-1.5 border-t border-green-500/20 bg-green-500/5 rounded-b-md">All installments paid!</p>
+                     <p className="text-xs text-green-600 font-medium text-center p-1.5 border-t border-green-500/20 bg-green-500/5 rounded-b-md">All payments made!</p>
                   )}
                 </div>
               );
@@ -344,7 +348,7 @@ export function RecordIndividualPaymentDialog({
               />
             </div>
             
-            {selectedSchemeIds.length > 0 && !noSchemesSelectedOrNoInstallments && (
+            {selectedSchemeIds.length > 0 && !noSchemesSelectedOrNoMonths && (
                  <div className="text-right font-semibold mt-2 pr-1">
                     Total for All Selected: {formatCurrency(totalAmountForSelectedSchemes)}
                  </div>
@@ -362,7 +366,7 @@ export function RecordIndividualPaymentDialog({
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isLoading || noSchemesSelectedOrNoInstallments}>
+              <Button type="submit" disabled={isLoading || noSchemesSelectedOrNoMonths}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Confirm & Record Payment(s)
               </Button>
@@ -373,5 +377,4 @@ export function RecordIndividualPaymentDialog({
     </Dialog>
   );
 }
-
     
