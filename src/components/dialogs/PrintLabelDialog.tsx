@@ -19,7 +19,6 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
 
   const handlePrint = () => {
     if (printableContentRef.current) {
-      // Temporarily populate the hidden div for printing
       const nameEl = printableContentRef.current.querySelector<HTMLHeadingElement>("#print-customer-name");
       const idEl = printableContentRef.current.querySelector<HTMLParagraphElement>("#print-scheme-id");
       const startDateEl = printableContentRef.current.querySelector<HTMLParagraphElement>("#print-start-date");
@@ -45,13 +44,13 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
             Print Label for Scheme {scheme.id.toUpperCase()}
           </DialogTitle>
           <DialogDescription>
-            Preview the label information below. Click "Print This Label" to open your browser's print dialog.
-            Ensure your Brother QL-810W printer is selected and paper size is correctly set (e.g., 62mm x 29mm).
+            Preview the label information below. When you click "Print This Label", your browser's print dialog will open.
+            <strong className="block mt-1">In the browser's print dialog: ensure your Brother QL-810W printer is selected as the "Destination" and that the paper size is correctly set (e.g., 62mm x 29mm).</strong>
           </DialogDescription>
         </DialogHeader>
         
         <div className="my-4">
-          <p className="text-sm font-semibold mb-2">Label Preview:</p>
+          <p className="text-sm font-semibold mb-2">Label Preview (approx. 62mm x 29mm):</p>
           <div className="border p-4 w-[235px] h-[110px] bg-white text-black font-sans rounded-md shadow-lg overflow-hidden flex flex-col justify-center items-start box-content" style={{ width: '62mm', height: '29mm', boxSizing: 'content-box' }}>
             <h3 className="text-sm font-bold mb-0.5 truncate" style={{ fontSize: '10pt', margin: '0 0 2px 0' }}>{scheme.customerName}</h3>
             <div className="space-y-0.5 text-xs" style={{ fontSize: '8pt' }}>
