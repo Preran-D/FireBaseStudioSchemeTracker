@@ -11,13 +11,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Loader2, AlertTriangle, ListChecks, ExternalLink } from 'lucide-react'; // Added ExternalLink
+import { CalendarIcon, Loader2, AlertTriangle, ListChecks, ExternalLink } from 'lucide-react'; 
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
-import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme'; // Added GroupDetail
-import { formatISO, parseISO } from 'date-fns';
+import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme'; 
+import { formatISO, parseISO, format } from 'date-fns'; // Added format from date-fns
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input'; // For group search if needed later
+import { Input } from '@/components/ui/input'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
