@@ -132,3 +132,47 @@ body {
     border-width: 0;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden !important; /* Important to override other visibility settings */
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important; /* Ensure background is white for printing */
+    color: black !important; /* Ensure text is black */
+  }
+
+  #printableLabelArea, #printableLabelArea * {
+    visibility: visible !important;
+    font-family: Arial, sans-serif !important; /* Simple font for labels */
+  }
+
+  #printableLabelArea {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 62mm !important;
+    height: 29mm !important; /* Common Brother label size DK-11209 / DK-1209 */
+    overflow: hidden !important;
+    padding: 2mm !important; /* Small padding inside the label */
+    box-sizing: border-box !important;
+    border: 1px dashed #ccc !important; /* Optional: for visual aid in preview, might print */
+    background-color: white !important; /* Ensure the label area itself is white */
+    page-break-after: always !important; /* Ensure only one label per page */
+  }
+  
+  /* Hide the dialog and its overlay during print */
+  div[role="dialog"] {
+    display: none !important;
+  }
+  div[data-radix-dialog-overlay] {
+    display: none !important;
+  }
+
+  @page {
+    size: 62mm 29mm !important; /* Attempt to set page size */
+    margin: 0 !important;
+  }
+}
