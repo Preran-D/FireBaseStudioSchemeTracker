@@ -620,4 +620,30 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
   return { successCount, errorCount, messages };
 };
 
+export const updateMockCustomerDetails = (
+  customerNameToUpdate: string,
+  details: { customerPhone?: string; customerAddress?: string }
+): Scheme[] | undefined => {
+  let updatedSchemesForCustomer: Scheme[] = [];
+  let customerFound = false;
+
+  MOCK_SCHEMES.forEach((scheme, index) => {
+    if (scheme.customerName === customerNameToUpdate) {
+      customerFound = true;
+      MOCK_SCHEMES[index].customerPhone = details.customerPhone !== undefined ? details.customerPhone : scheme.customerPhone;
+      MOCK_SCHEMES[index].customerAddress = details.customerAddress !== undefined ? details.customerAddress : scheme.customerAddress;
+      // No need to getMockSchemeById here as we only change non-calculated fields.
+      // The page displaying this will re-fetch if necessary.
+    }
+  });
+
+  if (customerFound) {
+    // After updating, filter to get all schemes for this customer to return
+    // This ensures we return copies with any recalculations if needed elsewhere, though not strictly for this function
+    updatedSchemesForCustomer = getMockSchemes().filter(s => s.customerName === customerNameToUpdate);
+    return updatedSchemesForCustomer;
+  }
+  return undefined; // Customer not found
+};
+
 

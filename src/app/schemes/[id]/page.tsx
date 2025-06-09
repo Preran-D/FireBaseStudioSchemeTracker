@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter } from 'lucide-react';
+import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
+import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
@@ -28,9 +28,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
+import { EditCustomerDetailsDialog } from '@/components/dialogs/EditCustomerDetailsDialog';
 import { Badge } from '@/components/ui/badge';
 
-const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
+const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI', 'System Closure'];
 
 interface SelectedPaymentContext extends Payment {
   schemeIdToUpdate: string;
@@ -38,9 +39,9 @@ interface SelectedPaymentContext extends Payment {
 
 export default function SchemeDetailsPage() {
   const router = useRouter();
-  const params = useParams();
+  const urlParams = useParams();
   const { toast } = useToast();
-  const schemeIdFromUrl = params.id as string;
+  const schemeIdFromUrl = urlParams.id as string;
 
   const [scheme, setScheme] = useState<Scheme | null>(null);
   const [allSchemesForThisCustomer, setAllSchemesForThisCustomer] = useState<Scheme[]>([]);
@@ -61,6 +62,9 @@ export default function SchemeDetailsPage() {
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   
   const [activeAccordionItem, setActiveAccordionItem] = useState<string | undefined>(schemeIdFromUrl);
+
+  const [isEditCustomerDetailsDialogOpen, setIsEditCustomerDetailsDialogOpen] = useState(false);
+  const [isUpdatingCustomerDetails, setIsUpdatingCustomerDetails] = useState(false);
 
 
   const loadSchemeData = useCallback(() => {
@@ -179,6 +183,19 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(false);
   };
   
+  const handleEditCustomerDetailsSubmit = (customerName: string, details: { customerPhone?: string; customerAddress?: string }) => {
+    setIsUpdatingCustomerDetails(true);
+    const updatedSchemes = updateMockCustomerDetails(customerName, details);
+    if (updatedSchemes) {
+      toast({ title: 'Customer Details Updated', description: `Phone and address for ${customerName} have been updated across all their schemes.` });
+      loadSchemeData(); // Reload all data to reflect changes everywhere
+    } else {
+      toast({ title: 'Error', description: 'Failed to update customer details.', variant: 'destructive' });
+    }
+    setIsEditCustomerDetailsDialogOpen(false);
+    setIsUpdatingCustomerDetails(false);
+  };
+
   const customerSummaryStats = useMemo(() => {
     if (!allSchemesForThisCustomer.length) {
       return {
@@ -288,6 +305,14 @@ export default function SchemeDetailsPage() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-4 sm:mt-0 flex-wrap">
+            <Button
+              onClick={() => setIsEditCustomerDetailsDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails}
+            >
+              <Pencil className="mr-2 h-4 w-4" /> Edit Details
+            </Button>
              <Button 
                 onClick={handleAddNewSchemeForCustomer}
                 variant="outline" 
@@ -299,7 +324,7 @@ export default function SchemeDetailsPage() {
               onClick={() => setIsAssignGroupDialogOpen(true)} 
               variant="outline"
               size="sm"
-              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup}
+              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails}
             >
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
@@ -641,6 +666,18 @@ export default function SchemeDetailsPage() {
           isLoading={isUpdatingGroup}
         />
       )}
+      {scheme && isEditCustomerDetailsDialogOpen && (
+        <EditCustomerDetailsDialog
+          isOpen={isEditCustomerDetailsDialogOpen}
+          onClose={() => setIsEditCustomerDetailsDialogOpen(false)}
+          customerName={scheme.customerName}
+          currentPhone={scheme.customerPhone}
+          currentAddress={scheme.customerAddress}
+          onSubmit={handleEditCustomerDetailsSubmit}
+          isLoading={isUpdatingCustomerDetails}
+        />
+      )}
     </div>
   );
 }
+
