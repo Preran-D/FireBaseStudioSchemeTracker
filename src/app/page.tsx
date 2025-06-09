@@ -430,7 +430,7 @@ export default function DashboardPage() {
                     return (
                         <div
                           key={scheme.id}
-                          className="max-w-sm w-full bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col min-h-[300px]"
+                          className="max-w-sm w-full bg-card p-4 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col min-h-[250px]"
                         >
                           
                           <div>
