@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, ChevronDown } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, ChevronDown, UserPlus, ListFilter } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { getMockSchemes, updateMockSchemePayment, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data';
@@ -19,6 +19,9 @@ import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymen
 import { RecordIndividualPaymentDialog, type IndividualPaymentDetails } from '@/components/dialogs/RecordIndividualPaymentDialog';
 import { useToast } from '@/hooks/use-toast';
 
+// Define a constant empty array for stable reference
+const EMPTY_GROUP_DETAIL_ARRAY: GroupDetail[] = [];
+
 export default function DashboardPage() {
   const { toast } = useToast();
   const [schemes, setSchemes] = useState<Scheme[]>([]);
@@ -27,7 +30,7 @@ export default function DashboardPage() {
   
   const [isIndividualPayDialogOpen, setIsIndividualPayDialogOpen] = useState(false);
   const [isBatchPayDialogOpen, setIsBatchPayDialogOpen] = useState(false);
-  const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({}); // For loading states in dialogs
+  const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({});
 
 
   const loadSchemesData = useCallback(() => {
@@ -97,7 +100,6 @@ export default function DashboardPage() {
     setIsHistoryPanelOpen(true);
   };
 
-  // --- "Record Payment" section logic moved to dialogs ---
   const recordableIndividualSchemesForDialog = useMemo((): Scheme[] => {
     return schemes.filter(s => {
         if (s.status === 'Active' || s.status === 'Overdue') {
@@ -110,13 +112,13 @@ export default function DashboardPage() {
                   break;
                 }
               }
-              if (allPreviousPaid) return true; // Scheme is recordable
+              if (allPreviousPaid) return true;
             }
           }
         }
         return false;
       })
-      .sort((a,b) => { // Sort by next due date primarily, then customer name
+      .sort((a,b) => {
         const nextDueA = a.payments.find(p => getPaymentStatus(p, a.startDate) !== 'Paid');
         const nextDueB = b.payments.find(p => getPaymentStatus(p, b.startDate) !== 'Paid');
         if (nextDueA && nextDueB) {
@@ -175,7 +177,6 @@ export default function DashboardPage() {
     let totalAmountRecorded = 0;
     let errors = 0;
 
-    // Find the index of the first payment that is not 'Paid' and where all previous are 'Paid'
     let firstPaymentToRecordIndex = -1;
     for (let i = 0; i < schemeToUpdate.payments.length; i++) {
         if (getPaymentStatus(schemeToUpdate.payments[i], schemeToUpdate.startDate) !== 'Paid') {
@@ -203,20 +204,17 @@ export default function DashboardPage() {
       const paymentIndexToRecord = firstPaymentToRecordIndex + i;
       if (paymentIndexToRecord < schemeToUpdate.payments.length) {
         const paymentToRecord = schemeToUpdate.payments[paymentIndexToRecord];
-        // Double check status again here, though theoretically covered by firstPaymentToRecordIndex logic
         if (getPaymentStatus(paymentToRecord, schemeToUpdate.startDate) !== 'Paid') {
           const updatedScheme = updateMockSchemePayment(schemeId, paymentToRecord.id, {
-            paymentDate: paymentDate, // ISO String from dialog
+            paymentDate: paymentDate,
             amountPaid: paymentToRecord.amountExpected,
             modeOfPayment: modeOfPayment,
           });
           if (updatedScheme) { successfulRecords++; totalAmountRecorded += paymentToRecord.amountExpected; } else { errors++; }
         } else {
-          // This payment was already paid or became paid during this loop (should not happen if logic is correct)
-          // Consider it an error or skip
           errors++;
         }
-      } else { errors++; break; } // Trying to record more months than available
+      } else { errors++; break; }
     }
 
     if (successfulRecords > 0) {
@@ -234,27 +232,16 @@ export default function DashboardPage() {
     setIsIndividualPayDialogOpen(false);
   };
 
-  const handleBatchPaySubmit = (details: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord: string[] }) => {
-    // Assuming groupName might not be directly available here, but mock-data function uses it.
-    // The `BatchRecordPaymentDialog` might need to pass groupName if we want to show it in toast.
-    // For now, we process based on scheme IDs.
-
-    // We need to find the group name for the toast message, or adjust the toast
-    // For simplicity, let's assume the mock function can handle it or we omit group from toast.
-    // OR, we can pass the group that was selected to open the dialog in the first place.
-    
-    // This handler is directly called by BatchRecordPaymentDialog which has group context.
-    // Let's assume the dialog might pass the groupName if needed for the toast.
-    // For now, the core logic:
-    const result = recordNextDuePaymentsForCustomerGroup("N/A_GROUP_FOR_TOAST", details); // Pass a placeholder or modify mock function
+  const handleBatchPaySubmit = (details: { paymentDate: string; modeOfPayment: PaymentMode[]; schemeIdsToRecord: string[], groupName?: string }) => {
+    const result = recordNextDuePaymentsForCustomerGroup(details.groupName || "N/A_GROUP_FOR_TOAST", details);
     
     toast({
       title: "Batch Payment Processed",
-      description: `Recorded ${result.paymentsRecordedCount} payment(s) totaling ${formatCurrency(result.totalRecordedAmount)}.`,
+      description: `Recorded ${result.paymentsRecordedCount} payment(s) totaling ${formatCurrency(result.totalRecordedAmount)} for group "${details.groupName}".`,
     });
     
     loadSchemesData();
-    setIsBatchPayDialogOpen(false); // Ensure this dialog also closes
+    setIsBatchPayDialogOpen(false);
   };
 
 
@@ -266,22 +253,22 @@ export default function DashboardPage() {
         <div className="flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="lg" variant="default"> {/* Changed to default variant */}
+              <Button size="lg" variant="default">
                 <ListChecksIcon className="mr-2 h-5 w-5" /> Add Payment <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsIndividualPayDialogOpen(true)}>
-                Record Individual Payment
+              <DropdownMenuItem onClick={() => setIsIndividualPayDialogOpen(true)} disabled={recordableIndividualSchemesForDialog.length === 0}>
+                 <UserPlus className="mr-2 h-4 w-4" /> Record Individual Payment
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsBatchPayDialogOpen(true)} disabled={groupsForBatchPayDialog.length === 0}>
-                Record Batch (Group) Payment
+                <Users className="mr-2 h-4 w-4" /> Record Batch (Group) Payment
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Link href="/schemes/new">
             <Button size="lg" variant="outline">
-              <Users className="mr-2 h-5 w-5" /> Add New Scheme
+              <ListFilter className="mr-2 h-5 w-5" /> Add New Scheme
             </Button>
           </Link>
         </div>
@@ -324,8 +311,6 @@ export default function DashboardPage() {
           <CardContent><div className="text-3xl font-bold">{summaryStats.completedSchemesCount}</div></CardContent>
         </Card>
       </div>
-
-      {/* Removed the inline Record Payment Card */}
 
       <SchemeHistoryPanel isOpen={isHistoryPanelOpen} onClose={() => setIsHistoryPanelOpen(false)} scheme={schemeForHistory} />
 
@@ -407,32 +392,19 @@ export default function DashboardPage() {
         onClose={() => setIsIndividualPayDialogOpen(false)}
         allRecordableSchemes={recordableIndividualSchemesForDialog}
         onSubmit={handleIndividualPaymentSubmit}
-        isLoading={Object.values(processingStates).some(s => s)} // Simplified loading state for dialog
+        isLoading={Object.values(processingStates).some(s => s)}
       />
     )}
 
-    {isBatchPayDialogOpen && (
-        // The BatchRecordPaymentDialog will need a way to get the relevant group to operate on,
-        // or it needs to be opened with a specific group's context.
-        // For now, assuming it might take all groups and allow selection, or `page.tsx` needs to pass a specific group.
-        // Let's assume it internally allows selecting a group from groupsForBatchPayDialog or this needs refinement.
-        // For this iteration, we'll just pass all schemes and let it filter.
-        // A better approach for BatchRecordPaymentDialog would be to pass the group object directly when opening if selected from a list of groups.
-        // Since the trigger is generic "Record Batch (Group) Payment", it needs a way to select the group inside the dialog.
-        // The current BatchRecordPaymentDialog is designed to work on a specific group.
-        // We'll simplify: if groupsForBatchPayDialog has only one group, pass it. Otherwise, it needs internal selection.
-        // For now, we'll pass all schemes and let it handle group selection if it does, or this part of the trigger flow needs rework.
-        // The `BatchRecordPaymentDialog` seems to expect a `groupDisplayName` and `schemesInGroup`.
-        // This means the trigger "Record Batch (Group) Payment" should ideally first let user choose a group if multiple exist.
-        // For now, if only one group is eligible, we can auto-select it. If more, we might need an intermediate step or the dialog handles it.
-        // Let's pass the first eligible group for now if it exists. This part of UX might need refinement.
+    {isBatchPayDialogOpen && groupsForBatchPayDialog.length > 0 && (
         <BatchRecordPaymentDialog
-            groupDisplayName={groupsForBatchPayDialog.length > 0 ? groupsForBatchPayDialog[0].groupName : "Select Group"}
-            schemesInGroup={groupsForBatchPayDialog.length > 0 ? groupsForBatchPayDialog[0].schemes : []} // This needs proper group selection
+            groupDisplayName={groupsForBatchPayDialog.length === 1 ? groupsForBatchPayDialog[0].groupName : undefined}
+            schemesInGroup={groupsForBatchPayDialog.length === 1 ? groupsForBatchPayDialog[0].schemes : undefined}
+            allEligibleGroups={groupsForBatchPayDialog.length > 1 ? groupsForBatchPayDialog : EMPTY_GROUP_DETAIL_ARRAY}
             isOpen={isBatchPayDialogOpen}
             onClose={() => setIsBatchPayDialogOpen(false)}
-            onSubmit={handleBatchPaySubmit} // This submit handler expects schemeIdsToRecord, which BatchRecordPaymentDialog provides
-            isLoading={Object.values(processingStates).some(s => s)} // Simplified
+            onSubmit={handleBatchPaySubmit}
+            isLoading={Object.values(processingStates).some(s => s)}
         />
     )}
     </>
