@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2 } from 'lucide-react'; 
+import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2, Lightbulb, CheckCircle, AlertCircleIcon } from 'lucide-react'; 
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup } from '@/lib/mock-data'; 
@@ -13,8 +13,11 @@ import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, get
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { useToast } from '@/hooks/use-toast';
-import { isPast, parseISO, differenceInDays, formatISO } from 'date-fns';
+import { isPast, parseISO, differenceInDays, formatISO, subDays } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
+import { getDashboardRecommendations, type DashboardInsightsInput, type DashboardRecommendationsOutput } from '@/ai/flows/dashboard-recommendations-flow';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 interface GroupWithRecordablePayments {
   groupName: string;
@@ -27,6 +30,10 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [isBatchRecording, setIsBatchRecording] = useState(false);
   const [selectedGroupForBatch, setSelectedGroupForBatch] = useState<GroupWithRecordablePayments | null>(null);
+
+  const [aiRecommendations, setAiRecommendations] = useState<DashboardRecommendationsOutput | null>(null);
+  const [isFetchingRecommendations, setIsFetchingRecommendations] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
 
   const loadSchemesData = useCallback(() => {
@@ -42,48 +49,59 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    const loadedSchemesInitial = loadSchemesData();
-
-    const allPaymentsWithContext = loadedSchemesInitial.flatMap(scheme =>
-      scheme.payments.map(payment => ({
-        ...payment,
-        schemeStartDate: scheme.startDate,
-        customerName: scheme.customerName, 
-      }))
-    );
-
-    const upcomingDueSoon = allPaymentsWithContext
-      .filter(p => 
-        getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && 
-        differenceInDays(parseISO(p.dueDate), new Date()) <= 7 && 
-        differenceInDays(parseISO(p.dueDate), new Date()) >= 0
-      )
-      .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
+    const loadedSchemes = loadSchemesData();
     
-    if (upcomingDueSoon.length > 0) {
-      // Toast notifications can be intrusive; consider a less aggressive notification system if desired.
-      // For now, keeping as is, but this could be a future enhancement point.
-      // toast({
-      //   title: "Upcoming Payment Reminder",
-      //   description: `Payment for ${upcomingDueSoon[0].customerName} is due on ${formatDate(upcomingDueSoon[0].dueDate)}. Amount: ${formatCurrency(upcomingDueSoon[0].amountExpected)}`,
-      //   variant: "default",
-      // });
-    }
-    
-    const allOverdueGlobal = allPaymentsWithContext
-      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
-      .sort((a,b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime());
+    // AI Recommendations Fetching Logic
+    if (loadedSchemes.length > 0) {
+      setIsFetchingRecommendations(true);
+      setRecommendationError(null);
 
-    if (allOverdueGlobal.length > 0) {
-      // Similar to above, toast for overdue payments.
-      // toast({
-      //   title: "Overdue Payment Alert",
-      //   description: `Payment for ${allOverdueGlobal[0].customerName} was due on ${formatDate(allOverdueGlobal[0].dueDate)}. Amount: ${formatCurrency(allOverdueGlobal[0].amountExpected)}`,
-      //   variant: "destructive",
-      // });
+      const totalActive = loadedSchemes.filter(s => s.status === 'Active' || s.status === 'Overdue').length;
+      const totalOverdueSchemes = loadedSchemes.filter(s => s.status === 'Overdue').length;
+      const totalOverdueAmount = loadedSchemes
+        .filter(s => s.status === 'Overdue')
+        .reduce((sum, s) => sum + (s.totalRemaining || 0), 0);
+      
+      const upcomingIn30Days = loadedSchemes
+        .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
+        .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 30 && !isPast(parseISO(p.dueDate)))
+        .length;
+
+      const newOverdueLast7Days = loadedSchemes
+        .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
+        .filter(p => {
+            const paymentIsOverdue = getPaymentStatus(p, p.schemeStartDate) === 'Overdue';
+            if (!paymentIsOverdue) return false;
+            // Check if due date was within the last 7 days
+            return differenceInDays(new Date(), parseISO(p.dueDate)) <= 7 && differenceInDays(new Date(), parseISO(p.dueDate)) >= 0;
+        }).length;
+      
+      const totalExpectedAll = loadedSchemes.reduce((sum,s) => sum + (s.payments.reduce((ps, p) => ps + p.amountExpected, 0)), 0);
+      const totalCollectedAll = loadedSchemes.reduce((sum,s) => sum + (s.totalCollected || 0), 0);
+      const averagePaymentCollectedPercentage = totalExpectedAll > 0 ? Math.round((totalCollectedAll / totalExpectedAll) * 100) : 0;
+
+
+      const insightsInput: DashboardInsightsInput = {
+        totalActiveSchemes: totalActive,
+        totalOverdueSchemes: totalOverdueSchemes,
+        totalOverdueAmount: totalOverdueAmount,
+        numberOfUpcomingPaymentsNext30Days: upcomingIn30Days,
+        numberOfNewOverduePaymentsLast7Days: newOverdueLast7Days,
+        averagePaymentCollectedPercentage: averagePaymentCollectedPercentage,
+        // commonPaymentDelays: "Some payments are 1-2 days late, especially for new customers." // Example, could be derived
+      };
+
+      getDashboardRecommendations(insightsInput)
+        .then(setAiRecommendations)
+        .catch(err => {
+          console.error("Error fetching AI recommendations:", err);
+          setRecommendationError("Could not load AI recommendations at this time.");
+        })
+        .finally(() => setIsFetchingRecommendations(false));
     }
 
-  }, [toast, loadSchemesData]);
+
+  }, [loadSchemesData]);
 
   const summaryStats = useMemo(() => {
     const activeSchemes = schemes.filter(s => s.status === 'Active' || s.status === 'Overdue');
@@ -99,7 +117,7 @@ export default function DashboardPage() {
       totalSchemes: schemes.length,
       activeSchemesCount: activeSchemes.length,
       totalCollected,
-      totalPending: totalExpectedFromActive - totalCollected,
+      totalPending: totalExpectedFromActive - totalCollected, // Only consider pending from active schemes
       totalOverdueAmount,
       completedSchemesCount: schemes.filter(s => s.status === 'Completed').length,
     };
@@ -111,8 +129,8 @@ export default function DashboardPage() {
   ], [summaryStats.totalCollected, summaryStats.totalPending]);
 
   const chartConfig = {
-    collected: { label: 'Collected', color: 'hsl(var(--chart-1))' }, // Use chart-1 for collected
-    pending: { label: 'Pending', color: 'hsl(var(--chart-2))' }, // Use chart-2 for pending
+    collected: { label: 'Collected', color: 'hsl(var(--chart-1))' }, 
+    pending: { label: 'Pending', color: 'hsl(var(--chart-2))' }, 
   };
   
   const upcomingPaymentsList = useMemo(() => {
@@ -187,21 +205,21 @@ export default function DashboardPage() {
 
 
   return (
-    <div className="flex flex-col gap-8"> {/* Increased gap for more spacing */}
+    <div className="flex flex-col gap-8"> 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
         <Link href="/schemes/new">
-          <Button size="lg"> {/* Slightly larger button */}
+          <Button size="lg"> 
             <Users className="mr-2 h-5 w-5" /> Add New Scheme
           </Button>
         </Link>
       </div>
 
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"> {/* Adjusted gap and cols */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"> 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Schemes</CardTitle>
-            <Users className="h-5 w-5 text-primary" /> {/* Use primary color for icon */}
+            <Users className="h-5 w-5 text-primary" /> 
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{summaryStats.totalSchemes}</div>
@@ -210,7 +228,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
-            <DollarSign className="h-5 w-5 text-green-400" /> {/* Adjusted color */}
+            <DollarSign className="h-5 w-5 text-green-400" /> 
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{formatCurrency(summaryStats.totalCollected)}</div>
@@ -219,7 +237,7 @@ export default function DashboardPage() {
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Pending (Active)</CardTitle>
-            <TrendingUp className="h-5 w-5 text-orange-400" /> {/* Adjusted color */}
+            <TrendingUp className="h-5 w-5 text-orange-400" /> 
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{formatCurrency(summaryStats.totalPending)}</div>
@@ -237,13 +255,89 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed Schemes</CardTitle>
-            <CalendarCheck className="h-5 w-5 text-blue-400" /> {/* Adjusted color */}
+            <CalendarCheck className="h-5 w-5 text-blue-400" /> 
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{summaryStats.completedSchemesCount}</div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <Lightbulb className="h-6 w-6 text-primary" /> 
+            AI-Powered Recommendations
+          </CardTitle>
+          <CardDescription>Actionable insights to improve your scheme collections.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isFetchingRecommendations && (
+            <div className="space-y-3">
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-5/6" />
+              <Skeleton className="h-8 w-1/2 mt-2" />
+              <Skeleton className="h-6 w-full" />
+            </div>
+          )}
+          {recommendationError && !isFetchingRecommendations && (
+            <div className="flex flex-col items-center justify-center py-6 text-destructive">
+              <AlertCircleIcon className="h-10 w-10 mb-2" />
+              <p className="font-semibold">Error Loading Recommendations</p>
+              <p className="text-sm">{recommendationError}</p>
+            </div>
+          )}
+          {!isFetchingRecommendations && !recommendationError && aiRecommendations && (
+            <div className="space-y-6">
+              {aiRecommendations.positiveObservations && aiRecommendations.positiveObservations.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-green-600 mb-2 flex items-center gap-2"><CheckCircle className="h-5 w-5"/>Positive Observations</h3>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {aiRecommendations.positiveObservations.map((obs, index) => <li key={`pos-${index}`}>{obs}</li>)}
+                  </ul>
+                </div>
+              )}
+              {aiRecommendations.areasForAttention && aiRecommendations.areasForAttention.length > 0 && (
+                 <div>
+                  <h3 className="text-lg font-semibold text-orange-600 mb-2 flex items-center gap-2"><AlertTriangle className="h-5 w-5"/>Areas for Attention</h3>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {aiRecommendations.areasForAttention.map((area, index) => <li key={`att-${index}`}>{area}</li>)}
+                  </ul>
+                </div>
+              )}
+              {aiRecommendations.recommendations && aiRecommendations.recommendations.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-2">Actionable Recommendations</h3>
+                  <div className="space-y-4">
+                    {aiRecommendations.recommendations.map((rec, index) => (
+                      <div key={`rec-${index}`} className="p-4 border rounded-lg shadow-sm bg-card">
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="font-semibold text-md">{rec.title}</h4>
+                          <Badge 
+                            variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'secondary' : 'outline'}
+                            className={
+                              rec.priority === 'High' ? 'bg-red-100 text-red-700 border-red-300' :
+                              rec.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                              'bg-blue-100 text-blue-700 border-blue-300'
+                            }
+                          >
+                            {rec.priority} Priority
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{rec.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+               {!aiRecommendations.recommendations?.length && !aiRecommendations.positiveObservations?.length && !aiRecommendations.areasForAttention?.length && (
+                <p className="text-muted-foreground text-center py-4">No specific recommendations or observations at this time. Keep up the good work!</p>
+               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
        <Card>
         <CardHeader>
@@ -293,13 +387,13 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="grid gap-8 grid-cols-1 md:grid-cols-2"> {/* Increased gap */}
+      <div className="grid gap-8 grid-cols-1 md:grid-cols-2"> 
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Payment Progress (Active Schemes)</CardTitle>
             <CardDescription>Collected vs. Pending amounts for all active schemes.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[350px]"> {/* Increased height */}
+          <CardContent className="h-[350px]"> 
             {chartData.some(d => d.value > 0) ? (
               <ChartContainer config={chartConfig} className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -329,8 +423,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         
-        {/* AI Recommendations Card Removed */}
-
         <Card>
           <CardHeader>
             <CardTitle className="font-headline">Upcoming Payments (Next 30 Days)</CardTitle>
@@ -362,7 +454,7 @@ export default function DashboardPage() {
         </Card>
       </div>
       
-      <Card className="md:col-span-2"> {/* Allow this to span if only two items in the last row */}
+      <Card className="md:col-span-2"> 
           <CardHeader>
             <CardTitle className="font-headline">Overdue Payments</CardTitle>
           </CardHeader>
@@ -394,3 +486,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
