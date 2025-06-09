@@ -135,41 +135,50 @@ body {
 
 /* Screen styles for printableLabelArea: position it off-screen */
 #printableLabelArea {
-  position: absolute;
-  left: -9999px;
-  top: -9999px;
-  width: 62mm; /* Define width/height for potential layout calculations if needed by browser */
+  position: absolute !important; /* Important to override potential other positionings */
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 62mm; 
   height: 29mm;
-  background-color: white; /* Ensure it has a background for print */
-  color: black; /* Ensure text color for print */
-  font-family: Arial, sans-serif !important; /* Basic font for print */
-  padding: 2mm !important; /* Internal padding for the label */
+  background-color: white; 
+  color: black; 
+  font-family: Arial, sans-serif !important; 
+  padding: 2mm !important; 
   box-sizing: border-box !important;
-  overflow: hidden; /* Ensure content doesn't spill */
+  overflow: hidden; 
+  z-index: -1; /* Ensure it's behind everything on screen */
 }
 
 
 @media print {
-  body, html { /* Reset body and html for print */
+  /* Reset and force label size on html and body */
+  html, body {
+    width: 62mm !important;
+    height: 29mm !important; /* Or use 'auto' if @page size is more reliable */
+    overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
-    color: black !important;
-    width: auto !important; /* Let page size dictate width */
-    height: auto !important; /* Let page size dictate height */
+    color: black !important; /* Ensures text is black on white */
+    -webkit-print-color-adjust: exact !important; /* For Chrome/Safari */
+    print-color-adjust: exact !important; /* Standard */
   }
 
-  body * { /* Hide all descendants of body initially */
-    visibility: hidden !important;
-    box-shadow: none !important;
-    border: none !important;
-    /* Avoid broad margin/padding resets here if they interfere with #printableLabelArea's own content */
+  /* Hide ALL elements by default */
+  body * {
+    display: none !important;
+    visibility: hidden !important; /* Belt and suspenders */
   }
 
-  #printableLabelArea, #printableLabelArea * { /* Make printable area and its children visible */
+  /* Make ONLY #printableLabelArea and its direct children visible and flow normally */
+  /* Using #printableLabelArea *, #printableLabelArea is more specific than body * */
+  #printableLabelArea, 
+  #printableLabelArea * {
+    display: block !important; /* Or appropriate display type for children if needed */
     visibility: visible !important;
-    font-family: Arial, sans-serif !important; /* Ensure consistent font for print */
-    /* color and background should be inherited or explicitly set if needed */
+    font-family: Arial, sans-serif !important;
+    color: black !important;
+    background-color: white !important; /* Ensure children also have white background */
   }
 
   #printableLabelArea {
@@ -177,36 +186,35 @@ body {
     left: 0 !important;
     top: 0 !important;
     width: 62mm !important;
-    height: 29mm !important; 
-    overflow: hidden !important;
+    height: 29mm !important;
+    margin: 0 !important;
     padding: 2mm !important; 
     box-sizing: border-box !important;
-    background-color: white !important; 
-    color: black !important; /* Explicitly set text color for the label content */
-    page-break-after: always !important; /* Ensure only one label per page */
-    /* Remove any borders or shadows if they were part of screen style */
+    overflow: hidden !important; /* Crucial to prevent its content from causing overflow */
+    page-break-after: always !important; /* Ensure it's the only thing on its page */
     border: none !important;
     box-shadow: none !important;
   }
   
-  /* Hide specific non-printable UI elements using visibility */
-  /* Using display:none on parents of #printableLabelArea will hide it too. */
-  div[role="dialog"],
-  div[data-radix-dialog-overlay],
-  header, 
-  aside {
-    visibility: hidden !important; /* Changed from display: none */
-    /* If they have explicit dimensions, might need to set to 0 or position off-screen */
-    position: absolute !important;
-    left: -9999px !important;
-    width: 0 !important;
-    height: 0 !important;
-    overflow: hidden !important;
+  /* Explicitly style elements within the printable area if needed */
+  #printableLabelArea h3, #printableLabelArea p {
+    margin: 1mm 0 !important; /* Adjust margins for label content */
+    padding: 0 !important;
+    line-height: 1.2 !important;
+    color: black !important; /* Ensure text is black */
+  }
+  #printableLabelArea h3 {
+    font-size: 10pt !important;
+    font-weight: bold !important;
+  }
+  #printableLabelArea p {
+    font-size: 8pt !important;
   }
 
+
+  /* Define the page size */
   @page {
-    size: 62mm 29mm !important; 
-    margin: 0 !important;
+    size: 62mm 29mm !important;
+    margin: 0 !important; /* No margin for the page itself */
   }
 }
-
