@@ -2,7 +2,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import type { Scheme } from '@/types/scheme';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Printer, Info } from 'lucide-react';
@@ -18,18 +18,49 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
   const printableContentRef = React.useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
-    if (printableContentRef.current) {
-      const nameEl = printableContentRef.current.querySelector<HTMLHeadingElement>("#print-customer-name");
-      const idEl = printableContentRef.current.querySelector<HTMLParagraphElement>("#print-scheme-id");
-      const startDateEl = printableContentRef.current.querySelector<HTMLParagraphElement>("#print-start-date");
-      const amountEl = printableContentRef.current.querySelector<HTMLParagraphElement>("#print-amount");
+    if (printableContentRef.current && scheme) {
+      // Clear previous content
+      printableContentRef.current.innerHTML = '';
 
-      if (nameEl) nameEl.textContent = scheme.customerName;
-      if (idEl) idEl.textContent = `ID: ${scheme.id.toUpperCase()}`;
-      if (startDateEl) startDateEl.textContent = `Starts: ${formatDate(scheme.startDate)}`;
-      if (amountEl) amountEl.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
+      // Create and append elements
+      const nameEl = document.createElement('h3');
+      nameEl.id = "print-customer-name"; // Keep ID if CSS targets it, otherwise can be removed
+      nameEl.style.fontSize = '10pt';
+      nameEl.style.fontWeight = 'bold';
+      nameEl.style.margin = '0 0 2px 0';
+      nameEl.style.whiteSpace = 'nowrap';
+      nameEl.style.overflow = 'hidden';
+      nameEl.style.textOverflow = 'ellipsis';
+      nameEl.textContent = scheme.customerName;
+      printableContentRef.current.appendChild(nameEl);
+
+      const idEl = document.createElement('p');
+      idEl.id = "print-scheme-id";
+      idEl.style.fontSize = '8pt';
+      idEl.style.margin = '1px 0';
+      idEl.textContent = `ID: ${scheme.id.toUpperCase()}`;
+      printableContentRef.current.appendChild(idEl);
+
+      const startDateEl = document.createElement('p');
+      startDateEl.id = "print-start-date";
+      startDateEl.style.fontSize = '8pt';
+      startDateEl.style.margin = '1px 0';
+      startDateEl.textContent = `Starts: ${formatDate(scheme.startDate)}`;
+      printableContentRef.current.appendChild(startDateEl);
       
+      const amountEl = document.createElement('p');
+      amountEl.id = "print-amount";
+      amountEl.style.fontSize = '8pt';
+      amountEl.style.margin = '1px 0';
+      amountEl.textContent = `Amount: ${formatCurrency(scheme.monthlyPaymentAmount)}`;
+      printableContentRef.current.appendChild(amountEl);
+      
+      console.log("PrintLabelDialog: Attempting to print. Printable area HTML:", printableContentRef.current.innerHTML);
       window.print();
+    } else {
+      console.error("PrintLabelDialog: printableContentRef.current is null or scheme data is missing.");
+      if (!printableContentRef.current) alert("Error: Printable area not found. Cannot print.");
+      if (!scheme) alert("Error: Scheme data not available. Cannot print.");
     }
   };
 
@@ -44,8 +75,8 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
             Print Label for Scheme {scheme.id.toUpperCase()}
           </DialogTitle>
           <DialogDescription>
-            Preview the label information below. When you click "Print This Label", your browser's print dialog will open.
-            <strong className="block mt-1">In the browser's print dialog: ensure your Brother QL-810W printer is selected as the "Destination" and that the paper size is correctly set (e.g., 62mm x 29mm).</strong>
+            Preview the label information below.
+            <strong className="block mt-1">Important: When your browser's print dialog opens, ensure your Brother QL-810W (or correct label printer) is selected as the "Destination". Also, verify the "Paper size" is correctly set to your label dimensions (e.g., 62mm x 29mm).</strong>
           </DialogDescription>
         </DialogHeader>
         
@@ -68,12 +99,9 @@ export function PrintLabelDialog({ isOpen, onClose, scheme }: PrintLabelDialogPr
             </span>
         </div>
 
-        {/* Hidden div for actual printing */}
-        <div id="printableLabelArea" ref={printableContentRef} className="hidden">
-          <h3 id="print-customer-name" style={{ fontSize: '10pt', fontWeight: 'bold', margin: '0 0 2px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}></h3>
-          <p id="print-scheme-id" style={{ fontSize: '8pt', margin: '1px 0' }}></p>
-          <p id="print-start-date" style={{ fontSize: '8pt', margin: '1px 0' }}></p>
-          <p id="print-amount" style={{ fontSize: '8pt', margin: '1px 0' }}></p>
+        {/* Div for actual printing - positioned off-screen by CSS by default */}
+        <div id="printableLabelArea" ref={printableContentRef}>
+          {/* Content will be dynamically inserted by handlePrint */}
         </div>
 
         <DialogFooter className="pt-4">

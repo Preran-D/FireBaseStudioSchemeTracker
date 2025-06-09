@@ -133,46 +133,63 @@ body {
   }
 }
 
+/* Screen styles for printableLabelArea: position it off-screen */
+#printableLabelArea {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 62mm; /* Define width/height for potential layout calculations if needed by browser */
+  height: 29mm;
+  background-color: white; /* Ensure it has a background for print */
+  color: black; /* Ensure text color for print */
+  font-family: Arial, sans-serif !important; /* Basic font for print */
+  padding: 2mm !important; /* Internal padding for the label */
+  box-sizing: border-box !important;
+  overflow: hidden; /* Ensure content doesn't spill */
+}
+
+
 @media print {
   body * {
-    visibility: hidden !important; /* Important to override other visibility settings */
+    visibility: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
-    background: white !important; /* Ensure background is white for printing */
-    color: black !important; /* Ensure text is black */
+    background: white !important; 
+    color: black !important;
   }
 
   #printableLabelArea, #printableLabelArea * {
     visibility: visible !important;
-    font-family: Arial, sans-serif !important; /* Simple font for labels */
+    font-family: Arial, sans-serif !important; /* Ensure consistent font for print */
   }
 
   #printableLabelArea {
-    position: absolute !important;
+    position: absolute !important; /* Changed from fixed for better print flow */
     left: 0 !important;
     top: 0 !important;
     width: 62mm !important;
-    height: 29mm !important; /* Common Brother label size DK-11209 / DK-1209 */
+    height: 29mm !important; 
     overflow: hidden !important;
-    padding: 2mm !important; /* Small padding inside the label */
+    padding: 2mm !important; 
     box-sizing: border-box !important;
-    border: 1px dashed #ccc !important; /* Optional: for visual aid in preview, might print */
-    background-color: white !important; /* Ensure the label area itself is white */
-    page-break-after: always !important; /* Ensure only one label per page */
+    border: none !important; /* No border for actual print, was 1px dashed #ccc for debugging */
+    background-color: white !important; 
+    page-break-after: always !important; /* Ensure only one label per page if multiple calls */
   }
   
   /* Hide the dialog and its overlay during print */
-  div[role="dialog"] {
+  div[role="dialog"],
+  div[data-radix-dialog-overlay],
+  header, /* Hide main app header */
+  aside /* Hide main app sidebar if any */ {
     display: none !important;
-  }
-  div[data-radix-dialog-overlay] {
-    display: none !important;
+    visibility: hidden !important;
   }
 
   @page {
-    size: 62mm 29mm !important; /* Attempt to set page size */
+    size: 62mm 29mm !important; 
     margin: 0 !important;
   }
 }
