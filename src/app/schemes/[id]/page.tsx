@@ -28,7 +28,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
-import { EditCustomerDetailsDialog } from '@/components/dialogs/EditCustomerDetailsDialog';
+import { EditCustomerDetailsDialog, type EditCustomerDetailsFormValues } from '@/components/dialogs/EditCustomerDetailsDialog';
 import { Badge } from '@/components/ui/badge';
 
 const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI', 'System Closure'];
@@ -66,12 +66,13 @@ export default function SchemeDetailsPage() {
   const [isEditCustomerDetailsDialogOpen, setIsEditCustomerDetailsDialogOpen] = useState(false);
   const [isUpdatingCustomerDetails, setIsUpdatingCustomerDetails] = useState(false);
 
-
-  const loadSchemeData = useCallback(() => {
+  const loadSchemeData = useCallback((currentCustomerName?: string) => {
     if (schemeIdFromUrl) {
       setIsLoading(true);
       const fetchedScheme = getMockSchemeById(schemeIdFromUrl);
       if (fetchedScheme) {
+        const customerNameToFilterBy = currentCustomerName || fetchedScheme.customerName;
+
         const totals = calculateSchemeTotals(fetchedScheme);
         fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
         const status = getSchemeStatus(fetchedScheme); 
@@ -79,7 +80,7 @@ export default function SchemeDetailsPage() {
         setActiveAccordionItem(fetchedScheme.id); 
 
         const allCustomerSchemes = getMockSchemes()
-          .filter(s => s.customerName === fetchedScheme.customerName)
+          .filter(s => s.customerName === customerNameToFilterBy)
           .map(s => {
             const sTotals = calculateSchemeTotals(s);
             s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
@@ -183,18 +184,36 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(false);
   };
   
-  const handleEditCustomerDetailsSubmit = (customerName: string, details: { customerPhone?: string; customerAddress?: string }) => {
+  const handleEditCustomerDetailsSubmit = (
+    originalName: string,
+    newDetails: EditCustomerDetailsFormValues
+  ) => {
     setIsUpdatingCustomerDetails(true);
-    const updatedSchemes = updateMockCustomerDetails(customerName, details);
-    if (updatedSchemes) {
-      toast({ title: 'Customer Details Updated', description: `Phone and address for ${customerName} have been updated across all their schemes.` });
-      loadSchemeData(); // Reload all data to reflect changes everywhere
+    const result = updateMockCustomerDetails(originalName, newDetails);
+
+    if (result.success) {
+      toast({
+        title: 'Customer Details Updated',
+        description: `Details for ${newDetails.customerName} have been updated.`,
+      });
+      // If name changed, we need to potentially redirect or ensure data reloads correctly
+      if (newDetails.customerName !== originalName && scheme && scheme.id === schemeIdFromUrl) {
+        // If current scheme's customer name changed, reload data for the new name
+        loadSchemeData(newDetails.customerName); 
+      } else {
+        loadSchemeData(scheme?.customerName); // Reload with current or original customer name
+      }
     } else {
-      toast({ title: 'Error', description: 'Failed to update customer details.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: result.message || 'Failed to update customer details.',
+        variant: 'destructive',
+      });
     }
     setIsEditCustomerDetailsDialogOpen(false);
     setIsUpdatingCustomerDetails(false);
   };
+
 
   const customerSummaryStats = useMemo(() => {
     if (!allSchemesForThisCustomer.length) {
@@ -670,7 +689,7 @@ export default function SchemeDetailsPage() {
         <EditCustomerDetailsDialog
           isOpen={isEditCustomerDetailsDialogOpen}
           onClose={() => setIsEditCustomerDetailsDialogOpen(false)}
-          customerName={scheme.customerName}
+          originalCustomerName={scheme.customerName}
           currentPhone={scheme.customerPhone}
           currentAddress={scheme.customerAddress}
           onSubmit={handleEditCustomerDetailsSubmit}
@@ -680,4 +699,3 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
-
