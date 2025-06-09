@@ -5,15 +5,15 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, CalendarCheck, Edit, Loader2, Users2, PackageCheck, ListChecks, UserCircle, Minus, Plus } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, Edit, Loader2, Users2, PackageCheck, ListChecks, Minus, Plus } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, recordNextDuePaymentsForCustomerGroup, updateMockSchemePayment } from '@/lib/mock-data';
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { useToast } from '@/hooks/use-toast';
-import { isPast, parseISO, differenceInDays, formatISO, subDays } from 'date-fns';
+import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog';
 import { Progress } from '@/components/ui/progress';
 import { QuickIndividualBatchDialog, type QuickIndividualBatchSubmitDetails } from '@/components/dialogs/QuickIndividualBatchDialog';
@@ -51,13 +51,12 @@ export default function DashboardPage() {
   const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-      const totals = calculateSchemeTotals(s); // Ensure totals are calculated
+      const totals = calculateSchemeTotals(s); 
       const status = getSchemeStatus(s);
       return { ...s, ...totals, status };
     });
     setSchemes(loadedSchemesInitial);
 
-    // Initialize monthsToPayForScheme for newly loaded schemes
     setMonthsToPayForScheme(prev => {
       const newMonthsToPay = { ...prev };
       loadedSchemesInitial.forEach(scheme => {
@@ -214,7 +213,8 @@ export default function DashboardPage() {
       const maxMonths = schemeDuration - (paymentsMade || 0);
       let newMonths = currentMonths + delta;
       if (newMonths < 1) newMonths = 1;
-      if (newMonths > maxMonths) newMonths = maxMonths;
+      if (newMonths > maxMonths) newMonths = maxMonths; // Ensure not exceeding total remaining
+      if (maxMonths <= 0) newMonths = 0; // If no months to pay, set to 0
       return { ...prev, [schemeId]: newMonths };
     });
   };
@@ -252,11 +252,10 @@ export default function DashboardPage() {
       const paymentIndexToRecord = firstPaymentIndex + i;
       if (paymentIndexToRecord < scheme.payments.length) {
         const paymentToRecord = scheme.payments[paymentIndexToRecord];
-        // Ensure we are not trying to re-pay an already paid installment
         if (getPaymentStatus(paymentToRecord, scheme.startDate) !== 'Paid') {
           const updatedScheme = updateMockSchemePayment(scheme.id, paymentToRecord.id, {
             paymentDate: details.paymentDate,
-            amountPaid: paymentToRecord.amountExpected, // Assuming full payment
+            amountPaid: paymentToRecord.amountExpected, 
             modeOfPayment: details.modeOfPayment,
           });
           if (updatedScheme) {
@@ -265,13 +264,8 @@ export default function DashboardPage() {
           } else {
             errors++;
           }
-        } else {
-          // This payment was already paid (e.g. if numMonthsToRecord was too high due to race condition)
-          // Or it's a payment that became paid through another means.
-          // We can choose to count it or skip. For simplicity, we'll assume it means one less to record.
         }
       } else {
-        // Trying to record beyond the scheme duration
         errors++;
         break; 
       }
@@ -291,8 +285,7 @@ export default function DashboardPage() {
     setIsProcessingQuickIndividualBatch(false);
     setIsQuickIndividualBatchDialogOpen(false);
     setPaymentContextForDialog(null);
-    loadSchemesData(); // Refresh all data
-    // Reset monthsToPayForScheme for this scheme back to 1 after processing
+    loadSchemesData(); 
     setMonthsToPayForScheme(prev => ({ ...prev, [scheme.id]: 1 }));
   };
 
@@ -368,57 +361,73 @@ export default function DashboardPage() {
           <CardContent>
             {recordableIndividualSchemes.length > 0 ? (
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {recordableIndividualSchemes.map(({ scheme, firstRecordablePayment }) => {
+                {recordableIndividualSchemes.map((schemeInfo) => {
+                  const { scheme, firstRecordablePayment } = schemeInfo;
                   const currentMonthsToPay = monthsToPayForScheme[scheme.id] || 1;
                   const paymentsMade = scheme.paymentsMadeCount || 0;
                   const maxMonthsToRecord = scheme.durationMonths - paymentsMade;
-                  const progressPercentage = (paymentsMade / scheme.durationMonths) * 100;
+                  const progressPercentage = maxMonthsToRecord > 0 ? (paymentsMade / scheme.durationMonths) * 100 : 100;
+                  const liveTotalAmount = currentMonthsToPay * scheme.monthlyPaymentAmount;
 
                   return (
-                    <div key={scheme.id} className="p-3 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-2">
-                      <div className="flex items-center gap-3">
-                        <Link href={`/schemes/${scheme.id}`}>
-                          <UserCircle className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer" />
+                    <div key={scheme.id} className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card space-y-3">
+                      <div className="flex justify-between items-center">
+                        <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline text-lg">
+                          {scheme.customerName}
                         </Link>
-                        <div>
-                          <Link href={`/schemes/${scheme.id}`} className="font-semibold text-accent hover:underline">
-                            {scheme.customerName}
-                          </Link>
-                          <p className="text-xs text-muted-foreground">Scheme ID: {scheme.id.toUpperCase()}</p>
-                        </div>
+                        <span className="font-semibold text-accent text-lg">
+                          {scheme.id.toUpperCase()}
+                        </span>
                       </div>
                       
-                      <Progress value={progressPercentage} className="h-2" />
-                      <p className="text-xs text-muted-foreground text-right">{paymentsMade} / {scheme.durationMonths} months paid</p>
-
-                      <p className="text-sm">
-                        Next: Month {firstRecordablePayment.monthNumber} (Due: {formatDate(firstRecordablePayment.dueDate)}) for {formatCurrency(firstRecordablePayment.amountExpected)}
-                      </p>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">Months to Record:</span>
-                        <Button
-                          variant="outline" size="icon" className="h-7 w-7"
-                          onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
-                          disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                        > <Minus className="h-4 w-4" /> </Button>
-                        <span className="w-6 text-center font-medium">{currentMonthsToPay}</span>
-                        <Button 
-                          variant="outline" size="icon" className="h-7 w-7"
-                          onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
-                          disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
-                        > <Plus className="h-4 w-4" /> </Button>
+                      <div className="flex items-center gap-3">
+                        <Progress value={progressPercentage} className="h-2 flex-grow" />
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{paymentsMade} / {scheme.durationMonths} months paid</span>
                       </div>
 
-                      <Button
-                        size="sm"
-                        onClick={() => handleOpenQuickIndividualBatchDialog({ scheme, firstRecordablePayment })}
-                        disabled={maxMonthsToRecord === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
-                        className="w-full sm:w-auto"
-                      >
-                        {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Edit className="mr-2 h-4 w-4" />}
-                        Record {currentMonthsToPay} Payment(s)
-                      </Button>
+                      <div className="text-sm text-muted-foreground">
+                         Monthly Payment: {formatCurrency(scheme.monthlyPaymentAmount)}
+                         {maxMonthsToRecord > 0 && ` (Next: ${formatCurrency(firstRecordablePayment.amountExpected)} due ${formatDate(firstRecordablePayment.dueDate)})`}
+                      </div>
+                      
+                      {maxMonthsToRecord > 0 ? (
+                        <>
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">Record:</span>
+                              <Button
+                                variant="outline" size="icon" className="h-7 w-7"
+                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, -1)}
+                                disabled={currentMonthsToPay <= 1 || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                              > <Minus className="h-3 w-3" /> </Button>
+                              <span className="w-5 text-center font-medium text-sm">{currentMonthsToPay}</span>
+                              <Button 
+                                variant="outline" size="icon" className="h-7 w-7"
+                                onClick={() => handleChangeMonthsToPay(scheme.id, scheme.durationMonths, paymentsMade, 1)}
+                                disabled={currentMonthsToPay >= maxMonthsToRecord || isProcessingQuickIndividualBatch || isBatchRecordingGroup}
+                              > <Plus className="h-3 w-3" /> </Button>
+                              <span className="text-sm">month(s)</span>
+                            </div>
+                            <div className="text-sm font-semibold text-primary">
+                              Total: {formatCurrency(liveTotalAmount)}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-center pt-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleOpenQuickIndividualBatchDialog(schemeInfo)}
+                              disabled={maxMonthsToRecord === 0 || currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
+                              className="w-full sm:w-auto"
+                            >
+                              {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Edit className="mr-2 h-4 w-4" />}
+                              Record {currentMonthsToPay > 0 ? `${currentMonthsToPay} ` : ""}Payment(s)
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-green-600 font-medium text-center py-2">All payments recorded for this scheme.</p>
+                      )}
                     </div>
                   );
                 })}
@@ -603,3 +612,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
