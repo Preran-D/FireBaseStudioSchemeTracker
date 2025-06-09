@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil } from 'lucide-react';
+import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil, ArrowLeft } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -311,6 +311,12 @@ export default function SchemeDetailsPage() {
   
   return (
     <div key={schemeIdFromUrl} className="flex flex-col gap-6">
+      <div className="mb-2">
+        <Button variant="outline" size="sm" onClick={() => router.push('/schemes')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to All Schemes
+        </Button>
+      </div>
       <Card>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>

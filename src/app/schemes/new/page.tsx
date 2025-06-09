@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { formatISO } from 'date-fns';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -98,8 +98,6 @@ export default function NewSchemePage() {
     const customerNameFromParams = searchParams.get('customerName');
     const trimmedCustomerNameFromParams = customerNameFromParams?.trim().toLowerCase();
 
-    // Prevent creating a new customer if name exists AND
-    // (we didn't navigate from their details page OR the name was changed from the pre-filled one to another existing name)
     if (customerExists && (!trimmedCustomerNameFromParams || trimmedCustomerNameFromParams !== trimmedNewCustomerName)) {
       toast({
         title: 'Duplicate Customer Name',
@@ -197,6 +195,12 @@ export default function NewSchemePage() {
   return (
     <>
       <div className="max-w-2xl mx-auto">
+        <div className="mb-4">
+          <Button variant="outline" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Add New Scheme</CardTitle>
@@ -291,4 +295,3 @@ export default function NewSchemePage() {
     </>
   );
 }
-
