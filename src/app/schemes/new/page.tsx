@@ -89,11 +89,28 @@ export default function NewSchemePage() {
   const handleSubmit = (data: NewSchemeFormData) => {
     setIsFormLoading(true);
     const allSchemes = getMockSchemes();
+    const trimmedNewCustomerName = data.customerName.trim().toLowerCase();
+    
     const customerExists = allSchemes.some(
-      (s) => s.customerName.trim().toLowerCase() === data.customerName.trim().toLowerCase()
+      (s) => s.customerName.trim().toLowerCase() === trimmedNewCustomerName
     );
 
-    if (customerExists) {
+    const customerNameFromParams = searchParams.get('customerName');
+    const trimmedCustomerNameFromParams = customerNameFromParams?.trim().toLowerCase();
+
+    // Prevent creating a new customer if name exists AND
+    // (we didn't navigate from their details page OR the name was changed from the pre-filled one to another existing name)
+    if (customerExists && (!trimmedCustomerNameFromParams || trimmedCustomerNameFromParams !== trimmedNewCustomerName)) {
+      toast({
+        title: 'Duplicate Customer Name',
+        description: `A customer named '${data.customerName}' already exists. Please use a different name, or add a new scheme for this customer via their details page.`,
+        variant: 'destructive',
+      });
+      setIsFormLoading(false);
+      return;
+    }
+    
+    if (customerExists && trimmedCustomerNameFromParams && trimmedCustomerNameFromParams === trimmedNewCustomerName) {
       toast({
         title: 'Existing Customer',
         description: `Creating new scheme for existing customer: ${data.customerName}.`,
