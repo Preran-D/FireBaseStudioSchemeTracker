@@ -143,13 +143,12 @@ body {
   background-color: white; 
   color: black; 
   font-family: Arial, sans-serif !important; 
-  padding: 1mm !important; /* Reduced padding */
+  padding: 1mm !important; 
   box-sizing: border-box !important;
   overflow: hidden; 
   z-index: -1; 
 }
 
-/* Pre-defined static elements within printableLabelArea for screen (though off-screen) */
 #printableLabelArea #labelCustomerName,
 #printableLabelArea #labelSchemeId,
 #printableLabelArea #labelStartDate,
@@ -157,29 +156,28 @@ body {
   display: block;
   color: black;
   background-color: white;
-  margin: 0.5mm 0 !important; /* Reduced margins */
+  margin: 0.5mm 0 !important; 
   font-family: Arial, sans-serif !important;
-  line-height: 1.1 !important; /* Slightly tighter line height */
+  line-height: 1.1 !important; 
 }
 #printableLabelArea #labelCustomerName {
-  font-size: 9pt !important; /* Reduced font size */
+  font-size: 9pt !important; 
   font-weight: bold !important;
 }
 #printableLabelArea #labelSchemeId,
 #printableLabelArea #labelStartDate,
 #printableLabelArea #labelAmount {
-  font-size: 7pt !important; /* Reduced font size */
+  font-size: 7pt !important;
 }
 
 
 @media print {
   html, body {
-    width: 62mm !important;
-    height: 29mm !important;
-    overflow: hidden !important;
+    width: auto !important; /* Let @page define dimensions */
+    height: auto !important; /* Let @page define dimensions */
     margin: 0 !important;
     padding: 0 !important;
-    background: white !important;
+    background: white !important; 
     color: black !important; 
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important; 
@@ -196,7 +194,7 @@ body {
     visibility: visible !important;
     font-family: Arial, sans-serif !important;
     color: black !important;
-    background-color: white !important;
+    background-color: white !important; /* Ensure background is white for label elements too */
   }
 
   #printableLabelArea {
@@ -208,29 +206,29 @@ body {
     margin: 0 !important;
     padding: 1mm !important; /* Reduced padding */
     box-sizing: border-box !important;
-    overflow: hidden !important; 
+    /* overflow: hidden !important; Temporarily removed for diagnosis */
+    border: 1px solid blue !important; /* Diagnostic border */
     page-break-after: always !important; 
-    border: none !important;
     box-shadow: none !important;
   }
   
-  #printableLabelArea #labelCustomerName, /* Targeting the specific IDs */
+  #printableLabelArea #labelCustomerName, 
   #printableLabelArea #labelSchemeId,
   #printableLabelArea #labelStartDate,
   #printableLabelArea #labelAmount {
-    margin: 0.5mm 0 !important; /* Reduced margins */
+    margin: 0.5mm 0 !important; 
     padding: 0 !important;
-    line-height: 1.1 !important; /* Slightly tighter line height */
+    line-height: 1.1 !important; 
     color: black !important; 
   }
   #printableLabelArea #labelCustomerName {
-    font-size: 9pt !important; /* Reduced font size */
+    font-size: 9pt !important; 
     font-weight: bold !important;
   }
   #printableLabelArea #labelSchemeId,
   #printableLabelArea #labelStartDate,
   #printableLabelArea #labelAmount {
-    font-size: 7pt !important; /* Reduced font size */
+    font-size: 7pt !important; 
   }
 
   @page {
@@ -238,3 +236,5 @@ body {
     margin: 0 !important; 
   }
 }
+
+    
