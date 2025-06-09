@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -21,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink } from 'lucide-react';
+import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
@@ -33,7 +32,6 @@ const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 const recordIndividualPaymentFormSchema = z.object({
   paymentDate: z.date({ required_error: 'Payment date is required.' }),
   modeOfPayment: z.array(z.enum(paymentModes)).min(1, { message: 'Select at least one payment mode.' }),
-  // numberOfMonths and schemeId will be managed outside the form, but submitted with it
 });
 
 type RecordIndividualPaymentFormValues = z.infer<typeof recordIndividualPaymentFormSchema>;
@@ -61,8 +59,8 @@ export function RecordIndividualPaymentDialog({
   isLoading,
 }: RecordIndividualPaymentDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedScheme, setSelectedScheme] = useState<Scheme | null>(null);
-  const [numberOfMonthsToPay, setNumberOfMonthsToPay] = useState(1);
+  const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
+  const [installmentsPerScheme, setInstallmentsPerScheme] = useState<{ [schemeId: string]: number }>({});
 
   const form = useForm<RecordIndividualPaymentFormValues>({
     resolver: zodResolver(recordIndividualPaymentFormSchema),
@@ -76,8 +74,8 @@ export function RecordIndividualPaymentDialog({
   useEffect(() => {
     if (isOpen) {
       form.reset({ paymentDate: new Date(), modeOfPayment: [] });
-      setSelectedScheme(null);
-      setNumberOfMonthsToPay(1);
+      setSelectedSchemeIds([]);
+      setInstallmentsPerScheme({});
       setSearchTerm('');
     }
   }, [isOpen, form]);
@@ -92,50 +90,87 @@ export function RecordIndividualPaymentDialog({
     );
   }, [allRecordableSchemes, searchTerm]);
 
-  const handleSchemeSelect = (scheme: Scheme) => {
-    setSelectedScheme(scheme);
-    setNumberOfMonthsToPay(1); // Reset months when a new scheme is selected
-    form.resetField("paymentDate", {defaultValue: new Date()}); // Reset date for new selection
-    form.resetField("modeOfPayment", {defaultValue: []}); // Reset mode for new selection
+  const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
+    setSelectedSchemeIds((prevIds) =>
+      checked ? [...prevIds, schemeId] : prevIds.filter((id) => id !== schemeId)
+    );
+    setInstallmentsPerScheme((prevInstallments) => {
+      const newInstallments = { ...prevInstallments };
+      if (checked) {
+        if (!newInstallments[schemeId]) { // Only set to 1 if not already set (e.g. re-selecting)
+            const scheme = allRecordableSchemes.find(s => s.id === schemeId);
+            const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
+            newInstallments[schemeId] = maxMonths > 0 ? 1 : 0;
+        }
+      } else {
+        delete newInstallments[schemeId];
+      }
+      return newInstallments;
+    });
   };
 
-  const handleChangeMonthsToPay = (delta: number) => {
-    if (!selectedScheme) return;
-    const paymentsMade = selectedScheme.paymentsMadeCount || 0;
-    const maxMonths = selectedScheme.durationMonths - paymentsMade;
-    let newMonths = numberOfMonthsToPay + delta;
-    if (newMonths < 1) newMonths = 1;
-    if (newMonths > maxMonths) newMonths = maxMonths;
-    if (maxMonths <= 0) newMonths = 0;
-    setNumberOfMonthsToPay(newMonths);
-  };
+  const handleInstallmentChange = (schemeId: string, delta: number) => {
+    const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
+    if (!scheme) return;
 
-  const totalAmountForSelectedMonths = useMemo(() => {
-    if (!selectedScheme || numberOfMonthsToPay === 0) return 0;
-    return selectedScheme.monthlyPaymentAmount * numberOfMonthsToPay;
-  }, [selectedScheme, numberOfMonthsToPay]);
+    setInstallmentsPerScheme((prevInstallments) => {
+      const currentInstallments = prevInstallments[schemeId] || 0;
+      let newInstallmentsCount = currentInstallments + delta;
+      const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
+
+      if (newInstallmentsCount < 1 && maxMonths > 0) newInstallmentsCount = 1;
+      if (newInstallmentsCount < 0 && maxMonths <=0 ) newInstallmentsCount = 0; // Can't go below 0 if no months to record
+      if (newInstallmentsCount > maxMonths) newInstallmentsCount = maxMonths;
+      
+      return { ...prevInstallments, [schemeId]: newInstallmentsCount };
+    });
+  };
+  
+  const totalAmountForSelectedSchemes = useMemo(() => {
+    return selectedSchemeIds.reduce((total, schemeId) => {
+      const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
+      const installments = installmentsPerScheme[schemeId] || 0;
+      if (scheme && installments > 0) {
+        return total + scheme.monthlyPaymentAmount * installments;
+      }
+      return total;
+    }, 0);
+  }, [selectedSchemeIds, installmentsPerScheme, allRecordableSchemes]);
 
   const handleSubmit = (values: RecordIndividualPaymentFormValues) => {
-    if (!selectedScheme || numberOfMonthsToPay === 0) return;
-    onSubmit({
-      schemeId: selectedScheme.id,
-      paymentDate: formatISO(values.paymentDate),
-      modeOfPayment: values.modeOfPayment,
-      numberOfMonths: numberOfMonthsToPay,
+    selectedSchemeIds.forEach((schemeId) => {
+      const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
+      const numberOfMonths = installmentsPerScheme[schemeId];
+      if (scheme && numberOfMonths > 0) {
+        onSubmit({
+          schemeId: scheme.id,
+          paymentDate: formatISO(values.paymentDate),
+          modeOfPayment: values.modeOfPayment,
+          numberOfMonths: numberOfMonths,
+        });
+      }
     });
+     if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0)) {
+        // If schemes are selected but all have 0 installments
+        // This case should ideally be prevented by disabling the submit button
+        console.warn("Submit called with selected schemes but zero installments for all.");
+        return;
+    }
+    // onClose(); // Consider if dialog should close automatically or wait for toast/user
   };
 
   if (!isOpen) return null;
   
-  const maxMonthsToRecordForSelected = selectedScheme ? (selectedScheme.durationMonths - (selectedScheme.paymentsMadeCount || 0)) : 0;
+  const noSchemesSelectedOrNoInstallments = selectedSchemeIds.length === 0 || selectedSchemeIds.every(id => (installmentsPerScheme[id] || 0) === 0);
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl md:max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-headline">Record Individual Payment</DialogTitle>
+          <DialogTitle className="font-headline">Record Individual Payment(s)</DialogTitle>
           <DialogDescription>
-            Search for a scheme, select it, then specify payment details and number of installments.
+            Search, select schemes, and specify payment details. Checked schemes will be processed.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,162 +185,182 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="flex-grow border rounded-md p-1 min-h-[200px] max-h-[300px]">
+        <ScrollArea className="flex-grow border rounded-md p-1 min-h-[200px] max-h-[calc(90vh-350px)]">
           {filteredSchemes.length === 0 && (
             <p className="text-center text-muted-foreground py-6">
               {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
             </p>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-2">
             {filteredSchemes.map((scheme) => {
+              const isSelected = selectedSchemeIds.includes(scheme.id);
+              const currentInstallments = installmentsPerScheme[scheme.id] || 0;
+              const maxMonthsForThisScheme = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
               const nextPayment = scheme.payments.find(p => getPaymentStatus(p, scheme.startDate) !== 'Paid' && 
                                   scheme.payments.slice(0, p.monthNumber - 1).every(prevP => getPaymentStatus(prevP, scheme.startDate) === 'Paid'));
-              const isCurrentlySelected = selectedScheme?.id === scheme.id;
+
               return (
-                <button
+                <div
                   key={scheme.id}
-                  type="button" // Ensure these buttons don't submit any outer form
-                  onClick={() => handleSchemeSelect(scheme)}
-                  disabled={isLoading}
                   className={cn(
-                    "p-3 border rounded-lg text-left hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-primary",
-                    isCurrentlySelected ? "bg-primary/10 border-primary ring-2 ring-primary" : "bg-card",
+                    "p-3 border rounded-lg transition-all",
+                    isSelected ? "bg-primary/10 border-primary shadow-md" : "bg-card",
                     isLoading && "opacity-70 cursor-not-allowed"
                   )}
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <Link href={`/schemes/${scheme.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} 
-                          className="font-medium text-primary hover:underline text-sm flex items-center">
-                      {scheme.customerName} <ExternalLink className="h-3 w-3 ml-1"/>
-                    </Link>
-                    <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
+                  <div className="flex items-start gap-3 mb-2">
+                    <Checkbox
+                      id={`scheme-select-${scheme.id}`}
+                      checked={isSelected}
+                      onCheckedChange={(checked) => handleSchemeSelectionToggle(scheme.id, !!checked)}
+                      disabled={isLoading || maxMonthsForThisScheme <= 0}
+                      className="mt-1"
+                    />
+                    <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
+                        <div className="flex justify-between items-start mb-0.5">
+                            <Link href={`/schemes/${scheme.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} 
+                                className="font-medium text-primary hover:underline text-sm flex items-center">
+                            {scheme.customerName} <ExternalLink className="h-3 w-3 ml-1"/>
+                            </Link>
+                            <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
+                        </div>
+                        {nextPayment && (
+                            <p className="text-xs text-muted-foreground">
+                                Next Due: {formatDate(nextPayment.dueDate, 'dd MMM')}, Amt: {formatCurrency(nextPayment.amountExpected)}
+                            </p>
+                        )}
+                    </label>
                   </div>
                   
-                  {nextPayment && (
-                     <p className="text-xs text-muted-foreground">
-                        Next Due: {formatDate(nextPayment.dueDate, 'dd MMM')}, Amt: {formatCurrency(nextPayment.amountExpected)}
-                     </p>
-                  )}
                   <div className="my-1.5">
-                    <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={0} className="h-1.5" />
+                    <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={isSelected ? currentInstallments : 0} className="h-1.5" />
                     <p className="text-xs text-muted-foreground mt-0.5 text-center">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths} paid</p>
                   </div>
-                </button>
+
+                  {isSelected && maxMonthsForThisScheme > 0 && (
+                    <div className="mt-2 flex items-center justify-between gap-2 p-2 border-t border-primary/20">
+                      <span className="text-xs font-medium">Installments:</span>
+                      <div className="flex items-center gap-1.5">
+                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-full" type="button" onClick={() => handleInstallmentChange(scheme.id, -1)} disabled={currentInstallments <= 1 || isLoading}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentInstallments}</span>
+                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-full" type="button" onClick={() => handleInstallmentChange(scheme.id, 1)} disabled={currentInstallments >= maxMonthsForThisScheme || isLoading}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                       <span className="text-xs font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentInstallments)}</span>
+                    </div>
+                  )}
+                  {isSelected && maxMonthsForThisScheme <= 0 && (
+                     <p className="text-xs text-green-600 font-medium text-center p-1.5 border-t border-green-500/20 bg-green-500/5 rounded-b-md">All installments paid!</p>
+                  )}
+                </div>
               );
             })}
           </div>
         </ScrollArea>
-
-        {selectedScheme && (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-3 border-t mt-3">
-              <h3 className="font-semibold text-md">
-                Payment for: <span className="text-primary">{selectedScheme.customerName} ({selectedScheme.id.toUpperCase()})</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="paymentDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Payment Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant={'outline'}
-                              className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
-                              disabled={isLoading}
-                              type="button"
-                            >
-                              {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date > new Date() || date < parseISO(selectedScheme.startDate) || isLoading}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="modeOfPayment"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Mode of Payment</FormLabel>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-1">
-                        {paymentModes.map((mode) => (
-                          <FormField
-                            key={mode}
-                            control={form.control}
-                            name="modeOfPayment"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center space-x-1.5 space-y-0">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(mode)}
-                                    onCheckedChange={(checked) => {
-                                      const newValue = checked
-                                        ? [...(field.value || []), mode]
-                                        : (field.value || []).filter((value) => value !== mode);
-                                      field.onChange(newValue);
-                                    }}
-                                    disabled={isLoading}
-                                  />
-                                </FormControl>
-                                <FormLabel className="font-normal text-sm">{mode}</FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {maxMonthsToRecordForSelected > 0 ? (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-md bg-muted/40">
-                    <div className="flex items-center gap-2">
-                        <FormLabel className="text-sm">Installments to Pay:</FormLabel>
-                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" type="button" onClick={() => handleChangeMonthsToPay(-1)} disabled={numberOfMonthsToPay <= 1 || isLoading}><Minus className="h-3.5 w-3.5" /></Button>
-                        <span className="w-6 text-center font-semibold text-sm tabular-nums">{numberOfMonthsToPay}</span>
-                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" type="button" onClick={() => handleChangeMonthsToPay(1)} disabled={numberOfMonthsToPay >= maxMonthsToRecordForSelected || isLoading}><Plus className="h-3.5 w-3.5" /></Button>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="paymentDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Payment Date (for all selected)</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={'outline'}
+                            className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
+                            disabled={isLoading}
+                            type="button"
+                          >
+                            {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) => date > new Date() || date < new Date("1900-01-01") || isLoading}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="modeOfPayment"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Mode of Payment (for all selected)</FormLabel>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-1">
+                      {paymentModes.map((mode) => (
+                        <FormField
+                          key={mode}
+                          control={form.control}
+                          name="modeOfPayment"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-1.5 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(mode)}
+                                  onCheckedChange={(checked) => {
+                                    const newValue = checked
+                                      ? [...(field.value || []), mode]
+                                      : (field.value || []).filter((value) => value !== mode);
+                                    field.onChange(newValue);
+                                  }}
+                                  disabled={isLoading}
+                                />
+                              </FormControl>
+                              <FormLabel className="font-normal text-sm">{mode}</FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                      ))}
                     </div>
-                    <p className="text-sm font-semibold">Total: {formatCurrency(totalAmountForSelectedMonths)}</p>
-                </div>
-               ) : (
-                <p className="text-sm text-green-600 font-medium text-center p-3 border rounded-md bg-green-500/10">All installments paid for this scheme.</p>
-               )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            {selectedSchemeIds.length > 0 && !noSchemesSelectedOrNoInstallments && (
+                 <div className="text-right font-semibold mt-2 pr-1">
+                    Total for All Selected: {formatCurrency(totalAmountForSelectedSchemes)}
+                 </div>
+            )}
+            {selectedSchemeIds.length === 0 && (
+                 <div className="text-center text-muted-foreground py-2 flex items-center justify-center gap-2">
+                    <AlertCircle className="h-4 w-4"/> Please select one or more schemes to record payments.
+                 </div>
+            )}
 
-              <DialogFooter className="pt-3">
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
-                    Cancel
-                  </Button>
-                </DialogClose>
-                <Button type="submit" disabled={isLoading || numberOfMonthsToPay === 0 || maxMonthsToRecordForSelected === 0}>
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Confirm & Record Payment
+
+            <DialogFooter className="pt-3">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+                  Cancel
                 </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        )}
-        {!selectedScheme && (
-            <p className="text-center text-muted-foreground py-4">Select a scheme from the list above to enter payment details.</p>
-        )}
+              </DialogClose>
+              <Button type="submit" disabled={isLoading || noSchemesSelectedOrNoInstallments}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm & Record Payment(s)
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
