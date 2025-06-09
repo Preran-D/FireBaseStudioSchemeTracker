@@ -410,9 +410,9 @@ export default function DashboardPage() {
                   />
               </div>
 
-              {individualSchemeSearchTerm.trim() && recordableIndividualSchemes.length === 0 && (
+              {individualSchemeSearchTerm.trim() && recordableIndividualSchemes.length === 0 ? (
                    <p className="text-muted-foreground py-4 text-center">No matching recordable schemes found for "{individualSchemeSearchTerm}".</p>
-              )}
+              ) : null}
 
               {!individualSchemeSearchTerm.trim() && (
                    <p className="text-muted-foreground py-4 text-center">Enter a customer name or scheme ID above to find schemes for payment recording.</p>
@@ -454,7 +454,6 @@ export default function DashboardPage() {
                             <div className="text-xs text-muted-foreground mt-1.5 space-y-1">
                              
                               <p>Installment: <strong>{formatCurrency(scheme.monthlyPaymentAmount)}</strong></p>
-                              <p>Duration: <strong>{scheme.durationMonths} Months</strong></p>
                             </div>
                           </div>
                         
@@ -468,7 +467,6 @@ export default function DashboardPage() {
                             />
                             <p className="text-xs text-muted-foreground mt-1.5 text-center">
                               {paymentsMade} / {scheme.durationMonths} paid
-                              {currentMonthsToPay > 0 && ` (+${currentMonthsToPay} to record)`}
                             </p>
                           </div>
                           
@@ -498,7 +496,7 @@ export default function DashboardPage() {
                                 disabled={currentMonthsToPay === 0 || isProcessingQuickIndividualBatch || isBatchRecordingGroup }
                               >
                                 {isProcessingQuickIndividualBatch && paymentContextForDialog?.scheme.id === scheme.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ListChecks className="mr-2 h-4 w-4" />}
-                                Pay {currentMonthsToPay > 0 ? `${currentMonthsToPay} Installment${currentMonthsToPay > 1 ? 's': ''} (${formatCurrency(liveTotalAmount)})` : "Installment(s)"}
+                                Pay ({formatCurrency(liveTotalAmount)})
                               </Button>
                             </div>
                           ) : (

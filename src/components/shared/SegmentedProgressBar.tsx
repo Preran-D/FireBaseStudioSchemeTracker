@@ -35,7 +35,7 @@ export function SegmentedProgressBar({
       const payment = scheme.payments.find(p => p.monthNumber === i + 1 && p.status === 'Paid');
       segmentTooltipText = `Month ${i + 1}: Paid (${formatDate(payment?.paymentDate)})`;
     } else if (i < paidMonthsCount + monthsToRecord) {
-      bgColor = 'bg-blue-500'; // To be recorded by current selection
+      bgColor = 'bg-yellow-500'; // To be recorded by current selection (changed from blue to yellow)
       segmentTooltipText = `Month ${i + 1}: Will be recorded`;
     } else {
        // Check if this future month is overdue (assuming previous are paid or will be paid by selection)
