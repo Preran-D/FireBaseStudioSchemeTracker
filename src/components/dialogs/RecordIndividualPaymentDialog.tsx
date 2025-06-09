@@ -85,30 +85,30 @@ export function RecordIndividualPaymentDialog({
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
       .sort((a,b) => { 
-        const indexA = allRecordableSchemes.findIndex(scheme => scheme.id === a.id);
-        const indexB = allRecordableSchemes.findIndex(scheme => scheme.id === b.id);
+        // Keep original selection order or sort by name/date if preferred
+        const indexA = selectedSchemeIds.indexOf(a.id);
+        const indexB = selectedSchemeIds.indexOf(b.id);
         return indexA - indexB;
       });
       
-    const unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
+    let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
-    let filteredUnselectedItems = unselectedItems;
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      filteredUnselectedItems = unselectedItems.filter(
+      unselectedItems = unselectedItems.filter(
         (s) =>
           s.customerName.toLowerCase().includes(lowerSearchTerm) ||
           s.id.toLowerCase().includes(lowerSearchTerm)
       );
     }
     
-    filteredUnselectedItems.sort((a,b) => {
+    unselectedItems.sort((a,b) => {
       const nameCompare = a.customerName.localeCompare(b.customerName);
       if (nameCompare !== 0) return nameCompare;
       return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
     });
 
-    return [...selectedItems, ...filteredUnselectedItems];
+    return [...selectedItems, ...unselectedItems];
   }, [allRecordableSchemes, searchTerm, selectedSchemeIds]);
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
@@ -124,8 +124,8 @@ export function RecordIndividualPaymentDialog({
             newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
       } else {
-        // Keep the monthsToPay value even if unchecked, so if re-checked, it remembers.
-        // To clear it, uncomment: delete newMonths[schemeId];
+        // Optionally clear monthsToPay when unchecking: delete newMonths[schemeId];
+        // Keeping it allows remembering the count if re-checked.
       }
       return newMonths;
     });
@@ -173,6 +173,7 @@ export function RecordIndividualPaymentDialog({
       }
     });
      if (selectedSchemeIds.length > 0 && selectedSchemeIds.every(id => (monthsToPayPerScheme[id] || 0) === 0)) {
+        // This case should ideally be prevented by disabling the submit button
         console.warn("Submit called with selected schemes but zero months for all.");
         return;
     }
@@ -185,7 +186,7 @@ export function RecordIndividualPaymentDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="font-headline">Record Individual Payment(s)</DialogTitle>
           <DialogDescription>
             Search, select schemes, and specify payment details. Checked schemes will be processed.
@@ -203,8 +204,8 @@ export function RecordIndividualPaymentDialog({
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 border rounded-md"> 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3"> {/* Added p-3 here for items */}
+        <ScrollArea className="h-0 flex-1 min-h-0"> 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
             {filteredSchemes.map((scheme) => {
               const isSelected = selectedSchemeIds.includes(scheme.id);
               const currentMonthsToPay = monthsToPayPerScheme[scheme.id] || 0;
@@ -367,7 +368,7 @@ export function RecordIndividualPaymentDialog({
             )}
 
 
-            <DialogFooter className="pt-3">
+            <DialogFooter className="pt-3 flex-shrink-0">
               <DialogClose asChild>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
                   Cancel
