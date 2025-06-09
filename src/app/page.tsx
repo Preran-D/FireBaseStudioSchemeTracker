@@ -460,7 +460,7 @@ export default function DashboardPage() {
                           </div>
                         
                           
-                          <div className="my-3">
+                          <div className="mt-3 mb-1.5">
                             <SegmentedProgressBar
                                 scheme={scheme}
                                 paidMonthsCount={paymentsMade}
