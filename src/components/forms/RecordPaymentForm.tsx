@@ -11,9 +11,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CalendarIcon } from 'lucide-react';
-import { cn, formatDate, formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils'; // Removed formatDate as we'll use date-fns/format directly
 import type { Payment, PaymentMode } from '@/types/scheme';
-import { formatISO, parseISO } from 'date-fns';
+import { formatISO, parseISO, format } from 'date-fns'; // Added date-fns/format
 
 const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 
@@ -33,10 +33,18 @@ interface RecordPaymentFormProps {
 }
 
 export function RecordPaymentForm({ payment, onSubmit, isLoading, isEdit = false }: RecordPaymentFormProps) {
+  let initialPaymentDate = new Date();
+  if (payment.paymentDate) {
+    const parsed = parseISO(payment.paymentDate);
+    if (!isNaN(parsed.getTime())) { // Check if parsed date is valid
+      initialPaymentDate = parsed;
+    }
+  }
+
   const form = useForm<RecordPaymentFormValues>({
     resolver: zodResolver(recordPaymentFormSchema),
     defaultValues: {
-      paymentDate: payment.paymentDate ? parseISO(payment.paymentDate) : new Date(),
+      paymentDate: initialPaymentDate,
       amountPaid: payment.amountPaid || payment.amountExpected,
       modeOfPayment: payment.modeOfPayment || [],
     },
@@ -56,7 +64,7 @@ export function RecordPaymentForm({ payment, onSubmit, isLoading, isEdit = false
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         {!isEdit && (
           <FormDescription>
-            Recording payment for Month {payment.monthNumber} (Due: {formatDate(payment.dueDate)}).
+            Recording payment for Month {payment.monthNumber} (Due: {payment.dueDate ? format(parseISO(payment.dueDate), 'dd MMM yyyy') : 'N/A'}).
             Expected amount: {formatCurrency(payment.amountExpected)}.
           </FormDescription>
         )}
@@ -76,7 +84,7 @@ export function RecordPaymentForm({ payment, onSubmit, isLoading, isEdit = false
                         !field.value && 'text-muted-foreground'
                       )}
                     >
-                      {field.value ? formatDate(field.value.toISOString()) : <span>Pick a date</span>}
+                      {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
                   </FormControl>
