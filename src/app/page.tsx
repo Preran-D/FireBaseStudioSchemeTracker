@@ -5,28 +5,21 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, UserPlus, ListFilter, CreditCard } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, ListChecksIcon, UserPlus, CreditCard, ChevronRight, FileText } from 'lucide-react';
 import Link from 'next/link';
-import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
-import { getMockSchemes, updateMockSchemePayment, getGroupDetails } from '@/lib/mock-data';
+import type { Scheme } from '@/types/scheme';
+import { getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
-import { useToast } from '@/hooks/use-toast';
-
-// Define a constant empty array for stable reference
-const EMPTY_GROUP_DETAIL_ARRAY: GroupDetail[] = [];
 
 export default function DashboardPage() {
-  const { toast } = useToast();
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
   
-  // processingStates removed as page handles its own loading for submit
-
   const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       const tempS = { ...s };
@@ -88,87 +81,74 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [schemes]);
 
-  const handleOpenHistoryPanel = (scheme: Scheme) => {
-    setSchemeForHistory(scheme);
-    setIsHistoryPanelOpen(true);
-  };
+  const StatCard = ({ title, value, icon: Icon, description, link, linkText, valueClass }: { title: string; value: string | number; icon: React.ElementType; description?: string; link?: string; linkText?: string; valueClass?: string }) => (
+    <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-medium text-muted-foreground">{title}</CardTitle>
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
+      </CardHeader>
+      <CardContent className="pb-4 pt-0">
+        <div className={`text-3xl font-bold ${valueClass || ''}`}>{value}</div>
+        {description && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
+      </CardContent>
+      {link && linkText && (
+        <CardContent className="pt-0 pb-4">
+            <Button variant="ghost" size="sm" asChild className="text-xs text-primary p-0 h-auto hover:underline">
+                <Link href={link}>{linkText} <ChevronRight className="h-3 w-3 ml-1"/></Link>
+            </Button>
+        </CardContent>
+      )}
+    </Card>
+  );
 
   return (
     <>
     <div className="flex flex-col gap-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
-        <div className="flex gap-2">
-            <Button size="lg" variant="default" asChild>
+        <div className="flex gap-3">
+            <Button size="lg" variant="default" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
                 <Link href="/payments/record">
                     <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
                 </Link>
             </Button>
           <Link href="/schemes/new">
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" className="rounded-lg shadow-sm hover:shadow-md transition-shadow">
               <UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Schemes</CardTitle>
-            <Users className="h-5 w-5 text-primary" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{summaryStats.totalSchemes}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
-            <DollarSign className="h-5 w-5 text-green-400" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{formatCurrency(summaryStats.totalCollected)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pending (Active)</CardTitle>
-            <TrendingUp className="h-5 w-5 text-orange-400" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{formatCurrency(summaryStats.totalPending)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Overdue</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold text-destructive">{formatCurrency(summaryStats.totalOverdueAmount)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Schemes</CardTitle>
-            <PackageCheck className="h-5 w-5 text-blue-400" />
-          </CardHeader>
-          <CardContent><div className="text-3xl font-bold">{summaryStats.completedSchemesCount}</div></CardContent>
-        </Card>
+      <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard title="Total Schemes" value={summaryStats.totalSchemes} icon={ListChecksIcon} description={`${summaryStats.activeSchemesCount} active`} link="/schemes" linkText="View all schemes"/>
+        <StatCard title="Total Collected" value={formatCurrency(summaryStats.totalCollected)} icon={DollarSign} valueClass="text-green-600" link="/transactions" linkText="View transactions"/>
+        <StatCard title="Total Pending" value={formatCurrency(summaryStats.totalPending)} icon={TrendingUp} description="From active schemes" valueClass="text-orange-600" />
+        <StatCard title="Total Overdue" value={formatCurrency(summaryStats.totalOverdueAmount)} icon={AlertTriangle} valueClass="text-destructive" description={`${overduePaymentsList.length} recent`} />
+        <StatCard title="Completed Schemes" value={summaryStats.completedSchemesCount} icon={PackageCheck} valueClass="text-blue-600" />
       </div>
 
       <SchemeHistoryPanel isOpen={isHistoryPanelOpen} onClose={() => setIsHistoryPanelOpen(false)} scheme={schemeForHistory} />
 
-      <div className="grid gap-8 grid-cols-1 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
+        <Card className="lg:col-span-2 shadow-lg rounded-xl">
           <CardHeader>
-            <CardTitle className="font-headline">Payment Progress (Active Schemes)</CardTitle>
+            <CardTitle className="font-headline text-xl">Payment Progress</CardTitle>
             <CardDescription>Collected vs. Pending amounts for all active schemes.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[350px]">
+          <CardContent className="h-[380px] p-4">
             {chartData.some(d => d.value > 0) ? (
               <ChartContainer config={chartConfig} className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 30, left: 20, top: 5, bottom: 5 }} barGap={8}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border) / 0.5)" />
-                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} stroke="hsl(var(--muted-foreground))" />
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={90} stroke="hsl(var(--muted-foreground))" />
-                    <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => ( <div className="flex flex-col"><span className="capitalize">{name}</span><span>{formatCurrency(Number(value))}</span></div>)}/>} cursor={{ fill: 'hsl(var(--muted) / 0.3)' }}/>
-                    <ChartLegend content={<ChartLegendContent />} />
-                    <Bar dataKey="value" radius={6} />
+                  <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 40, left: 30, top: 5, bottom: 20 }} barSize={35} barGap={10}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border) / 0.6)" />
+                    <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={100} stroke="hsl(var(--muted-foreground))" fontSize={14} />
+                    <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => ( <div className="flex flex-col p-1"><span className="capitalize font-medium">{name}</span><span>{formatCurrency(Number(value))}</span></div>)}/>} cursor={{ fill: 'hsl(var(--muted) / 0.3)' }}/>
+                    <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '10px'}} />} />
+                    <Bar dataKey="value" radius={[0, 8, 8, 0]} />
                   </RechartsBarChart>
                 </ResponsiveContainer>
               </ChartContainer>
@@ -176,56 +156,53 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Upcoming Payments (Next 30 Days)</CardTitle>
-            <CardDescription>Top 5 upcoming payments.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {upcomingPaymentsList.length > 0 ? (
-              <Table>
-                <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-                <TableBody>
+        <div className="space-y-8">
+          <Card className="shadow-lg rounded-xl">
+            <CardHeader>
+              <CardTitle className="font-headline text-lg">Upcoming Payments</CardTitle>
+              <CardDescription>Next 5 payments due in 30 days.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {upcomingPaymentsList.length > 0 ? (
+                <ul className="space-y-3">
                   {upcomingPaymentsList.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-medium"><Link href={`/schemes/${payment.schemeId}`} className="hover:underline">{payment.customerName}</Link></TableCell>
-                      <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
-                    </TableRow>
+                    <li key={payment.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                      <div>
+                        <Link href={`/schemes/${payment.schemeId}`} className="font-medium hover:underline text-sm">{payment.customerName}</Link>
+                        <p className="text-xs text-muted-foreground">Due: {formatDate(payment.dueDate)}</p>
+                      </div>
+                      <span className="text-sm font-semibold">{formatCurrency(payment.amountExpected)}</span>
+                    </li>
                   ))}
-                </TableBody>
-              </Table>
-            ) : ( <p className="text-muted-foreground text-center py-4">No upcoming payments in the next 30 days.</p> )}
-          </CardContent>
-        </Card>
-      </div>
+                </ul>
+              ) : ( <p className="text-muted-foreground text-center py-4 text-sm">No upcoming payments in the next 30 days.</p> )}
+            </CardContent>
+          </Card>
 
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle className="font-headline">Recent Overdue Payments</CardTitle>
-          <CardDescription>Top 5 most recently due payments that are overdue.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {overduePaymentsList.length > 0 ? (
-            <Table>
-              <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {overduePaymentsList.map((payment) => (
-                  <TableRow key={payment.id} className="text-destructive hover:bg-destructive/10">
-                    <TableCell className="font-medium"><Link href={`/schemes/${payment.schemeId}`} className="hover:underline">{payment.customerName}</Link></TableCell>
-                    <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.amountExpected)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : ( <p className="text-muted-foreground text-center py-4">No overdue payments. Great job!</p> )}
-        </CardContent>
-      </Card>
+          <Card className="shadow-lg rounded-xl">
+            <CardHeader>
+              <CardTitle className="font-headline text-lg">Recent Overdue</CardTitle>
+              <CardDescription>Top 5 most recent overdue payments.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {overduePaymentsList.length > 0 ? (
+                 <ul className="space-y-3">
+                  {overduePaymentsList.map((payment) => (
+                    <li key={payment.id} className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg hover:bg-destructive/20 transition-colors">
+                      <div>
+                        <Link href={`/schemes/${payment.schemeId}`} className="font-medium hover:underline text-destructive text-sm">{payment.customerName}</Link>
+                        <p className="text-xs text-destructive/80">Was Due: {formatDate(payment.dueDate)}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-destructive">{formatCurrency(payment.amountExpected)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : ( <p className="text-muted-foreground text-center py-4 text-sm">No overdue payments. Great job!</p> )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
-    {/* Removed RecordIndividualPaymentDialog as it's now a page */}
     </>
   );
 }
-
-    

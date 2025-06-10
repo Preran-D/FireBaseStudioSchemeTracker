@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Checkbox } from '@/components/ui/checkbox'; // Kept for payment mode, not for scheme selection
+import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, CreditCard, Landmark, Smartphone, Users, Info, CalendarDays, DollarSign } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
@@ -87,7 +87,7 @@ export default function RecordPaymentPage() {
   });
 
   useEffect(() => {
-    const initialGroupSearch = searchParams.get('group');
+    const initialGroupSearchParam = searchParams.get('group');
     const loadedSchemes = getMockSchemes().filter(s => {
       if (s.status === 'Active' || s.status === 'Overdue') {
         for (let i = 0; i < s.payments.length; i++) {
@@ -120,9 +120,11 @@ export default function RecordPaymentPage() {
     setAllGroups(loadedGroups);
     setPageLoading(false);
 
-    if (initialGroupSearch) {
-      setSearchTerm(decodeURIComponent(initialGroupSearch));
-      const lowerInitialSearchTerm = decodeURIComponent(initialGroupSearch).toLowerCase();
+    if (initialGroupSearchParam) {
+      const decodedInitialSearch = decodeURIComponent(initialGroupSearchParam);
+      setSearchTerm(decodedInitialSearch);
+      // Trigger suggestion logic based on initial search term
+      const lowerInitialSearchTerm = decodedInitialSearch.toLowerCase();
       const exactMatchGroup = loadedGroups.find(g => g.groupName.toLowerCase() === lowerInitialSearchTerm);
       setSuggestedGroup(exactMatchGroup || null);
       if (exactMatchGroup) {
@@ -178,6 +180,11 @@ export default function RecordPaymentPage() {
 
     if (activeGroupSelection === groupToToggle.groupName) {
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
+      // Optionally clear months/modes for deselected group schemes
+      groupSchemeIds.forEach(id => {
+        delete newMonths[id];
+        delete newModes[id];
+      });
       setActiveGroupSelection(null);
     } else {
       const currentSelectedSet = new Set(selectedSchemeIds);
@@ -216,7 +223,7 @@ export default function RecordPaymentPage() {
 
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
-    if (searchTerm && (!suggestedGroup || groupNameSuggestions.length > 0)) {
+    if (searchTerm && (!suggestedGroup || groupNameSuggestions.length > 0) && !activeGroupSelection) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       unselectedItems = unselectedItems.filter(
         (s) =>
@@ -233,7 +240,7 @@ export default function RecordPaymentPage() {
     });
 
     return [...selectedItems, ...unselectedItems];
-  }, [allRecordableSchemes, searchTerm, selectedSchemeIds, suggestedGroup, groupNameSuggestions]);
+  }, [allRecordableSchemes, searchTerm, selectedSchemeIds, suggestedGroup, groupNameSuggestions, activeGroupSelection]);
 
   const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
     setSelectedSchemeIds((prevIds) =>
@@ -256,6 +263,18 @@ export default function RecordPaymentPage() {
           newModes[schemeId] = ['Cash'];
         }
         return newModes;
+      });
+    } else {
+      // Optionally, clear months and payment modes if deselected individually
+      setMonthsToPayPerScheme(prev => {
+          const newMonths = {...prev};
+          delete newMonths[schemeId];
+          return newMonths;
+      });
+      setPaymentModePerScheme(prev => {
+          const newModes = {...prev};
+          delete newModes[schemeId];
+          return newModes;
       });
     }
   };
@@ -341,42 +360,31 @@ export default function RecordPaymentPage() {
 
       if (scheme && numberOfMonths > 0 && modes.length > 0) {
         paymentsToSubmit++;
-        const updatedScheme = updateMockSchemePayment(scheme.id, scheme.payments.find(p => getPaymentStatus(p, scheme.startDate) !== 'Paid')!.id, { // Assuming first unpaid payment
-          paymentDate: formatISO(values.paymentDate),
-          modeOfPayment: modes,
-          amountPaid: scheme.monthlyPaymentAmount * numberOfMonths, // This assumes full payment for number of months
-        });
-
-        if (updatedScheme) {
-          // This is tricky for multiple months - updateMockSchemePayment expects one payment.
-          // For simplicity of this refactor, we'll submit one by one if a loop is added inside.
-          // Or, the mock function itself would need to handle "numberOfMonths".
-          // For now, assuming updateMockSchemePayment handles the logic if it's adapted or only one month is recorded.
-          // Let's adjust to record multiple payments if numberOfMonths > 1
-          let tempScheme = scheme;
-          for (let i = 0; i < numberOfMonths; i++) {
-            const paymentToUpdate = tempScheme.payments.find(p => getPaymentStatus(p, tempScheme.startDate) !== 'Paid');
-            if (paymentToUpdate) {
-              const singlePaymentResult = updateMockSchemePayment(tempScheme.id, paymentToUpdate.id, {
-                 paymentDate: formatISO(values.paymentDate),
-                 modeOfPayment: modes,
-                 amountPaid: tempScheme.monthlyPaymentAmount,
-              });
-              if (singlePaymentResult) {
-                totalRecordedAmount += tempScheme.monthlyPaymentAmount;
-                successfulSubmissions++;
-                tempScheme = singlePaymentResult; // Update scheme for next iteration
-              } else {
-                failedSubmissions++;
-              }
+        let tempScheme = scheme; // Use a local copy for multi-month recording
+        for (let i = 0; i < numberOfMonths; i++) {
+          const paymentToUpdate = tempScheme.payments.find(p => getPaymentStatus(p, tempScheme.startDate) !== 'Paid');
+          if (paymentToUpdate) {
+            const singlePaymentResult = updateMockSchemePayment(tempScheme.id, paymentToUpdate.id, {
+                paymentDate: formatISO(values.paymentDate),
+                modeOfPayment: modes,
+                amountPaid: tempScheme.monthlyPaymentAmount,
+            });
+            if (singlePaymentResult) {
+              totalRecordedAmount += tempScheme.monthlyPaymentAmount;
+              successfulSubmissions++;
+              // Update tempScheme with the result to reflect the payment for the next iteration
+              const reloadedScheme = getMockSchemeById(tempScheme.id); // Fetch the fully updated scheme
+              if (reloadedScheme) tempScheme = reloadedScheme; else { failedSubmissions++; break; }
             } else {
-              failedSubmissions++; // Should not happen if numberOfMonths is calculated correctly
-              break;
+              failedSubmissions++;
+              // If one payment fails, we might want to stop for this scheme
+              break; 
             }
+          } else {
+            // This means we tried to record more months than available unpaid ones for this scheme
+            failedSubmissions++; 
+            break;
           }
-
-        } else {
-          failedSubmissions++;
         }
       }
     }
@@ -384,21 +392,36 @@ export default function RecordPaymentPage() {
     if (successfulSubmissions > 0) {
       toast({
         title: "Payments Recorded",
-        description: `${successfulSubmissions} payment(s) totaling ${formatCurrency(totalRecordedAmount)} recorded. ${failedSubmissions > 0 ? `${failedSubmissions} errors.` : ''}`,
+        description: `${successfulSubmissions} payment installments totaling ${formatCurrency(totalRecordedAmount)} recorded. ${failedSubmissions > 0 ? `${failedSubmissions} errors.` : ''}`,
       });
-      // Refresh data
-      const reloadedSchemes = getMockSchemes().filter(s => { /* ... filter logic ... */ return true; }); // Re-apply recordable filter
+      // Refresh data for the page
+      const reloadedSchemes = getMockSchemes().filter(s => {
+          if (s.status === 'Active' || s.status === 'Overdue') {
+              for (let i = 0; i < s.payments.length; i++) {
+                  if (getPaymentStatus(s.payments[i], s.startDate) !== 'Paid') {
+                      let allPreviousPaid = true;
+                      for (let j = 0; j < i; j++) {
+                          if (getPaymentStatus(s.payments[j], s.startDate) !== 'Paid') { allPreviousPaid = false; break; }
+                      }
+                      if (allPreviousPaid) return true;
+                  }
+              }
+          }
+          return false;
+      }).sort((a,b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()); // Simplified sort, adjust if needed
       setAllRecordableSchemes(reloadedSchemes);
+      
       setSelectedSchemeIds([]);
       setMonthsToPayPerScheme({});
       setPaymentModePerScheme({});
       setActiveGroupSelection(null);
       setSearchTerm('');
+      setSuggestedGroup(null);
+      setGroupNameSuggestions([]);
+      form.reset({paymentDate: new Date()});
 
-      // Optionally navigate away or reset further
-      // router.push('/dashboard'); // Example
     } else if (failedSubmissions > 0 && paymentsToSubmit > 0) {
-      toast({ title: "Error Recording Payments", description: `Could not record ${failedSubmissions} payments.`, variant: "destructive" });
+      toast({ title: "Error Recording Payments", description: `Could not record ${failedSubmissions} payment installments.`, variant: "destructive" });
     } else if (paymentsToSubmit === 0 && selectedSchemeIds.length > 0) {
       toast({ title: "No Payments to Record", description: "Ensure months to pay and payment modes are set for selected schemes.", variant: "default" });
     }
@@ -424,7 +447,7 @@ export default function RecordPaymentPage() {
         <CardHeader>
             <CardTitle className="text-xl">Search & Select Schemes</CardTitle>
             <CardDescription>
-              Search by customer, scheme ID, or type a group name for suggestions. Click cards to select schemes.
+              Search by customer, scheme ID, or type a group name. Click cards to select schemes.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -456,7 +479,7 @@ export default function RecordPaymentPage() {
               )}
               {suggestedGroup && (
                 <div className="flex items-center gap-2 p-2 border border-dashed rounded-md bg-muted/50">
-                  <Info className="h-4 w-4 text-primary"/>
+                  <Info className="h-4 w-4 text-primary shrink-0"/>
                   <Button
                     variant="link"
                     className="p-0 h-auto text-sm text-left text-primary hover:underline"
@@ -483,7 +506,7 @@ export default function RecordPaymentPage() {
             return (
               <motion.div
                 key={scheme.id}
-                layout // Enable layout animation
+                // Remove layout from here to prevent row expansion
                 variants={listItemVariants}
                 initial="hidden"
                 animate="visible"
@@ -525,7 +548,7 @@ export default function RecordPaymentPage() {
                       animate={{ opacity: 1, height: 'auto', marginTop: '1rem' }}
                       exit={{ opacity: 0, height: 0, marginTop: 0 }}
                       transition={{ duration: 0.3, ease: "easeInOut" }}
-                      className="overflow-hidden"
+                      className="overflow-hidden" // Important for height animation
                     >
                       <div className="mt-1 flex items-center justify-between gap-2 p-2.5 border-t border-primary/20">
                         <span className="text-sm font-medium">Months to Pay:</span>
@@ -553,7 +576,7 @@ export default function RecordPaymentPage() {
                                     id={`mop-${scheme.id}-${mode}`}
                                     checked={currentPaymentModes.includes(mode)}
                                     onCheckedChange={(checked) => handlePaymentModeChange(scheme.id, mode, !!checked)}
-                                    onClick={(e) => e.stopPropagation()} // Prevent card click
+                                    onClick={(e) => e.stopPropagation()} 
                                     disabled={processingPayment}
                                     className="h-5 w-5"
                                   />
@@ -586,7 +609,7 @@ export default function RecordPaymentPage() {
           )}
       </div>
 
-      <Card className="sticky bottom-0 z-10 shadow-lg border-t-4 border-primary/30">
+      <Card className="sticky bottom-0 z-10 shadow-lg border-t-4 border-primary/30 bg-background/95 backdrop-blur-sm">
         <CardContent className="p-4 md:p-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -637,7 +660,7 @@ export default function RecordPaymentPage() {
               )}
               {selectedSchemeIds.length > 0 && isSubmissionDisabled && !processingPayment && (
                 <div className="text-center text-destructive py-2 flex items-center justify-center gap-2 text-sm">
-                  <AlertCircle className="h-4 w-4"/> Ensure all selected schemes with months to pay also have a payment mode selected.
+                  <AlertCircle className="h-4 w-4"/> Ensure all selected schemes with months to pay also have a payment mode selected, and payment date is valid.
                 </div>
               )}
               
@@ -658,5 +681,3 @@ export default function RecordPaymentPage() {
     </div>
   );
 }
-
-    
