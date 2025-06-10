@@ -4,37 +4,34 @@
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-// Input is removed as we are removing import functionality for now
-// import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, /*FileUp, FileSpreadsheet, AlertTriangle, FileText, Activity,*/ Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap } from 'lucide-react';
-import { getMockSchemes, getGroupDetails } from '@/lib/mock-data'; // getGroupDetails is needed
-import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme'; // GroupDetail is needed
-import { arrayToCSV, downloadCSV } from '@/lib/csvUtils';
-import { formatDate, formatCurrency, getPaymentStatus, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
-// isValid, parse, formatISO from date-fns are removed as import logic is removed
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet } from 'lucide-react';
+import { getMockSchemes, getGroupDetails } from '@/lib/mock-data';
+import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
+import { formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
+import { exportToExcel } from '@/lib/excelUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-// ImportMessage and ImportResult interfaces are removed as import functionality is removed
 
 function DataManagementTabContent() {
   const { toast } = useToast();
-  const [isExporting, setIsExporting] = useState(false); // Single state for any export operation
+  const [isExporting, setIsExporting] = useState(false);
 
-  const handleExportSchemesCSV = () => {
+  const handleExportAllToExcel = () => {
     setIsExporting(true);
     try {
+      // 1. Schemes Data
       const schemes = getMockSchemes();
-      const dataToExport: any[][] = [[
-        'Scheme ID', 'Customer Name', 'Group Name', 'Phone', 'Address', 
+      const schemesSheetData: any[][] = [[
+        'Scheme ID', 'Customer Name', 'Group Name', 'Phone', 'Address',
         'Start Date', 'Monthly Amount', 'Duration (Months)', 'Status', 'Closure Date',
         'Total Collected', 'Total Remaining', 'Payments Made Count'
       ]];
       schemes.forEach(s => {
-        dataToExport.push([
+        schemesSheetData.push([
           s.id.toUpperCase(),
           s.customerName,
           s.customerGroupName || 'N/A',
@@ -50,27 +47,15 @@ function DataManagementTabContent() {
           s.paymentsMadeCount || 0
         ]);
       });
-      const csvString = arrayToCSV(dataToExport);
-      downloadCSV(csvString, 'schemes_data.csv');
-      toast({ title: 'Success', description: 'Schemes data exported successfully.' });
-    } catch (error) {
-      console.error('Error exporting schemes data:', error);
-      toast({ title: 'Error', description: 'Failed to export schemes data.', variant: 'destructive' });
-    }
-    setIsExporting(false);
-  };
 
-  const handleExportPaymentsCSV = () => {
-    setIsExporting(true);
-    try {
-      const schemes = getMockSchemes();
-      const dataToExport: any[][] = [[
-        'Payment ID', 'Scheme ID', 'Customer Name', 'Month #', 'Due Date', 
+      // 2. Payments Data
+      const paymentsSheetData: any[][] = [[
+        'Payment ID', 'Scheme ID', 'Customer Name', 'Month #', 'Due Date',
         'Payment Date', 'Amount Expected', 'Amount Paid', 'Mode of Payment', 'Payment Status'
       ]];
-      schemes.forEach(s => {
+      schemes.forEach(s => { // Can reuse schemes fetched for schemesSheetData
         s.payments.forEach(p => {
-          dataToExport.push([
+          paymentsSheetData.push([
             p.id,
             s.id.toUpperCase(),
             s.customerName,
@@ -80,30 +65,14 @@ function DataManagementTabContent() {
             p.amountExpected,
             p.amountPaid !== undefined ? p.amountPaid : 'N/A',
             p.modeOfPayment?.join(' | ') || 'N/A',
-            getPaymentStatus(p, s.startDate) // Ensure current status
+            getPaymentStatus(p, s.startDate)
           ]);
         });
       });
-      if (dataToExport.length <= 1) {
-        toast({ title: 'No Data', description: 'No payment data found to export.' });
-      } else {
-        const csvString = arrayToCSV(dataToExport);
-        downloadCSV(csvString, 'payments_data.csv');
-        toast({ title: 'Success', description: 'Payments data exported successfully.' });
-      }
-    } catch (error) {
-      console.error('Error exporting payments data:', error);
-      toast({ title: 'Error', description: 'Failed to export payments data.', variant: 'destructive' });
-    }
-    setIsExporting(false);
-  };
 
-  const handleExportCustomersCSV = () => {
-    setIsExporting(true);
-    try {
-      const schemes = getMockSchemes();
+      // 3. Customers Data
       const customerMap = new Map<string, { name: string, phone: string, address: string, groups: Set<string> }>();
-      schemes.forEach(s => {
+      schemes.forEach(s => { // Can reuse schemes
         if (!customerMap.has(s.customerName)) {
           customerMap.set(s.customerName, {
             name: s.customerName,
@@ -114,58 +83,42 @@ function DataManagementTabContent() {
         }
         const customerEntry = customerMap.get(s.customerName)!;
         if (s.customerGroupName) customerEntry.groups.add(s.customerGroupName);
-        // Prefer non-N/A values if encountered later
         if (s.customerPhone && customerEntry.phone === 'N/A') customerEntry.phone = s.customerPhone;
         if (s.customerAddress && customerEntry.address === 'N/A') customerEntry.address = s.customerAddress;
       });
-
-      const dataToExport: any[][] = [['Customer Name', 'Phone', 'Address', 'Associated Groups']];
+      const customersSheetData: any[][] = [['Customer Name', 'Phone', 'Address', 'Associated Groups']];
       customerMap.forEach(c => {
-        dataToExport.push([
+        customersSheetData.push([
           c.name,
           c.phone,
           c.address,
           Array.from(c.groups).join(' | ') || 'N/A'
         ]);
       });
-      
-      if (dataToExport.length <= 1) {
-        toast({ title: 'No Data', description: 'No customer data found to export.' });
-      } else {
-        const csvString = arrayToCSV(dataToExport);
-        downloadCSV(csvString, 'customers_data.csv');
-        toast({ title: 'Success', description: 'Customers data exported successfully.' });
-      }
-    } catch (error) {
-      console.error('Error exporting customers data:', error);
-      toast({ title: 'Error', description: 'Failed to export customers data.', variant: 'destructive' });
-    }
-    setIsExporting(false);
-  };
 
-  const handleExportGroupsCSV = () => {
-    setIsExporting(true);
-    try {
+      // 4. Groups Data
       const groups = getGroupDetails();
-      const dataToExport: any[][] = [['Group Name', 'Number of Customers', 'Number of Schemes', 'Customer Names']];
+      const groupsSheetData: any[][] = [['Group Name', 'Number of Customers', 'Number of Schemes', 'Customer Names']];
       groups.forEach(g => {
-        dataToExport.push([
+        groupsSheetData.push([
           g.groupName,
           g.customerNames.length,
           g.totalSchemesInGroup,
           g.customerNames.join(' | ')
         ]);
       });
-      if (dataToExport.length <= 1) {
-        toast({ title: 'No Data', description: 'No group data found to export.' });
-      } else {
-        const csvString = arrayToCSV(dataToExport);
-        downloadCSV(csvString, 'groups_data.csv');
-        toast({ title: 'Success', description: 'Groups data exported successfully.' });
-      }
+
+      exportToExcel([
+        { name: 'Schemes', data: schemesSheetData.length > 1 ? schemesSheetData : [['No scheme data to export']] },
+        { name: 'Payments', data: paymentsSheetData.length > 1 ? paymentsSheetData : [['No payment data to export']] },
+        { name: 'Customers', data: customersSheetData.length > 1 ? customersSheetData : [['No customer data to export']] },
+        { name: 'Groups', data: groupsSheetData.length > 1 ? groupsSheetData : [['No group data to export']] }
+      ], 'scheme_tracker_all_data');
+
+      toast({ title: 'Success', description: 'All data exported to Excel successfully.' });
     } catch (error) {
-      console.error('Error exporting groups data:', error);
-      toast({ title: 'Error', description: 'Failed to export groups data.', variant: 'destructive' });
+      console.error('Error exporting all data to Excel:', error);
+      toast({ title: 'Error', description: 'Failed to export data to Excel.', variant: 'destructive' });
     }
     setIsExporting(false);
   };
@@ -175,47 +128,24 @@ function DataManagementTabContent() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
-            <Download className="h-5 w-5 text-primary" />
-            Export Data as CSV
+            <FileSpreadsheet className="h-5 w-5 text-primary" />
+            Export All Data to Excel
           </CardTitle>
           <CardDescription>
-            Download different categories of your application data. Each button will generate a separate CSV file.
-            A single CSV file cannot contain multiple tabs; for that, an Excel (.xlsx) file would be needed.
+            Download a single Excel (.xlsx) file containing all your application data, organized into separate sheets for Schemes, Payments, Customers, and Groups.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
-          <Button 
-            onClick={handleExportSchemesCSV} 
+        <CardContent>
+          <Button
+            onClick={handleExportAllToExcel}
             disabled={isExporting}
+            className="w-full sm:w-auto"
           >
             {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Schemes Data
-          </Button>
-          <Button 
-            onClick={handleExportPaymentsCSV} 
-            disabled={isExporting}
-          >
-            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Payments Data
-          </Button>
-          <Button 
-            onClick={handleExportCustomersCSV} 
-            disabled={isExporting}
-          >
-            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Customers Data
-          </Button>
-          <Button 
-            onClick={handleExportGroupsCSV} 
-            disabled={isExporting}
-          >
-            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Export Groups Data
+            Export All Data (.xlsx)
           </Button>
         </CardContent>
       </Card>
-      
-      {/* Removed all import sections */}
     </div>
   );
 }
