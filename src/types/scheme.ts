@@ -14,7 +14,7 @@ export interface Payment {
   modeOfPayment?: PaymentMode[];
 }
 
-export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming';
+export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming' | 'Closed';
 
 export interface Scheme {
   id: string;
@@ -41,3 +41,4 @@ export interface GroupDetail {
   totalSchemesInGroup: number;
   recordableSchemeCount: number; // Number of schemes in this group with a next payment due
 }
+

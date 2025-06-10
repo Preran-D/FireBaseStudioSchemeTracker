@@ -76,26 +76,17 @@ export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'sta
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
-  // First, ensure all individual payment statuses are up-to-date for accurate calculation
+  // Ensure all individual payment statuses are up-to-date for accurate calculation
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
-  const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
-
-  // If the scheme has a closureDate, it was intended to be completed.
-  // Verify if it genuinely still meets 'Completed' criteria.
+  // If a scheme has a closureDate, it is considered 'Closed' by manual action.
   if (scheme.closureDate) {
-    if (allPaymentsPaid) {
-      return 'Completed';
-    } else {
-      // If it was marked completed (had a closureDate) but no longer has all payments paid,
-      // it's no longer truly 'Completed'. We fall through to re-evaluate.
-      // The closureDate should be cleared by the calling function if this condition is met.
-    }
-  } else {
-    // If no closureDate and all payments are paid, it's 'Completed' naturally.
-    if (allPaymentsPaid) {
-      return 'Completed';
-    }
+    return 'Closed';
+  }
+  
+  const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
+  if (allPaymentsPaid) {
+    return 'Completed'; // All payments made, but not yet manually 'Closed'.
   }
 
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));
@@ -104,8 +95,6 @@ export function getSchemeStatus(scheme: Scheme): SchemeStatus {
   const hasOverduePayment = scheme.payments.some(p => p.status === 'Overdue');
   if (hasOverduePayment) return 'Overdue';
   
-  // If not upcoming, not overdue, and not all payments made, it's active.
-  // (The 'Completed' case for all payments naturally paid is handled above)
   return 'Active';
 }
 
@@ -124,3 +113,4 @@ export function calculateSchemeTotals(scheme: Scheme): Partial<Scheme> {
 export function generateId(): string {
   return Math.random().toString(36).substr(2, 6); // Generates a 6-character string
 }
+
