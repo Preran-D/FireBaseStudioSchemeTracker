@@ -19,10 +19,11 @@ const navItems = [
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
+// Utility items will now only have icons for desktop, labels for mobile.
 const utilityNavItems = [
-    { href: '#!', label: 'Settings', icon: Settings },
-    { href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
-    { href: '#!', label: 'Profile', icon: User },
+    { id: 'settings', href: '#!', label: 'Settings', icon: Settings },
+    { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
+    { id: 'profile', href: '#!', label: 'Profile', icon: User },
 ];
 
 
@@ -31,7 +32,6 @@ function TopNavigationBar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Close mobile menu on route change
     if (isMobileMenuOpen) {
       setIsMobileMenuOpen(false);
     }
@@ -42,35 +42,37 @@ function TopNavigationBar() {
 
   return (
     <header className="sticky top-0 z-50 py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
+      {/* Main navigation bar container */}
       <div
-        className="container mx-auto flex h-16 items-center justify-between rounded-full px-3 shadow-lg
-                   bg-card/60 dark:bg-card/50 backdrop-blur-lg border border-white/20 dark:border-white/10"
+        className="container mx-auto flex h-16 items-center justify-between rounded-full px-4 md:px-6 shadow-lg
+                   bg-card/70 dark:bg-card/60 backdrop-blur-xl border border-white/20 dark:border-white/10"
       >
-        {/* Left: Logo - Stays on the far left */}
-        <Link href="/" className="flex items-center">
+        {/* Left: Logo */}
+        <Link href="/" className="flex-shrink-0">
           <div
-            className="px-5 py-2 border border-[hsl(var(--border)/0.6)] dark:border-[hsl(var(--border)/0.5)] rounded-full
-                       text-foreground font-semibold text-base hover:bg-muted/50 transition-colors"
+            className="px-5 py-2.5 border border-[hsl(var(--border)/0.7)] dark:border-[hsl(var(--border)/0.6)] rounded-full
+                       text-foreground font-semibold text-sm hover:bg-muted/30 transition-colors"
           >
             Scheme Tracker
           </div>
         </Link>
 
         {/* Right: Group for Navigation Links and Utility Icons (Desktop) */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-3">
+          {/* Main Navigation Links */}
           <nav
-            className="flex items-center gap-1 rounded-full px-2 py-1.5 shadow-inner
-                       bg-background/80 dark:bg-zinc-800/80 border border-[hsl(var(--border)/0.4)] dark:border-[hsl(var(--border)/0.4)]"
+            className="flex items-center gap-1 rounded-full px-2 py-1.5
+                       bg-background/80 dark:bg-zinc-800/70 border border-[hsl(var(--border)/0.5)] dark:border-[hsl(var(--border)/0.4)]"
           >
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-medium transition-colors",
+                  "px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ease-out",
                   pathname === item.href
                     ? "bg-primary text-primary-foreground shadow-md"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
               >
                 {item.label}
@@ -78,27 +80,29 @@ function TopNavigationBar() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* Utility Icons */}
+          <div className="flex items-center gap-2 rounded-full px-1.5 py-1
+                          bg-background/80 dark:bg-zinc-800/70 border border-[hsl(var(--border)/0.5)] dark:border-[hsl(var(--border)/0.4)]">
             {utilityNavItems.map((item) => (
               <Button
-                key={item.label}
+                key={item.id}
                 variant="ghost"
-                size="icon" 
+                size="icon"
                 asChild
-                className="rounded-full bg-background/80 dark:bg-zinc-800/80 hover:bg-muted/80
+                className="rounded-full bg-transparent hover:bg-muted/60
                            text-muted-foreground hover:text-foreground
-                           h-10 w-10 relative shadow-sm border border-[hsl(var(--border)/0.4)] dark:border-[hsl(var(--border)/0.4)]"
+                           h-9 w-9 relative"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
                   {item.hasNotification && (
-                      <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-background/80" />
+                      <span className="absolute top-1.5 right-1.5 block h-2 w-2.5 rounded-full bg-accent ring-1 ring-background" />
                   )}
                   <span className="sr-only">{item.label}</span>
                 </Link>
               </Button>
             ))}
-            <ThemeToggle />
+            <ThemeToggle /> {/* ThemeToggle is already styled as a circular icon button */}
           </div>
         </div>
 
@@ -123,11 +127,11 @@ function TopNavigationBar() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden absolute top-20 left-0 right-0 mx-4 shadow-xl z-40"
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="md:hidden absolute top-[calc(100%_-_0.25rem)] left-0 right-0 mx-4 shadow-xl z-40" // Positioned slightly overlapping
           >
-            <div className="rounded-xl border border-border bg-card/80 dark:bg-card/70 backdrop-blur-lg p-4">
-              <nav className="flex flex-col space-y-2 mb-4">
+            <div className="rounded-xl border border-border bg-card/90 dark:bg-card/80 backdrop-blur-lg p-4">
+              <nav className="flex flex-col space-y-1 mb-3">
                 {navItems.map((item) => (
                   <Link
                     key={`mobile-${item.label}`}
@@ -140,20 +144,20 @@ function TopNavigationBar() {
                         : "text-foreground hover:bg-muted"
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className="h-5 w-5 opacity-80" />
                     {item.label}
                   </Link>
                 ))}
               </nav>
-              <div className="border-t border-border pt-4 space-y-2">
+              <div className="border-t border-border pt-3 space-y-1">
                  {utilityNavItems.map((item) => (
                   <Link
-                    key={`mobile-util-${item.label}`}
+                    key={`mobile-util-${item.id}`}
                     href={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-foreground hover:bg-muted relative"
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className="h-5 w-5 opacity-80" />
                     {item.label}
                     {item.hasNotification && (
                       <span className="absolute top-1/2 right-3 -translate-y-1/2 block h-2.5 w-2.5 rounded-full bg-accent" />
@@ -162,7 +166,7 @@ function TopNavigationBar() {
                 ))}
                 <div className="flex justify-between items-center px-3 py-2.5 rounded-lg hover:bg-muted">
                     <span className="flex items-center gap-3 text-base font-medium text-foreground">
-                        <Settings className="h-5 w-5"/> Theme
+                        <Settings className="h-5 w-5 opacity-80"/> Theme
                     </span>
                     <ThemeToggle />
                 </div>
@@ -177,7 +181,7 @@ function TopNavigationBar() {
 
 export default function AppLayout({ children }: PropsWithChildren) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="min-h-screen flex flex-col bg-background text-foreground font-body">
       <TopNavigationBar />
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto">
         {children}
@@ -185,5 +189,6 @@ export default function AppLayout({ children }: PropsWithChildren) {
     </div>
   );
 }
+    
 
     
