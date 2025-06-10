@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User, Menu, MoreVertical, Sun, Moon } from 'lucide-react';
-import { ThemeToggle } from './ThemeToggle';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTheme } from '@/hooks/useTheme'; // Import useTheme
+import { useTheme } from '@/hooks/useTheme';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,7 +26,7 @@ const navItems = [
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
-// Utility items will now only have icons for desktop, labels for mobile dropdown.
+// Utility items for the top-right dropdown on mobile, and icons on desktop.
 const utilityNavItems = [
     { id: 'settings', href: '#!', label: 'Settings', icon: Settings },
     { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
@@ -35,7 +35,8 @@ const utilityNavItems = [
 
 function TopNavigationBar() {
   const pathname = usePathname();
-  const { setTheme } = useTheme(); // Get setTheme from useTheme
+  const { theme, setTheme } = useTheme();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
@@ -62,7 +63,7 @@ function TopNavigationBar() {
           >
             {navItems.map((item) => (
               <Link
-                key={item.label}
+                key={item.href} // Changed from item.label
                 href={item.href}
                 className={cn(
                   "px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ease-out",
@@ -98,7 +99,31 @@ function TopNavigationBar() {
                 </Link>
               </Button>
             ))}
-            <ThemeToggle />
+            {/* Desktop Theme Toggle */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="rounded-full bg-transparent hover:bg-muted/60 text-muted-foreground hover:text-foreground h-9 w-9"
+                >
+                  <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setTheme("light")} className={cn(theme === 'light' && 'font-semibold bg-muted/50', "cursor-pointer")}>
+                  Light
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("dark")} className={cn(theme === 'dark' && 'font-semibold bg-muted/50', "cursor-pointer")}>
+                  Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme("system")} className={cn(theme === 'system' && 'font-semibold bg-muted/50', "cursor-pointer")}>
+                  System
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -140,7 +165,7 @@ function TopNavigationBar() {
 
 function BottomNavigationBar() {
   const pathname = usePathname();
-  // Select first 4-5 items for the bottom bar. Example:
+  // Select first 4 items for the bottom bar.
   const bottomNavItems = navItems.slice(0, 4); 
 
   return (
@@ -150,10 +175,10 @@ function BottomNavigationBar() {
           const isActive = pathname === item.href;
           return (
             <Link
-              key={`bottom-${item.label}`}
+              key={`bottom-${item.href}`} // Changed from item.label
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full", // Ensure full height for touch target
+                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full",
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground/80 hover:bg-muted/30"
               )}
               aria-current={isActive ? "page" : undefined}
@@ -173,11 +198,10 @@ export default function AppLayout({ children }: PropsWithChildren) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground font-body">
       <TopNavigationBar />
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto md:pt-8 pb-20 md:pb-6"> {/* Added pb-20 for bottom nav, adjusted md:pb */}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto md:pt-8 pb-20 md:pb-6">
         {children}
       </main>
       <BottomNavigationBar />
     </div>
   );
 }
-    
