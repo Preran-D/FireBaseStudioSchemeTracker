@@ -86,13 +86,7 @@ export default function RecordPaymentPage() {
     mode: 'onTouched',
   });
 
-  const getMockSchemeById = (id: string): Scheme | undefined => {
-    const foundScheme = allRecordableSchemes.find(s => s.id === id); // Assuming allRecordableSchemes has the latest data
-    if (foundScheme) return JSON.parse(JSON.stringify(foundScheme));
-    const globalScheme = getMockSchemes().find(s => s.id === id); // Fallback to global mock
-    if (globalScheme) return JSON.parse(JSON.stringify(globalScheme));
-    return undefined;
-  };
+  // Removed getMockSchemeById as it's part of mock-data and not needed here directly
 
   useEffect(() => {
     const initialGroupSearchParam = searchParams.get('group');
@@ -131,7 +125,6 @@ export default function RecordPaymentPage() {
     if (initialGroupSearchParam) {
       const decodedInitialSearch = decodeURIComponent(initialGroupSearchParam);
       setSearchTerm(decodedInitialSearch);
-      // Trigger suggestion logic based on initial search term
       const lowerInitialSearchTerm = decodedInitialSearch.toLowerCase();
       const exactMatchGroup = loadedGroups.find(g => g.groupName.toLowerCase() === lowerInitialSearchTerm);
       setSuggestedGroup(exactMatchGroup || null);
@@ -188,7 +181,6 @@ export default function RecordPaymentPage() {
 
     if (activeGroupSelection === groupToToggle.groupName) {
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
-      // Optionally clear months/modes for deselected group schemes
       groupSchemeIds.forEach(id => {
         delete newMonths[id];
         delete newModes[id];
@@ -273,7 +265,6 @@ export default function RecordPaymentPage() {
         return newModes;
       });
     } else {
-      // Optionally, clear months and payment modes if deselected individually
       setMonthsToPayPerScheme(prev => {
           const newMonths = {...prev};
           delete newMonths[schemeId];
@@ -362,34 +353,36 @@ export default function RecordPaymentPage() {
     let failedSubmissions = 0;
 
     for (const schemeId of selectedSchemeIds) {
-      const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
+      const initialSchemeState = allRecordableSchemes.find((s) => s.id === schemeId);
       const numberOfMonths = monthsToPayPerScheme[schemeId];
       const modes = paymentModePerScheme[schemeId] || [];
 
-      if (scheme && numberOfMonths > 0 && modes.length > 0) {
+      if (initialSchemeState && numberOfMonths > 0 && modes.length > 0) {
         paymentsToSubmit++;
-        let tempScheme = scheme; // Use a local copy for multi-month recording
+        let currentSchemeStateForLoop: Scheme | undefined = JSON.parse(JSON.stringify(initialSchemeState)); // Use a deep copy for the loop
+
         for (let i = 0; i < numberOfMonths; i++) {
-          const paymentToUpdate = tempScheme.payments.find(p => getPaymentStatus(p, tempScheme.startDate) !== 'Paid');
+          if (!currentSchemeStateForLoop) break; // Should not happen if initial state was good
+
+          const paymentToUpdate = currentSchemeStateForLoop.payments.find(p => getPaymentStatus(p, currentSchemeStateForLoop!.startDate) !== 'Paid');
+          
           if (paymentToUpdate) {
-            const singlePaymentResult = updateMockSchemePayment(tempScheme.id, paymentToUpdate.id, {
+            const singlePaymentResult = updateMockSchemePayment(currentSchemeStateForLoop.id, paymentToUpdate.id, {
                 paymentDate: formatISO(values.paymentDate),
                 modeOfPayment: modes,
-                amountPaid: tempScheme.monthlyPaymentAmount,
+                amountPaid: currentSchemeStateForLoop.monthlyPaymentAmount, // Amount paid is fixed to monthly amount here
             });
+
             if (singlePaymentResult) {
-              totalRecordedAmount += tempScheme.monthlyPaymentAmount;
+              totalRecordedAmount += currentSchemeStateForLoop.monthlyPaymentAmount;
               successfulSubmissions++;
-              // Update tempScheme with the result to reflect the payment for the next iteration
-              const reloadedScheme = getMockSchemeById(tempScheme.id); // Fetch the fully updated scheme
-              if (reloadedScheme) tempScheme = reloadedScheme; else { failedSubmissions++; break; }
+              currentSchemeStateForLoop = singlePaymentResult; // Update currentSchemeStateForLoop with the fresh state
             } else {
               failedSubmissions++;
-              // If one payment fails, we might want to stop for this scheme
-              break; 
+              break; // Stop processing this scheme if one payment fails
             }
           } else {
-            // This means we tried to record more months than available unpaid ones for this scheme
+            // No more unpaid installments found for this scheme, even though we expected to pay more.
             failedSubmissions++; 
             break;
           }
@@ -402,7 +395,7 @@ export default function RecordPaymentPage() {
         title: "Payments Recorded",
         description: `${successfulSubmissions} payment installments totaling ${formatCurrency(totalRecordedAmount)} recorded. ${failedSubmissions > 0 ? `${failedSubmissions} errors.` : ''}`,
       });
-      // Refresh data for the page
+      // Refresh data for the page by re-fetching and re-filtering
       const reloadedSchemes = getMockSchemes().filter(s => {
           if (s.status === 'Active' || s.status === 'Overdue') {
               for (let i = 0; i < s.payments.length; i++) {
@@ -416,7 +409,15 @@ export default function RecordPaymentPage() {
               }
           }
           return false;
-      }).sort((a,b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()); // Simplified sort, adjust if needed
+      }).sort((a,b) => { // Ensure consistent sort order after reload
+        const nextDueA = a.payments.find(p => getPaymentStatus(p, a.startDate) !== 'Paid');
+        const nextDueB = b.payments.find(p => getPaymentStatus(p, b.startDate) !== 'Paid');
+        if (nextDueA && nextDueB) {
+            const dateDiff = parseISO(nextDueA.dueDate).getTime() - parseISO(nextDueB.dueDate).getTime();
+            if (dateDiff !== 0) return dateDiff;
+        }
+        return a.customerName.localeCompare(b.customerName);
+      });
       setAllRecordableSchemes(reloadedSchemes);
       
       setSelectedSchemeIds([]);
@@ -512,7 +513,7 @@ export default function RecordPaymentPage() {
             const currentPaymentModes = paymentModePerScheme[scheme.id] || [];
 
             return (
-              <motion.div // Outer div for item, removing 'layout' prop
+              <motion.div 
                 key={scheme.id}
                 variants={listItemVariants}
                 initial="hidden"
@@ -555,7 +556,7 @@ export default function RecordPaymentPage() {
                       animate={{ opacity: 1, height: 'auto', marginTop: '1rem' }}
                       exit={{ opacity: 0, height: 0, marginTop: 0 }}
                       transition={{ duration: 0.3, ease: "easeInOut" }}
-                      className="overflow-hidden" // Important for height animation
+                      className="overflow-hidden"
                     >
                       <div className="mt-1 flex items-center justify-between gap-2 p-2.5 border-t border-primary/20">
                         <span className="text-sm font-medium">Months to Pay:</span>
