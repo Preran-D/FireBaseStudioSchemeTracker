@@ -11,8 +11,8 @@ import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts";
 import { parseISO, format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
 import { motion } from 'framer-motion';
 
@@ -99,7 +99,6 @@ export default function DashboardPage() {
   const monthlyCollectionsChartConfig = {
     totalCollected: { label: "Collected", color: "hsl(var(--positive-value))" },
   };
-
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
