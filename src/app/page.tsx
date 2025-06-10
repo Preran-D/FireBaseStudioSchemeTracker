@@ -4,9 +4,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// import { Input } from '@/components/ui/input'; // Removed Input
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UserPlus, CreditCard, Search, PackageCheck, ListChecks, CalendarDays, LineChart as LineChartIcon, ChevronRight, Users, Repeat } from 'lucide-react';
+import { UserPlus, CreditCard, /*Search,*/ PackageCheck, ListChecks, CalendarDays, LineChart as LineChartIcon, ChevronRight, Users, Repeat } from 'lucide-react'; // Removed Search
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
@@ -23,7 +23,7 @@ interface RecentTransaction extends Payment {
 
 export default function DashboardPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  // const [searchTerm, setSearchTerm] = useState<string>(''); // Removed searchTerm state
 
   useEffect(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
@@ -41,23 +41,15 @@ export default function DashboardPage() {
   }, [allSchemes]);
 
   const recentlyCompletedSchemes = useMemo(() => {
-    let schemes = allSchemes
+    const schemes = allSchemes
       .filter(s => s.status === 'Completed' && s.closureDate)
       .sort((a, b) => parseISO(b.closureDate!).getTime() - parseISO(a.closureDate!).getTime());
-
-    if (searchTerm) {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      schemes = schemes.filter(s =>
-        s.customerName.toLowerCase().includes(lowerSearchTerm) ||
-        s.id.toLowerCase().includes(lowerSearchTerm) ||
-        (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm))
-      );
-    }
+    // Removed searchTerm filtering
     return schemes.slice(0, 10);
-  }, [allSchemes, searchTerm]);
+  }, [allSchemes]); // Removed searchTerm from dependencies
 
   const recentTransactions = useMemo(() => {
-    let transactions: RecentTransaction[] = [];
+    const transactions: RecentTransaction[] = [];
     allSchemes.forEach(scheme => {
       scheme.payments.forEach(payment => {
         if (payment.status === 'Paid' && payment.paymentDate) {
@@ -70,19 +62,11 @@ export default function DashboardPage() {
       });
     });
 
-    let sortedTransactions = transactions
+    const sortedTransactions = transactions
       .sort((a, b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime());
-
-    if (searchTerm) {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      sortedTransactions = sortedTransactions.filter(tx =>
-        tx.customerName.toLowerCase().includes(lowerSearchTerm) ||
-        tx.schemeId.toLowerCase().includes(lowerSearchTerm) ||
-        (tx.customerGroupName && tx.customerGroupName.toLowerCase().includes(lowerSearchTerm))
-      );
-    }
+    // Removed searchTerm filtering
     return sortedTransactions.slice(0, 10);
-  }, [allSchemes, searchTerm]);
+  }, [allSchemes]); // Removed searchTerm from dependencies
 
   const monthlyCollectionsData = useMemo(() => {
     const collections: Record<string, number> = {};
@@ -123,10 +107,10 @@ export default function DashboardPage() {
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: (i: number) => ({ // Ensure type annotation is compatible or removed if causing issues
+    visible: (i: number) => ({
       opacity: 1,
       y: 0,
-      transition: { delay: i * 0.1, duration: 0.4 } // Adjusted delay/duration slightly
+      transition: { delay: i * 0.1, duration: 0.4 }
     }),
   };
 
@@ -155,7 +139,8 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* Search Bar */}
+      {/* Search Bar Removed */}
+      {/*
       <motion.div  variants={cardVariants} initial="hidden" animate="visible" custom={1}>
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardContent className="p-4 sm:p-5">
@@ -172,9 +157,10 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </motion.div>
+      */}
 
       {/* Total Schemes Display */}
-      <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={2}>
+      <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={1}> {/* custom index adjusted */}
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -201,7 +187,7 @@ export default function DashboardPage() {
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          custom={3}
+          custom={2} // custom index adjusted
         >
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
@@ -238,7 +224,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Monthly Collections List */}
-        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={4}>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={3}> {/* custom index adjusted */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -275,14 +261,14 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recently Completed Schemes */}
-        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={5}>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={4}> {/* custom index adjusted */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
                 <PackageCheck className="mr-2.5 h-6 w-6 text-primary" />
                 Recently Completed Schemes
               </CardTitle>
-              <CardDescription>Top 10 schemes marked as completed. {searchTerm && `(Filtered by "${searchTerm}")`}</CardDescription>
+              <CardDescription>Top 10 schemes marked as completed.</CardDescription> {/* Removed searchTerm message */}
             </CardHeader>
             <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
               {recentlyCompletedSchemes.length > 0 ? (
@@ -315,7 +301,7 @@ export default function DashboardPage() {
                 </Table>
               ) : (
                 <p className="text-muted-foreground text-center py-4">
-                  {searchTerm ? `No completed schemes match "${searchTerm}".` : "No schemes completed yet."}
+                  No schemes completed yet.
                 </p>
               )}
             </CardContent>
@@ -323,14 +309,14 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Recent Transactions */}
-        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={6}>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={5}> {/* custom index adjusted */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
                 <Repeat className="mr-2.5 h-6 w-6 text-primary" />
                 Recent Transactions
               </CardTitle>
-              <CardDescription>Last 10 payments recorded. {searchTerm && `(Filtered by "${searchTerm}")`}</CardDescription>
+              <CardDescription>Last 10 payments recorded.</CardDescription> {/* Removed searchTerm message */}
             </CardHeader>
             <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
               {recentTransactions.length > 0 ? (
@@ -366,7 +352,7 @@ export default function DashboardPage() {
                   </div></>
               ) : (
                 <p className="text-muted-foreground text-center py-4">
-                  {searchTerm ? `No transactions match "${searchTerm}".` : "No transactions recorded yet."}
+                  No transactions recorded yet.
                 </p>
               )}
             </CardContent>
