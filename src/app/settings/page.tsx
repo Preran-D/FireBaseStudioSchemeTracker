@@ -1,15 +1,16 @@
 
 'use client';
 
-import { useState, type ReactNode, useEffect } from 'react';
+import { useState, type ReactNode, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon } from 'lucide-react';
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp } from 'lucide-react';
 import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames } from '@/lib/mock-data';
 import type { Scheme, PaymentMode, GroupDetail, Payment } from '@/types/scheme';
 import { formatDate, formatCurrency, getPaymentStatus, generateId } from '@/lib/utils';
 import { exportToExcel } from '@/lib/excelUtils';
+import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { formatISO, format as formatDateFns, parseISO } from 'date-fns';
+import { formatISO, format as formatDateFns, parseISO, isValid as isValidDate } from 'date-fns';
 
 interface ImportUIRow {
   id: string;
@@ -43,6 +44,7 @@ function DataManagementTabContent() {
   const [isImportProcessing, setIsImportProcessing] = useState(false);
   const [importResults, setImportResults] = useState<{ successCount: number; errorCount: number; messages: string[] } | null>(null);
   const [existingGroupNamesForImport, setExistingGroupNamesForImport] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isImportSectionVisible) {
@@ -177,9 +179,123 @@ function DataManagementTabContent() {
     );
   };
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setIsImportProcessing(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+
+        const newImportRows: ImportUIRow[] = jsonData.map((excelRow, index): ImportUIRow | null => {
+          // Normalize header keys (case-insensitive, remove extra spaces)
+          const normalizedRow: {[key: string]: any} = {};
+          for (const key in excelRow) {
+            normalizedRow[key.trim().toLowerCase().replace(/\s+/g, ' ')] = excelRow[key];
+          }
+          
+          const customerName = String(normalizedRow['customer name'] || '').trim();
+          let startDate = normalizedRow['start date (yyyy-mm-dd)'];
+
+          if (!customerName) {
+            toast({ title: `Excel Row ${index + 2} Skipped`, description: "Customer Name is missing.", variant: "destructive"});
+            return null; // Skip row if essential data missing
+          }
+          
+          if (startDate) {
+            if (startDate instanceof Date && isValidDate(startDate)) {
+              // Already a date object from cellDates:true
+            } else if (typeof startDate === 'string') {
+              startDate = parseISO(startDate.trim());
+              if (!isValidDate(startDate)) startDate = undefined;
+            } else if (typeof startDate === 'number') { // Excel date serial number
+              startDate = XLSX.SSF.parse_date_code(startDate) as any; // temp any
+              if (startDate) {
+                 startDate = new Date(startDate.y, startDate.m - 1, startDate.d, startDate.H, startDate.M, startDate.S);
+              } else {
+                 startDate = undefined;
+              }
+            } else {
+              startDate = undefined;
+            }
+          } else {
+            startDate = undefined;
+          }
+
+
+          if (!startDate) {
+             toast({ title: `Excel Row ${index + 2} Skipped`, description: `Start Date is missing or invalid for ${customerName}. Expected YYYY-MM-DD.`, variant: "destructive"});
+             return null;
+          }
+
+          const monthlyAmountStr = String(normalizedRow['monthly payment amount'] || '0').trim();
+          const initialPaymentsStr = String(normalizedRow['initial payments paid (0-12)'] || '0').trim();
+
+
+          return {
+            id: generateId(),
+            customerName: customerName,
+            groupName: String(normalizedRow['group name'] || '').trim(),
+            phone: String(normalizedRow['phone'] || '').trim(),
+            address: String(normalizedRow['address'] || '').trim(),
+            startDate: startDate,
+            monthlyPaymentAmount: monthlyAmountStr,
+            initialPaymentsPaid: initialPaymentsStr,
+          };
+        }).filter(row => row !== null) as ImportUIRow[];
+
+        setImportRows(newImportRows);
+        toast({ title: "Excel File Processed", description: `${newImportRows.length} rows loaded into the table for review. Please verify and click "Process Import".` });
+      } catch (error) {
+        console.error("Error parsing Excel file:", error);
+        toast({ title: "Error Parsing File", description: "Could not parse the Excel file. Please ensure it's a valid .xlsx file and the format is correct.", variant: "destructive" });
+        setImportRows([]);
+      } finally {
+        setIsImportProcessing(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""; // Reset file input
+        }
+      }
+    };
+    reader.onerror = () => {
+        toast({ title: "File Read Error", description: "Could not read the selected file.", variant: "destructive" });
+        setIsImportProcessing(false);
+         if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownloadSampleExcel = () => {
+    const headers = ["Customer Name", "Group Name", "Phone", "Address", "Start Date (YYYY-MM-DD)", "Monthly Payment Amount", "Initial Payments Paid (0-12)"];
+    const exampleRow = ["John Doe Example", "Alpha Group", "9988776655", "123 Main St, Anytown", "2024-08-01", "1000", "1"];
+    const data = [headers, exampleRow];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    // Set column widths (optional, for better readability)
+    worksheet['!cols'] = [
+        { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, 
+        { wch: 20 }, { wch: 20 }, { wch: 20 } 
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Schemes Import");
+    XLSX.writeFile(workbook, "Scheme_Import_Sample.xlsx");
+    toast({title: "Sample File Downloaded", description: "Scheme_Import_Sample.xlsx has been downloaded."});
+  };
+
+
   const handleProcessImportFromUI = async () => {
     if (importRows.length === 0) {
-      toast({ title: 'No Data', description: 'Please add at least one scheme to import.', variant: 'destructive' });
+      toast({ title: 'No Data', description: 'Please add at least one scheme to import, either manually or by uploading an Excel file.', variant: 'destructive' });
       return;
     }
     setIsImportProcessing(true);
@@ -191,27 +307,27 @@ function DataManagementTabContent() {
 
     for (let i = 0; i < importRows.length; i++) {
       const row = importRows[i];
-      const rowNum = i + 1;
+      const rowNumForMsg = `Row ${i + 1} (Table)`; // For user message
 
       if (!row.customerName.trim()) {
-        localResults.messages.push(`Row ${rowNum}: Customer Name is required.`);
+        localResults.messages.push(`${rowNumForMsg}: Customer Name is required.`);
         localResults.errorCount++;
         continue;
       }
       if (!row.startDate) {
-        localResults.messages.push(`Row ${rowNum}: Start Date is required for "${row.customerName}".`);
+        localResults.messages.push(`${rowNumForMsg}: Start Date is required for "${row.customerName}".`);
         localResults.errorCount++;
         continue;
       }
       const monthlyAmount = parseFloat(row.monthlyPaymentAmount);
       if (isNaN(monthlyAmount) || monthlyAmount <= 0) {
-        localResults.messages.push(`Row ${rowNum}: Monthly Payment Amount for "${row.customerName}" must be a positive number.`);
+        localResults.messages.push(`${rowNumForMsg}: Monthly Payment Amount for "${row.customerName}" must be a positive number.`);
         localResults.errorCount++;
         continue;
       }
       const initialPayments = parseInt(row.initialPaymentsPaid, 10);
       if (isNaN(initialPayments) || initialPayments < 0 || initialPayments > 12) {
-        localResults.messages.push(`Row ${rowNum}: Initial Payments Paid for "${row.customerName}" must be a number between 0 and 12.`);
+        localResults.messages.push(`${rowNumForMsg}: Initial Payments Paid for "${row.customerName}" must be a number between 0 and 12.`);
         localResults.errorCount++;
         continue;
       }
@@ -227,11 +343,11 @@ function DataManagementTabContent() {
         };
         const createdScheme = addMockScheme(newSchemeData);
         if (!createdScheme) {
-          localResults.messages.push(`Row ${rowNum}: Failed to create scheme for "${row.customerName}".`);
+          localResults.messages.push(`${rowNumForMsg}: Failed to create scheme for "${row.customerName}".`);
           localResults.errorCount++;
           continue;
         }
-        localResults.messages.push(`Row ${rowNum}: Successfully created scheme for "${createdScheme.customerName}" (ID: ${createdScheme.id.toUpperCase()}).`);
+        localResults.messages.push(`${rowNumForMsg}: Successfully created scheme for "${createdScheme.customerName}" (ID: ${createdScheme.id.toUpperCase()}).`);
         
         let recordedInitialPaymentsCount = 0;
         if (initialPayments > 0 && createdScheme.payments.length > 0) {
@@ -239,39 +355,37 @@ function DataManagementTabContent() {
           for (let j = 0; j < initialPayments; j++) {
             if (schemeForPaymentRecording && j < schemeForPaymentRecording.payments.length) {
               const paymentToUpdate = schemeForPaymentRecording.payments[j];
-               // Ensure status is based on expected for this payment
               const paymentStatus = getPaymentStatus(paymentToUpdate, schemeForPaymentRecording.startDate);
 
-              if (paymentStatus !== 'Paid') { // Only record if not already paid
+              if (paymentStatus !== 'Paid') {
                 const updatedSchemeResult = updateMockSchemePayment(schemeForPaymentRecording.id, paymentToUpdate.id, {
-                  paymentDate: schemeForPaymentRecording.startDate, // Pay on scheme start date
+                  paymentDate: schemeForPaymentRecording.startDate,
                   amountPaid: schemeForPaymentRecording.monthlyPaymentAmount,
                   modeOfPayment: ['Imported'] as PaymentMode[],
                 });
 
                 if (updatedSchemeResult) {
                   recordedInitialPaymentsCount++;
-                  schemeForPaymentRecording = updatedSchemeResult; // Use the updated scheme for the next iteration
+                  schemeForPaymentRecording = updatedSchemeResult;
                 } else {
-                  localResults.messages.push(`Row ${rowNum}: Error recording initial payment ${j + 1} for scheme ${createdScheme.id.toUpperCase()}.`);
-                  break; // Stop recording payments for this scheme if one fails
+                  localResults.messages.push(`${rowNumForMsg}: Error recording initial payment ${j + 1} for scheme ${createdScheme.id.toUpperCase()}.`);
+                  break; 
                 }
               } else {
-                 // If it was somehow already paid (e.g. data issue or re-import attempt), count it if within initialPayments desired.
                  recordedInitialPaymentsCount++; 
               }
             } else {
-              localResults.messages.push(`Row ${rowNum}: Attempted to record more initial payments (${initialPayments}) than available months (${createdScheme.payments.length}) for scheme ${createdScheme.id.toUpperCase()}.`);
+              localResults.messages.push(`${rowNumForMsg}: Attempted to record more initial payments (${initialPayments}) than available months (${createdScheme.payments.length}) for scheme ${createdScheme.id.toUpperCase()}.`);
               break;
             }
           }
           if (recordedInitialPaymentsCount > 0) {
-            localResults.messages.push(`Row ${rowNum}: Recorded/confirmed ${recordedInitialPaymentsCount} initial payment(s) for scheme ${createdScheme.id.toUpperCase()}.`);
+            localResults.messages.push(`${rowNumForMsg}: Recorded/confirmed ${recordedInitialPaymentsCount} initial payment(s) for scheme ${createdScheme.id.toUpperCase()}.`);
           }
         }
         localResults.successCount++;
       } catch (error: any) {
-        localResults.messages.push(`Row ${rowNum}: Error processing scheme for "${row.customerName}": ${error.message || 'Unknown error'}.`);
+        localResults.messages.push(`${rowNumForMsg}: Error processing scheme for "${row.customerName}": ${error.message || 'Unknown error'}.`);
         localResults.errorCount++;
       }
     }
@@ -288,7 +402,6 @@ function DataManagementTabContent() {
       toast({ title: 'Import Complete', description: 'No schemes were processed.', variant: 'default' });
     }
     setIsImportProcessing(false);
-    // Refresh existing group names in case new ones were added
     setExistingGroupNamesForImport(getUniqueGroupNames());
   };
 
@@ -296,6 +409,9 @@ function DataManagementTabContent() {
     setIsImportSectionVisible(false);
     setImportRows([]);
     setImportResults(null);
+    if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+    }
   };
 
   return (
@@ -329,7 +445,7 @@ function DataManagementTabContent() {
             Bulk Import Schemes
           </CardTitle>
           <CardDescription>
-            Add scheme details in the table below for bulk import. Existing group names will be suggested.
+            Upload an Excel file or manually add scheme details in the table below for bulk import.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -343,133 +459,160 @@ function DataManagementTabContent() {
               disabled={isExporting || isImportProcessing}
               className="w-full sm:w-auto"
             >
-              <FileText className="mr-2 h-4 w-4" /> Show Import Table
+              <FileText className="mr-2 h-4 w-4" /> Show Import Table / Upload
             </Button>
           ) : (
             <div className="space-y-6">
-              {importRows.length > 0 && (
-                <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-                  <Table className="min-w-[1000px]"> {/* Ensure table can scroll horizontally */}
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="px-2 py-2 w-[180px] sticky left-0 bg-background z-10">Customer Name*</TableHead>
-                        <TableHead className="px-2 py-2 w-[150px]">Group Name</TableHead>
-                        <TableHead className="px-2 py-2 w-[120px]">Phone</TableHead>
-                        <TableHead className="px-2 py-2 w-[200px]">Address</TableHead>
-                        <TableHead className="px-2 py-2 w-[150px]">Start Date*</TableHead>
-                        <TableHead className="px-2 py-2 w-[120px]">Monthly Amt*</TableHead>
-                        <TableHead className="px-2 py-2 w-[100px]">Initial Paid</TableHead>
-                        <TableHead className="px-2 py-2 w-[80px] text-center">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {importRows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="p-1 sticky left-0 bg-background z-10">
-                            <Input
-                              value={row.customerName}
-                              onChange={(e) => handleImportRowChange(row.id, 'customerName', e.target.value)}
-                              placeholder="John Doe"
-                              disabled={isImportProcessing}
-                              className="h-8 text-xs"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Input
-                              value={row.groupName}
-                              onChange={(e) => handleImportRowChange(row.id, 'groupName', e.target.value)}
-                              placeholder="Optional"
-                              disabled={isImportProcessing}
-                              className="h-8 text-xs"
-                              list="existing-group-names-datalist"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Input
-                              value={row.phone}
-                              onChange={(e) => handleImportRowChange(row.id, 'phone', e.target.value)}
-                              placeholder="Optional"
-                              disabled={isImportProcessing}
-                              className="h-8 text-xs"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Textarea
-                              value={row.address}
-                              onChange={(e) => handleImportRowChange(row.id, 'address', e.target.value)}
-                              placeholder="Optional"
-                              disabled={isImportProcessing}
-                              rows={1}
-                              className="h-8 text-xs resize-none leading-tight py-1.5"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant={'outline'}
-                                  className={cn("w-full justify-start text-left font-normal h-8 text-xs px-2", !row.startDate && "text-muted-foreground")}
-                                  disabled={isImportProcessing}
-                                >
-                                  <CalendarIcon className="mr-1.5 h-3 w-3" />
-                                  {row.startDate ? formatDateFns(row.startDate, "dd MMM yy") : <span>Pick date</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={row.startDate}
-                                  onSelect={(date) => handleImportRowChange(row.id, 'startDate', date)}
-                                  initialFocus
-                                  disabled={isImportProcessing}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Input
-                              type="number"
-                              value={row.monthlyPaymentAmount}
-                              onChange={(e) => handleImportRowChange(row.id, 'monthlyPaymentAmount', e.target.value)}
-                              placeholder="e.g., 1000"
-                              disabled={isImportProcessing}
-                              className="h-8 text-xs"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1">
-                            <Input
-                              type="number"
-                              value={row.initialPaymentsPaid}
-                              onChange={(e) => handleImportRowChange(row.id, 'initialPaymentsPaid', e.target.value)}
-                              placeholder="0-12"
-                              min="0" max="12"
-                              disabled={isImportProcessing}
-                              className="h-8 text-xs"
-                            />
-                          </TableCell>
-                          <TableCell className="p-1 text-center">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveImportRow(row.id)}
-                              className="h-7 w-7"
-                              disabled={isImportProcessing}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          </TableCell>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div>
+                    <Label htmlFor="excel-upload" className="text-sm font-medium">Upload Excel File (.xlsx)</Label>
+                    <Input
+                        id="excel-upload"
+                        type="file"
+                        accept=".xlsx"
+                        onChange={handleFileChange}
+                        className="mt-1 max-w-xs text-sm"
+                        disabled={isImportProcessing}
+                        ref={fileInputRef}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Overrides current table data.</p>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={handleDownloadSampleExcel}
+                    disabled={isImportProcessing}
+                    size="sm"
+                    className="mt-4 sm:mt-6"
+                >
+                    <Download className="mr-2 h-4 w-4" /> Download Sample.xlsx
+                </Button>
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="text-md font-medium mb-2">Or, Add/Edit Schemes Manually:</h3>
+                {importRows.length > 0 && (
+                  <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                    <Table className="min-w-[1200px]"> 
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="px-2 py-2 w-[180px] sticky left-0 bg-background z-10">Customer Name*</TableHead>
+                          <TableHead className="px-2 py-2 w-[150px]">Group Name</TableHead>
+                          <TableHead className="px-2 py-2 w-[120px]">Phone</TableHead>
+                          <TableHead className="px-2 py-2 w-[200px]">Address</TableHead>
+                          <TableHead className="px-2 py-2 w-[150px]">Start Date*</TableHead>
+                          <TableHead className="px-2 py-2 w-[120px]">Monthly Amt*</TableHead>
+                          <TableHead className="px-2 py-2 w-[100px]">Initial Paid</TableHead>
+                          <TableHead className="px-2 py-2 w-[80px] text-center">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <datalist id="existing-group-names-datalist">
-                    {existingGroupNamesForImport.map(name => <option key={name} value={name} />)}
-                  </datalist>
-                  <div className="p-2 text-xs text-muted-foreground">
-                    Scroll horizontally if table content is clipped. Customer Name is sticky.
-                  </div>
-                </ScrollArea>
-              )}
+                      </TableHeader>
+                      <TableBody>
+                        {importRows.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="p-1 sticky left-0 bg-background z-10">
+                              <Input
+                                value={row.customerName}
+                                onChange={(e) => handleImportRowChange(row.id, 'customerName', e.target.value)}
+                                placeholder="John Doe"
+                                disabled={isImportProcessing}
+                                className="h-8 text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Input
+                                value={row.groupName}
+                                onChange={(e) => handleImportRowChange(row.id, 'groupName', e.target.value)}
+                                placeholder="Optional"
+                                disabled={isImportProcessing}
+                                className="h-8 text-xs"
+                                list="existing-group-names-datalist"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Input
+                                value={row.phone}
+                                onChange={(e) => handleImportRowChange(row.id, 'phone', e.target.value)}
+                                placeholder="Optional"
+                                disabled={isImportProcessing}
+                                className="h-8 text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Textarea
+                                value={row.address}
+                                onChange={(e) => handleImportRowChange(row.id, 'address', e.target.value)}
+                                placeholder="Optional"
+                                disabled={isImportProcessing}
+                                rows={1}
+                                className="h-8 text-xs resize-none leading-tight py-1.5"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant={'outline'}
+                                    className={cn("w-full justify-start text-left font-normal h-8 text-xs px-2", !row.startDate && "text-muted-foreground")}
+                                    disabled={isImportProcessing}
+                                  >
+                                    <CalendarIcon className="mr-1.5 h-3 w-3" />
+                                    {row.startDate ? formatDateFns(row.startDate, "dd MMM yy") : <span>Pick date</span>}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={row.startDate}
+                                    onSelect={(date) => handleImportRowChange(row.id, 'startDate', date)}
+                                    initialFocus
+                                    disabled={isImportProcessing}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Input
+                                type="number"
+                                value={row.monthlyPaymentAmount}
+                                onChange={(e) => handleImportRowChange(row.id, 'monthlyPaymentAmount', e.target.value)}
+                                placeholder="e.g., 1000"
+                                disabled={isImportProcessing}
+                                className="h-8 text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1">
+                              <Input
+                                type="number"
+                                value={row.initialPaymentsPaid}
+                                onChange={(e) => handleImportRowChange(row.id, 'initialPaymentsPaid', e.target.value)}
+                                placeholder="0-12"
+                                min="0" max="12"
+                                disabled={isImportProcessing}
+                                className="h-8 text-xs"
+                              />
+                            </TableCell>
+                            <TableCell className="p-1 text-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveImportRow(row.id)}
+                                className="h-7 w-7"
+                                disabled={isImportProcessing}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <datalist id="existing-group-names-datalist">
+                      {existingGroupNamesForImport.map(name => <option key={name} value={name} />)}
+                    </datalist>
+                    <div className="p-2 text-xs text-muted-foreground">
+                      Scroll horizontally if table content is clipped. Customer Name is sticky. Use YYYY-MM-DD for dates in Excel.
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-4">
                 <Button
                   variant="outline"
@@ -477,7 +620,7 @@ function DataManagementTabContent() {
                   disabled={isImportProcessing}
                   size="sm"
                 >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Scheme Row
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Scheme Row Manually
                 </Button>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
@@ -486,7 +629,7 @@ function DataManagementTabContent() {
                   disabled={isImportProcessing || importRows.length === 0}
                   className="w-full sm:w-auto"
                 >
-                  {isImportProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  {isImportProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
                   Process Import ({importRows.length} {importRows.length === 1 ? "Scheme" : "Schemes"})
                 </Button>
                 <Button
@@ -495,7 +638,7 @@ function DataManagementTabContent() {
                   disabled={isImportProcessing}
                   className="w-full sm:w-auto"
                 >
-                  Cancel Import
+                  Cancel Import Section
                 </Button>
               </div>
             </div>
@@ -517,8 +660,8 @@ function DataManagementTabContent() {
             {importResults.messages.length > 0 ? (
               <ScrollArea className="h-60 w-full rounded-md border p-3 text-sm">
                 {importResults.messages.map((msg, index) => (
-                  <p key={index} className={`mb-1 ${msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') ? 'text-destructive' : msg.toLowerCase().includes('info') || msg.toLowerCase().includes('successfully') ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {msg.toLowerCase().includes('error') && <AlertCircle className="inline h-3.5 w-3.5 mr-1.5 relative -top-px" />}
+                  <p key={index} className={`mb-1 ${msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipped') ? 'text-destructive' : msg.toLowerCase().includes('successfully') || msg.toLowerCase().includes('created') ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {(msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipped')) && <AlertCircle className="inline h-3.5 w-3.5 mr-1.5 relative -top-px" />}
                     {msg}
                   </p>
                 ))}
@@ -640,3 +783,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
