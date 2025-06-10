@@ -5,7 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User, Menu, MoreVertical, Sun, Moon, X } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, Settings, Bell, User, MoreVertical, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,19 +16,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from '@/hooks/useTheme';
-// Removed motion and AnimatePresence as they are not used in the current refined version of mobile menu
-// import { motion, AnimatePresence } from 'framer-motion';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
   { href: '/transactions', label: 'Transactions', icon: Repeat },
   { href: '/groups', label: 'Groups', icon: UsersRound },
-  { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
 const utilityNavItems = [
-    { id: 'settings', href: '#!', label: 'Settings', icon: Settings },
+    { id: 'settings', href: '/settings', label: 'Settings', icon: Settings },
     { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
     { id: 'profile', href: '#!', label: 'Profile', icon: User },
 ];
@@ -181,7 +178,7 @@ function TopNavigationBar() {
                 className={cn("cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm text-foreground/80 hover:bg-muted/50", theme === 'system' && 'font-semibold bg-muted/30')}
               >
                 <Settings className="h-5 w-5 text-muted-foreground" />
-                <span>System Default</span>
+                <span>System Default Theme</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -193,8 +190,7 @@ function TopNavigationBar() {
 
 function BottomNavigationBar() {
   const pathname = usePathname();
-  // Select first 4 items for the bottom bar, or fewer if navItems is short
-  const bottomNavItems = navItems.slice(0, Math.min(navItems.length, 4));
+  const bottomNavItems = navItems.slice(0, Math.min(navItems.length, 4)); // Ensures we don't exceed 4 items if navItems is shorter
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)] dark:shadow-[0_-2px_10px_-3px_rgba(255,255,255,0.03)]">
@@ -206,7 +202,7 @@ function BottomNavigationBar() {
               key={`bottom-${item.href}`}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full",
+                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full", // Ensure w-1/4 for 4 items
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground/80 hover:bg-muted/30"
               )}
               aria-current={isActive ? "page" : undefined}
