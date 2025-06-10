@@ -186,6 +186,7 @@ function DataManagementTabContent() {
     }
 
     setIsImportProcessing(true);
+    setImportResults(null); // Clear previous results
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -193,75 +194,95 @@ function DataManagementTabContent() {
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 }); // Read as array of arrays
 
-        const newImportRows: ImportUIRow[] = jsonData.map((excelRow, index): ImportUIRow | null => {
-          // Normalize header keys (case-insensitive, remove extra spaces)
-          const normalizedRow: {[key: string]: any} = {};
-          for (const key in excelRow) {
-            normalizedRow[key.trim().toLowerCase().replace(/\s+/g, ' ')] = excelRow[key];
-          }
+        if (jsonData.length < 1) {
+            toast({ title: "Empty Excel File", description: "The Excel file appears to be empty or has no data in the first sheet.", variant: "destructive"});
+            setImportRows([]);
+            setIsImportProcessing(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+        
+        const headers = (jsonData[0] as Array<any>).map(h => String(h || '').trim().toLowerCase().replace(/\s+/g, ' '));
+        const expectedHeaders = ["customer name", "group name", "phone", "address", "start date (yyyy-mm-dd)", "monthly payment amount", "initial payments paid (0-12)"];
+        
+        const colMap: Record<string, number> = {};
+        expectedHeaders.forEach(eh => {
+            const idx = headers.indexOf(eh);
+            if(idx !== -1) colMap[eh] = idx;
+        });
+
+        // Check for mandatory headers
+        if (colMap["customer name"] === undefined || colMap["start date (yyyy-mm-dd)"] === undefined || colMap["monthly payment amount"] === undefined) {
+            toast({ title: "Missing Mandatory Columns", description: "Excel file must contain 'Customer Name', 'Start Date (YYYY-MM-DD)', and 'Monthly Payment Amount' columns.", variant: "destructive", duration: 7000});
+            setImportRows([]);
+            setIsImportProcessing(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+
+
+        const newImportRows: ImportUIRow[] = jsonData.slice(1).map((excelRowArray, index): ImportUIRow | null => {
+          const excelRow = excelRowArray as Array<any>;
+          const customerName = String(excelRow[colMap["customer name"]] || '').trim();
+          let startDateRaw = excelRow[colMap["start date (yyyy-mm-dd)"]];
+          let startDate: Date | undefined = undefined;
           
-          const customerName = String(normalizedRow['customer name'] || '').trim();
-          let startDate = normalizedRow['start date (yyyy-mm-dd)'];
-
           if (!customerName) {
-            toast({ title: `Excel Row ${index + 2} Skipped`, description: "Customer Name is missing.", variant: "destructive"});
-            return null; // Skip row if essential data missing
+            // If customer name is missing for a row, we might skip it or mark for user to fix later.
+            // For now, let's skip with a general message after processing if some rows are bad.
+            return null; 
           }
           
-          if (startDate) {
-            if (startDate instanceof Date && isValidDate(startDate)) {
-              // Already a date object from cellDates:true
-            } else if (typeof startDate === 'string') {
-              startDate = parseISO(startDate.trim());
-              if (!isValidDate(startDate)) startDate = undefined;
-            } else if (typeof startDate === 'number') { // Excel date serial number
-              startDate = XLSX.SSF.parse_date_code(startDate) as any; // temp any
-              if (startDate) {
-                 startDate = new Date(startDate.y, startDate.m - 1, startDate.d, startDate.H, startDate.M, startDate.S);
-              } else {
-                 startDate = undefined;
+          if (startDateRaw) {
+            if (startDateRaw instanceof Date && isValidDate(startDateRaw)) {
+              startDate = startDateRaw;
+            } else if (typeof startDateRaw === 'string') {
+              const parsedDate = parseISO(startDateRaw.trim());
+              if (isValidDate(parsedDate)) startDate = parsedDate;
+            } else if (typeof startDateRaw === 'number') { // Excel date serial number
+              const dateInfo = XLSX.SSF.parse_date_code(startDateRaw);
+              if (dateInfo) {
+                 startDate = new Date(dateInfo.y, dateInfo.m - 1, dateInfo.d, dateInfo.H, dateInfo.M, dateInfo.S);
+                 if (!isValidDate(startDate)) startDate = undefined;
               }
-            } else {
-              startDate = undefined;
             }
-          } else {
-            startDate = undefined;
           }
 
-
-          if (!startDate) {
-             toast({ title: `Excel Row ${index + 2} Skipped`, description: `Start Date is missing or invalid for ${customerName}. Expected YYYY-MM-DD.`, variant: "destructive"});
-             return null;
-          }
-
-          const monthlyAmountStr = String(normalizedRow['monthly payment amount'] || '0').trim();
-          const initialPaymentsStr = String(normalizedRow['initial payments paid (0-12)'] || '0').trim();
-
+          const monthlyAmountStr = String(excelRow[colMap["monthly payment amount"]] || '').trim();
+          const initialPaymentsStr = String(excelRow[colMap["initial payments paid (0-12)"]] || '0').trim();
 
           return {
             id: generateId(),
             customerName: customerName,
-            groupName: String(normalizedRow['group name'] || '').trim(),
-            phone: String(normalizedRow['phone'] || '').trim(),
-            address: String(normalizedRow['address'] || '').trim(),
+            groupName: String(excelRow[colMap["group name"]] || '').trim(),
+            phone: String(excelRow[colMap["phone"]] || '').trim(),
+            address: String(excelRow[colMap["address"]] || '').trim(),
             startDate: startDate,
             monthlyPaymentAmount: monthlyAmountStr,
             initialPaymentsPaid: initialPaymentsStr,
           };
-        }).filter(row => row !== null) as ImportUIRow[];
+        }).filter(row => row !== null && row.customerName) as ImportUIRow[];
 
+
+        if (newImportRows.length === 0 && jsonData.length > 1) {
+             toast({ title: "No Valid Data Rows", description: "No valid data rows could be processed from the Excel file. Please check column names and data.", variant: "destructive", duration: 7000 });
+        } else if (newImportRows.length > 0) {
+             toast({ title: "Excel File Processed", description: `${newImportRows.length} rows loaded into the table for review. Please verify and click "Process Import".` });
+        } else {
+             toast({ title: "No Data Loaded", description: "No data was loaded from the Excel file.", variant: "default" });
+        }
         setImportRows(newImportRows);
-        toast({ title: "Excel File Processed", description: `${newImportRows.length} rows loaded into the table for review. Please verify and click "Process Import".` });
+
       } catch (error) {
         console.error("Error parsing Excel file:", error);
-        toast({ title: "Error Parsing File", description: "Could not parse the Excel file. Please ensure it's a valid .xlsx file and the format is correct.", variant: "destructive" });
+        toast({ title: "Error Parsing File", description: "Could not parse the Excel file. Ensure it's a valid .xlsx format and structure.", variant: "destructive" });
         setImportRows([]);
       } finally {
         setIsImportProcessing(false);
         if (fileInputRef.current) {
-          fileInputRef.current.value = ""; // Reset file input
+          fileInputRef.current.value = ""; 
         }
       }
     };
@@ -277,11 +298,10 @@ function DataManagementTabContent() {
 
   const handleDownloadSampleExcel = () => {
     const headers = ["Customer Name", "Group Name", "Phone", "Address", "Start Date (YYYY-MM-DD)", "Monthly Payment Amount", "Initial Payments Paid (0-12)"];
-    const exampleRow = ["John Doe Example", "Alpha Group", "9988776655", "123 Main St, Anytown", "2024-08-01", "1000", "1"];
+    const exampleRow = ["John Sample", "Alpha Group", "9988776655", "123 Main St, Anytown", "2024-08-01", "1000", "1"];
     const data = [headers, exampleRow];
     
     const worksheet = XLSX.utils.aoa_to_sheet(data);
-    // Set column widths (optional, for better readability)
     worksheet['!cols'] = [
         { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, 
         { wch: 20 }, { wch: 20 }, { wch: 20 } 
@@ -299,42 +319,56 @@ function DataManagementTabContent() {
       return;
     }
     setIsImportProcessing(true);
+    setImportResults(null); // Clear previous results
     const localResults: { successCount: number; errorCount: number; messages: string[] } = {
       successCount: 0,
       errorCount: 0,
       messages: [],
     };
+    const processedCustomerNamesInThisBatch = new Set<string>();
 
     for (let i = 0; i < importRows.length; i++) {
       const row = importRows[i];
-      const rowNumForMsg = `Row ${i + 1} (Table)`; // For user message
+      const rowNumForMsg = `Row ${i + 1} (Table)`;
+      const customerNameForProcessing = row.customerName.trim();
 
-      if (!row.customerName.trim()) {
-        localResults.messages.push(`${rowNumForMsg}: Customer Name is required.`);
+      if (!customerNameForProcessing) {
+        localResults.messages.push(`${rowNumForMsg}: Customer Name is required. Skipping.`);
         localResults.errorCount++;
-        continue;
+        continue; 
       }
-      if (!row.startDate) {
-        localResults.messages.push(`${rowNumForMsg}: Start Date is required for "${row.customerName}".`);
+
+      const lowerCaseCustomerName = customerNameForProcessing.toLowerCase();
+      if (processedCustomerNamesInThisBatch.has(lowerCaseCustomerName)) {
+        localResults.messages.push(`${rowNumForMsg}: Customer Name "${customerNameForProcessing}" is a duplicate within this import batch. Skipping.`);
+        localResults.errorCount++;
+        continue; 
+      }
+      // Only add to set if it's not a duplicate *so far*. Other validations might still make it fail.
+      // The purpose of this set is to prevent multiple attempts for the same name *within this batch*.
+      processedCustomerNamesInThisBatch.add(lowerCaseCustomerName);
+
+      if (!row.startDate || !isValidDate(row.startDate)) {
+        localResults.messages.push(`${rowNumForMsg}: Start Date is required and must be valid for "${customerNameForProcessing}". Skipping.`);
         localResults.errorCount++;
         continue;
       }
       const monthlyAmount = parseFloat(row.monthlyPaymentAmount);
       if (isNaN(monthlyAmount) || monthlyAmount <= 0) {
-        localResults.messages.push(`${rowNumForMsg}: Monthly Payment Amount for "${row.customerName}" must be a positive number.`);
+        localResults.messages.push(`${rowNumForMsg}: Monthly Payment Amount for "${customerNameForProcessing}" must be a positive number. Skipping.`);
         localResults.errorCount++;
         continue;
       }
       const initialPayments = parseInt(row.initialPaymentsPaid, 10);
       if (isNaN(initialPayments) || initialPayments < 0 || initialPayments > 12) {
-        localResults.messages.push(`${rowNumForMsg}: Initial Payments Paid for "${row.customerName}" must be a number between 0 and 12.`);
+        localResults.messages.push(`${rowNumForMsg}: Initial Payments Paid for "${customerNameForProcessing}" must be a number between 0 and 12. Skipping.`);
         localResults.errorCount++;
         continue;
       }
 
       try {
         const newSchemeData = {
-          customerName: row.customerName.trim(),
+          customerName: customerNameForProcessing,
           customerGroupName: row.groupName.trim() || undefined,
           customerPhone: row.phone.trim() || undefined,
           customerAddress: row.address.trim() || undefined,
@@ -343,9 +377,9 @@ function DataManagementTabContent() {
         };
         const createdScheme = addMockScheme(newSchemeData);
         if (!createdScheme) {
-          localResults.messages.push(`${rowNumForMsg}: Failed to create scheme for "${row.customerName}".`);
+          localResults.messages.push(`${rowNumForMsg}: Failed to create scheme for "${customerNameForProcessing}". This could be due to an internal issue or if the customer name already exists globally with different details.`);
           localResults.errorCount++;
-          continue;
+          continue; // Skip payment processing for this failed scheme
         }
         localResults.messages.push(`${rowNumForMsg}: Successfully created scheme for "${createdScheme.customerName}" (ID: ${createdScheme.id.toUpperCase()}).`);
         
@@ -359,20 +393,20 @@ function DataManagementTabContent() {
 
               if (paymentStatus !== 'Paid') {
                 const updatedSchemeResult = updateMockSchemePayment(schemeForPaymentRecording.id, paymentToUpdate.id, {
-                  paymentDate: schemeForPaymentRecording.startDate,
+                  paymentDate: schemeForPaymentRecording.startDate, // Initial payments are recorded on scheme start date
                   amountPaid: schemeForPaymentRecording.monthlyPaymentAmount,
                   modeOfPayment: ['Imported'] as PaymentMode[],
                 });
 
                 if (updatedSchemeResult) {
                   recordedInitialPaymentsCount++;
-                  schemeForPaymentRecording = updatedSchemeResult;
+                  schemeForPaymentRecording = updatedSchemeResult; // Use the updated scheme for the next payment iteration
                 } else {
                   localResults.messages.push(`${rowNumForMsg}: Error recording initial payment ${j + 1} for scheme ${createdScheme.id.toUpperCase()}.`);
                   break; 
                 }
               } else {
-                 recordedInitialPaymentsCount++; 
+                 recordedInitialPaymentsCount++; // Count already paid initial months as successfully "processed"
               }
             } else {
               localResults.messages.push(`${rowNumForMsg}: Attempted to record more initial payments (${initialPayments}) than available months (${createdScheme.payments.length}) for scheme ${createdScheme.id.toUpperCase()}.`);
@@ -385,7 +419,7 @@ function DataManagementTabContent() {
         }
         localResults.successCount++;
       } catch (error: any) {
-        localResults.messages.push(`${rowNumForMsg}: Error processing scheme for "${row.customerName}": ${error.message || 'Unknown error'}.`);
+        localResults.messages.push(`${rowNumForMsg}: Error processing scheme for "${customerNameForProcessing}": ${error.message || 'Unknown error'}. Skipping.`);
         localResults.errorCount++;
       }
     }
@@ -395,14 +429,14 @@ function DataManagementTabContent() {
       toast({ title: 'Import Successful', description: `${localResults.successCount} schemes imported successfully.` });
       setImportRows([]); 
     } else if (localResults.successCount > 0 && localResults.errorCount > 0) {
-      toast({ title: 'Import Partially Successful', description: `${localResults.successCount} imported, ${localResults.errorCount} errors. Check results below.`, variant: 'default', duration: 10000 });
+      toast({ title: 'Import Partially Successful', description: `${localResults.successCount} schemes imported, ${localResults.errorCount} errors/skipped. Check results below.`, variant: 'default', duration: 10000 });
     } else if (localResults.errorCount > 0) {
-      toast({ title: 'Import Failed', description: `${localResults.errorCount} errors occurred. Check results below.`, variant: 'destructive', duration: 10000 });
-    } else {
-      toast({ title: 'Import Complete', description: 'No schemes were processed.', variant: 'default' });
+      toast({ title: 'Import Failed', description: `${localResults.errorCount} errors/skipped rows. Check results below.`, variant: 'destructive', duration: 10000 });
+    } else { // Only if importRows was not empty but nothing was processed.
+      toast({ title: 'Import Complete', description: 'No schemes were processed (possibly all rows had issues or were empty).', variant: 'default' });
     }
     setIsImportProcessing(false);
-    setExistingGroupNamesForImport(getUniqueGroupNames());
+    setExistingGroupNamesForImport(getUniqueGroupNames()); // Refresh group names in case new ones were added
   };
 
   const cancelImport = () => {
@@ -410,7 +444,7 @@ function DataManagementTabContent() {
     setImportRows([]);
     setImportResults(null);
     if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = ""; 
     }
   };
 
@@ -445,7 +479,7 @@ function DataManagementTabContent() {
             Bulk Import Schemes
           </CardTitle>
           <CardDescription>
-            Upload an Excel file or manually add scheme details in the table below for bulk import.
+            Upload an Excel file or manually add scheme details in the table below for bulk import. Only unique customer names per batch will be processed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -455,6 +489,7 @@ function DataManagementTabContent() {
                 setIsImportSectionVisible(true);
                 if(importRows.length === 0) handleAddImportRow(); 
                 setExistingGroupNamesForImport(getUniqueGroupNames());
+                setImportResults(null); // Clear previous results when showing section
               }}
               disabled={isExporting || isImportProcessing}
               className="w-full sm:w-auto"
@@ -469,13 +504,13 @@ function DataManagementTabContent() {
                     <Input
                         id="excel-upload"
                         type="file"
-                        accept=".xlsx"
+                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                         onChange={handleFileChange}
                         className="mt-1 max-w-xs text-sm"
                         disabled={isImportProcessing}
                         ref={fileInputRef}
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Overrides current table data.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Overrides current table data. Uses first sheet.</p>
                 </div>
                 <Button
                     variant="outline"
@@ -500,7 +535,7 @@ function DataManagementTabContent() {
                           <TableHead className="px-2 py-2 w-[200px]">Address</TableHead>
                           <TableHead className="px-2 py-2 w-[150px]">Start Date*</TableHead>
                           <TableHead className="px-2 py-2 w-[120px]">Monthly Amt*</TableHead>
-                          <TableHead className="px-2 py-2 w-[100px]">Initial Paid</TableHead>
+                          <TableHead className="px-2 py-2 w-[100px]">Initial Paid (0-12)</TableHead>
                           <TableHead className="px-2 py-2 w-[80px] text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -608,7 +643,7 @@ function DataManagementTabContent() {
                       {existingGroupNamesForImport.map(name => <option key={name} value={name} />)}
                     </datalist>
                     <div className="p-2 text-xs text-muted-foreground">
-                      Scroll horizontally if table content is clipped. Customer Name is sticky. Use YYYY-MM-DD for dates in Excel.
+                      Scroll horizontally if table content is clipped. Start Date for Excel should be YYYY-MM-DD.
                     </div>
                   </ScrollArea>
                 )}
@@ -653,15 +688,15 @@ function DataManagementTabContent() {
               <Info className="h-5 w-5 text-primary" /> Import Results
             </CardTitle>
             <CardDescription>
-              Successfully imported: {importResults.successCount} | Errors: {importResults.errorCount}
+              Successfully imported: {importResults.successCount} | Errors/Skipped: {importResults.errorCount}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {importResults.messages.length > 0 ? (
               <ScrollArea className="h-60 w-full rounded-md border p-3 text-sm">
                 {importResults.messages.map((msg, index) => (
-                  <p key={index} className={`mb-1 ${msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipped') ? 'text-destructive' : msg.toLowerCase().includes('successfully') || msg.toLowerCase().includes('created') ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {(msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipped')) && <AlertCircle className="inline h-3.5 w-3.5 mr-1.5 relative -top-px" />}
+                  <p key={index} className={`mb-1 ${msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipping') || msg.toLowerCase().includes('duplicate') ? 'text-destructive' : msg.toLowerCase().includes('successfully') || msg.toLowerCase().includes('created') ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {(msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('skipping') || msg.toLowerCase().includes('duplicate')) && <AlertCircle className="inline h-3.5 w-3.5 mr-1.5 relative -top-px" />}
                     {msg}
                   </p>
                 ))}
