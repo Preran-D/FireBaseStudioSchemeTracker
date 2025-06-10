@@ -76,29 +76,36 @@ export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'sta
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
-  // If a scheme is explicitly marked 'Completed' (e.g. via manual closure), that status persists.
-  if (scheme.status === 'Completed') {
-    return 'Completed';
-  }
-
+  // First, ensure all individual payment statuses are up-to-date for accurate calculation
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
-  const schemeStartDate = startOfDay(parseISO(scheme.startDate));
+  const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
 
+  // If the scheme has a closureDate, it was intended to be completed.
+  // Verify if it genuinely still meets 'Completed' criteria.
+  if (scheme.closureDate) {
+    if (allPaymentsPaid) {
+      return 'Completed';
+    } else {
+      // If it was marked completed (had a closureDate) but no longer has all payments paid,
+      // it's no longer truly 'Completed'. We fall through to re-evaluate.
+      // The closureDate should be cleared by the calling function if this condition is met.
+    }
+  } else {
+    // If no closureDate and all payments are paid, it's 'Completed' naturally.
+    if (allPaymentsPaid) {
+      return 'Completed';
+    }
+  }
+
+  const schemeStartDate = startOfDay(parseISO(scheme.startDate));
   if (isFuture(schemeStartDate)) return 'Upcoming';
 
-  // Check for overdue payments only if not already 'Completed'
   const hasOverduePayment = scheme.payments.some(p => p.status === 'Overdue');
   if (hasOverduePayment) return 'Overdue';
   
-  const allPaymentsEffectivelyMade = scheme.payments.every(p => p.status === 'Paid');
-  // If scheme duration has passed and not all payments made and not marked completed, it's Overdue.
-  const lastPayment = scheme.payments[scheme.payments.length - 1];
-  if (lastPayment && isPast(startOfDay(parseISO(lastPayment.dueDate))) && !allPaymentsEffectivelyMade) {
-    return 'Overdue';
-  }
-  
-  // If not upcoming, not overdue, and not explicitly completed, it's active.
+  // If not upcoming, not overdue, and not all payments made, it's active.
+  // (The 'Completed' case for all payments naturally paid is handled above)
   return 'Active';
 }
 
@@ -117,4 +124,3 @@ export function calculateSchemeTotals(scheme: Scheme): Partial<Scheme> {
 export function generateId(): string {
   return Math.random().toString(36).substr(2, 6); // Generates a 6-character string
 }
-
