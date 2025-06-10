@@ -211,7 +211,7 @@ export default function DashboardPage() {
                         itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                         formatter={(value: number) => [formatCurrency(value), "Collected"]}
                       />
-                      <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '10px'}} />} />
+                      <ChartLegend content={<ChartLegendContent style={{paddingTop: '10px'}} />} />
                       <Bar dataKey="totalCollected" fill="var(--color-totalCollected)" radius={[6, 6, 0, 0]} barSize={30}/>
                     </RechartsBarChart>
                   </ResponsiveContainer>
