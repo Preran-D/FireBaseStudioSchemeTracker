@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { formatISO, format as formatDateFns } from 'date-fns';
 
@@ -231,7 +232,7 @@ function DataManagementTabContent() {
             if (j < createdScheme.payments.length) {
               const paymentToUpdate = createdScheme.payments[j];
               const updatedSchemeResult = updateMockSchemePayment(createdScheme.id, paymentToUpdate.id, {
-                paymentDate: createdScheme.startDate,
+                paymentDate: createdScheme.startDate, // Pay on scheme start date
                 amountPaid: createdScheme.monthlyPaymentAmount,
                 modeOfPayment: ['Imported'] as PaymentMode[],
               });
@@ -256,7 +257,7 @@ function DataManagementTabContent() {
     setImportResults(localResults);
     if (localResults.successCount > 0 && localResults.errorCount === 0) {
       toast({ title: 'Import Successful', description: `${localResults.successCount} schemes imported successfully.` });
-      setImportRows([]); // Clear rows on full success
+      setImportRows([]); 
     } else if (localResults.successCount > 0 && localResults.errorCount > 0) {
       toast({ title: 'Import Partially Successful', description: `${localResults.successCount} imported, ${localResults.errorCount} errors.`, variant: 'default' });
     } else if (localResults.errorCount > 0) {
@@ -304,7 +305,7 @@ function DataManagementTabContent() {
             Bulk Import Schemes
           </CardTitle>
           <CardDescription>
-            Add multiple schemes row by row using the form below.
+            Add scheme details in the table below for bulk import.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -312,128 +313,140 @@ function DataManagementTabContent() {
             <Button
               onClick={() => {
                 setIsImportSectionVisible(true);
-                if(importRows.length === 0) handleAddImportRow(); // Add one row by default
+                if(importRows.length === 0) handleAddImportRow(); 
               }}
               disabled={isExporting || isImportProcessing}
               className="w-full sm:w-auto"
             >
-              <FileText className="mr-2 h-4 w-4" /> Show Import Form
+              <FileText className="mr-2 h-4 w-4" /> Show Import Table
             </Button>
           ) : (
             <div className="space-y-6">
-              <div className="space-y-4">
-                {importRows.map((row, index) => (
-                  <Card key={row.id} className="p-4 relative">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveImportRow(row.id)}
-                      className="absolute top-2 right-2 h-7 w-7"
-                      disabled={isImportProcessing}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                      <span className="sr-only">Remove row</span>
-                    </Button>
-                    <p className="font-medium text-sm mb-3">Scheme #{index + 1}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label htmlFor={`customerName-${row.id}`}>Customer Name *</Label>
-                        <Input
-                          id={`customerName-${row.id}`}
-                          value={row.customerName}
-                          onChange={(e) => handleImportRowChange(row.id, 'customerName', e.target.value)}
-                          placeholder="John Doe"
-                          disabled={isImportProcessing}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`groupName-${row.id}`}>Group Name</Label>
-                        <Input
-                          id={`groupName-${row.id}`}
-                          value={row.groupName}
-                          onChange={(e) => handleImportRowChange(row.id, 'groupName', e.target.value)}
-                          placeholder="Optional"
-                          disabled={isImportProcessing}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`phone-${row.id}`}>Phone</Label>
-                        <Input
-                          id={`phone-${row.id}`}
-                          value={row.phone}
-                          onChange={(e) => handleImportRowChange(row.id, 'phone', e.target.value)}
-                          placeholder="Optional"
-                          disabled={isImportProcessing}
-                        />
-                      </div>
-                       <div className="space-y-1">
-                        <Label htmlFor={`startDate-${row.id}`}>Start Date *</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
+              {importRows.length > 0 && (
+                <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                  <Table className="min-w-full">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="px-2 py-2 w-[180px]">Customer Name*</TableHead>
+                        <TableHead className="px-2 py-2 w-[150px]">Group Name</TableHead>
+                        <TableHead className="px-2 py-2 w-[120px]">Phone</TableHead>
+                        <TableHead className="px-2 py-2 w-[200px]">Address</TableHead>
+                        <TableHead className="px-2 py-2 w-[150px]">Start Date*</TableHead>
+                        <TableHead className="px-2 py-2 w-[120px]">Monthly Amt*</TableHead>
+                        <TableHead className="px-2 py-2 w-[100px]">Initial Paid</TableHead>
+                        <TableHead className="px-2 py-2 w-[80px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importRows.map((row) => (
+                        <TableRow key={row.id}>
+                          <TableCell className="p-1">
+                            <Input
+                              value={row.customerName}
+                              onChange={(e) => handleImportRowChange(row.id, 'customerName', e.target.value)}
+                              placeholder="John Doe"
+                              disabled={isImportProcessing}
+                              className="h-8 text-xs"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Input
+                              value={row.groupName}
+                              onChange={(e) => handleImportRowChange(row.id, 'groupName', e.target.value)}
+                              placeholder="Optional"
+                              disabled={isImportProcessing}
+                              className="h-8 text-xs"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Input
+                              value={row.phone}
+                              onChange={(e) => handleImportRowChange(row.id, 'phone', e.target.value)}
+                              placeholder="Optional"
+                              disabled={isImportProcessing}
+                              className="h-8 text-xs"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Textarea
+                              value={row.address}
+                              onChange={(e) => handleImportRowChange(row.id, 'address', e.target.value)}
+                              placeholder="Optional"
+                              disabled={isImportProcessing}
+                              rows={1}
+                              className="h-8 text-xs resize-none leading-tight py-1.5"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant={'outline'}
+                                  className={cn("w-full justify-start text-left font-normal h-8 text-xs px-2", !row.startDate && "text-muted-foreground")}
+                                  disabled={isImportProcessing}
+                                >
+                                  <CalendarIcon className="mr-1.5 h-3 w-3" />
+                                  {row.startDate ? formatDateFns(row.startDate, "ddMMMyy") : <span>Pick date</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={row.startDate}
+                                  onSelect={(date) => handleImportRowChange(row.id, 'startDate', date)}
+                                  initialFocus
+                                  disabled={isImportProcessing}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Input
+                              type="number"
+                              value={row.monthlyPaymentAmount}
+                              onChange={(e) => handleImportRowChange(row.id, 'monthlyPaymentAmount', e.target.value)}
+                              placeholder="e.g., 1000"
+                              disabled={isImportProcessing}
+                              className="h-8 text-xs"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1">
+                            <Input
+                              type="number"
+                              value={row.initialPaymentsPaid}
+                              onChange={(e) => handleImportRowChange(row.id, 'initialPaymentsPaid', e.target.value)}
+                              placeholder="0-12"
+                              min="0" max="12"
+                              disabled={isImportProcessing}
+                              className="h-8 text-xs"
+                            />
+                          </TableCell>
+                          <TableCell className="p-1 text-center">
                             <Button
-                              variant={'outline'}
-                              id={`startDate-${row.id}`}
-                              className={cn("w-full justify-start text-left font-normal", !row.startDate && "text-muted-foreground")}
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveImportRow(row.id)}
+                              className="h-7 w-7"
                               disabled={isImportProcessing}
                             >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {row.startDate ? formatDateFns(row.startDate, "dd MMM yyyy") : <span>Pick a date</span>}
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={row.startDate}
-                              onSelect={(date) => handleImportRowChange(row.id, 'startDate', date)}
-                              initialFocus
-                              disabled={isImportProcessing}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                       <div className="space-y-1 sm:col-span-2">
-                        <Label htmlFor={`address-${row.id}`}>Address</Label>
-                        <Textarea
-                          id={`address-${row.id}`}
-                          value={row.address}
-                          onChange={(e) => handleImportRowChange(row.id, 'address', e.target.value)}
-                          placeholder="Optional"
-                          disabled={isImportProcessing}
-                          rows={2}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`monthlyAmount-${row.id}`}>Monthly Amount (INR) *</Label>
-                        <Input
-                          id={`monthlyAmount-${row.id}`}
-                          type="number"
-                          value={row.monthlyPaymentAmount}
-                          onChange={(e) => handleImportRowChange(row.id, 'monthlyPaymentAmount', e.target.value)}
-                          placeholder="e.g., 1000"
-                          disabled={isImportProcessing}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`initialPayments-${row.id}`}>Initial Payments Paid</Label>
-                        <Input
-                          id={`initialPayments-${row.id}`}
-                          type="number"
-                          value={row.initialPaymentsPaid}
-                          onChange={(e) => handleImportRowChange(row.id, 'initialPaymentsPaid', e.target.value)}
-                          placeholder="0 to 12"
-                          min="0" max="12"
-                          disabled={isImportProcessing}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="p-2 text-xs text-muted-foreground">
+                    Scroll horizontally if table content is clipped.
+                  </div>
+                </ScrollArea>
+              )}
               <div className="flex items-center gap-3 mt-4">
                 <Button
                   variant="outline"
                   onClick={handleAddImportRow}
                   disabled={isImportProcessing}
+                  size="sm"
                 >
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Scheme Row
                 </Button>
@@ -598,4 +611,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
