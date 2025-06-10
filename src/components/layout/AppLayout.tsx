@@ -5,11 +5,18 @@ import type { PropsWithChildren } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User, Menu, MoreVertical, Sun, Moon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useTheme } from '@/hooks/useTheme'; // Import useTheme
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,30 +26,19 @@ const navItems = [
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
-// Utility items will now only have icons for desktop, labels for mobile.
+// Utility items will now only have icons for desktop, labels for mobile dropdown.
 const utilityNavItems = [
     { id: 'settings', href: '#!', label: 'Settings', icon: Settings },
     { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
     { id: 'profile', href: '#!', label: 'Profile', icon: User },
 ];
 
-
 function TopNavigationBar() {
   const pathname = usePathname();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (isMobileMenuOpen) {
-      setIsMobileMenuOpen(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
-
-  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
+  const { setTheme } = useTheme(); // Get setTheme from useTheme
 
   return (
     <header className="sticky top-0 z-50 py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
-      {/* Main navigation bar container */}
       <div
         className="container mx-auto flex h-16 items-center justify-between rounded-full px-4 md:px-6 shadow-lg
                    bg-card/70 dark:bg-card/60 backdrop-blur-xl border border-white/20 dark:border-white/10"
@@ -57,7 +53,7 @@ function TopNavigationBar() {
           </div>
         </Link>
 
-        {/* Right: Group for Navigation Links and Utility Icons (Desktop) */}
+        {/* Desktop Navigation (Center & Right) */}
         <div className="hidden md:flex items-center gap-3">
           {/* Main Navigation Links */}
           <nav
@@ -102,93 +98,86 @@ function TopNavigationBar() {
                 </Link>
               </Button>
             ))}
-            <ThemeToggle /> {/* ThemeToggle is already styled as a circular icon button */}
+            <ThemeToggle />
           </div>
         </div>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Utility Menu Trigger (Right) */}
         <div className="md:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMobileMenu}
-            className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/70"
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground hover:text-foreground">
+                <MoreVertical className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {utilityNavItems.map((item) => (
+                <DropdownMenuItem key={item.id} asChild className="cursor-pointer">
+                  <Link href={item.href} className="flex items-center gap-2">
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                    <span>{item.label}</span>
+                    {item.hasNotification && <span className="ml-auto h-2 w-2 rounded-full bg-accent" />}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setTheme('light')} className="cursor-pointer flex items-center gap-2">
+                <Sun className="h-4 w-4 text-muted-foreground" /> Light
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('dark')} className="cursor-pointer flex items-center gap-2">
+                <Moon className="h-4 w-4 text-muted-foreground" /> Dark
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('system')} className="cursor-pointer flex items-center gap-2">
+                <Settings className="h-4 w-4 text-muted-foreground" /> System
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-      
-      {/* Mobile Menu Panel */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="md:hidden absolute top-[calc(100%_-_0.25rem)] left-0 right-0 mx-4 shadow-xl z-40" // Positioned slightly overlapping
-          >
-            <div className="rounded-xl border border-border bg-card/90 dark:bg-card/80 backdrop-blur-lg p-4">
-              <nav className="flex flex-col space-y-1 mb-3">
-                {navItems.map((item) => (
-                  <Link
-                    key={`mobile-${item.label}`}
-                    href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium transition-colors",
-                      pathname === item.href
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-muted"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 opacity-80" />
-                    {item.label}
-                  </Link>
-                ))}
-              </nav>
-              <div className="border-t border-border pt-3 space-y-1">
-                 {utilityNavItems.map((item) => (
-                  <Link
-                    key={`mobile-util-${item.id}`}
-                    href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-foreground hover:bg-muted relative"
-                  >
-                    <item.icon className="h-5 w-5 opacity-80" />
-                    {item.label}
-                    {item.hasNotification && (
-                      <span className="absolute top-1/2 right-3 -translate-y-1/2 block h-2.5 w-2.5 rounded-full bg-accent" />
-                    )}
-                  </Link>
-                ))}
-                <div className="flex justify-between items-center px-3 py-2.5 rounded-lg hover:bg-muted">
-                    <span className="flex items-center gap-3 text-base font-medium text-foreground">
-                        <Settings className="h-5 w-5 opacity-80"/> Theme
-                    </span>
-                    <ThemeToggle />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </header>
   );
 }
+
+function BottomNavigationBar() {
+  const pathname = usePathname();
+  // Select first 4-5 items for the bottom bar. Example:
+  const bottomNavItems = navItems.slice(0, 4); 
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)] dark:shadow-[0_-2px_10px_-3px_rgba(255,255,255,0.03)]">
+      <div className="container mx-auto flex justify-around items-center h-16">
+        {bottomNavItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={`bottom-${item.label}`}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full", // Ensure full height for touch target
+                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground/80 hover:bg-muted/30"
+              )}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <item.icon className="h-6 w-6" />
+              <span className="sr-only">{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 
 export default function AppLayout({ children }: PropsWithChildren) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground font-body">
       <TopNavigationBar />
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto md:pt-8 pb-20 md:pb-6"> {/* Added pb-20 for bottom nav, adjusted md:pb */}
         {children}
       </main>
+      <BottomNavigationBar />
     </div>
   );
 }
-    
-
     
