@@ -23,20 +23,22 @@ interface RecentTransaction extends Payment {
 
 export default function DashboardPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   useEffect(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       const tempS = { ...s };
       tempS.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-      const totals = calculateSchemeTotals(tempS);
+      const totals = calculateSchemeTotals(s);
       const status = getSchemeStatus(tempS);
       return { ...tempS, ...totals, status };
     });
     setAllSchemes(loadedSchemesInitial);
   }, []);
 
-  const totalSchemesCount = useMemo(() => allSchemes.length, [allSchemes]);
+  const totalSchemesCount = useMemo(() => {
+    return allSchemes.length;
+  }, [allSchemes]);
 
   const recentlyCompletedSchemes = useMemo(() => {
     return allSchemes
