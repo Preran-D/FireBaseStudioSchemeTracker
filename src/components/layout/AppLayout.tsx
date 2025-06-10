@@ -34,6 +34,11 @@ function TopNavigationBar() {
   const pathname = usePathname();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -104,14 +109,16 @@ function TopNavigationBar() {
                 size="icon"
                 onClick={cycleTheme}
                 className="rounded-full hover:bg-muted/60 text-muted-foreground hover:text-foreground h-9 w-9"
-                aria-label={`Toggle theme. Current theme: ${theme}. Displaying as: ${resolvedTheme}.`}
+                aria-label={mounted ? `Toggle theme. Current theme: ${theme}. Displaying as: ${resolvedTheme}.` : 'Toggle theme'}
             >
-              {resolvedTheme === 'dark' ? (
+              {mounted && resolvedTheme === 'dark' ? (
                 <Moon className="h-5 w-5" />
               ) : (
                 <Sun className="h-5 w-5" />
               )}
-              <span className="sr-only">Toggle theme (Currently: {theme}, Displaying as: {resolvedTheme})</span>
+              <span className="sr-only">
+                {mounted ? `Toggle theme (Currently: ${theme}, Displaying as: ${resolvedTheme})` : 'Toggle theme'}
+              </span>
             </Button>
           </div>
         </div>
@@ -162,13 +169,15 @@ function TopNavigationBar() {
                 onClick={() => { cycleTheme(); setIsMobileMenuOpen(false); }}
                 className="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm text-foreground/80 hover:bg-muted/50"
               >
-                {resolvedTheme === 'dark' ? (
+                {mounted && resolvedTheme === 'dark' ? (
                     <Moon className="h-5 w-5 text-muted-foreground" />
                 ) : (
                     <Sun className="h-5 w-5 text-muted-foreground" />
                 )}
                 <span>Toggle Theme</span>
-                <span className="ml-auto text-xs text-muted-foreground uppercase">({theme.charAt(0)})</span>
+                {mounted && (
+                  <span className="ml-auto text-xs text-muted-foreground uppercase">({theme.charAt(0)})</span>
+                )}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
