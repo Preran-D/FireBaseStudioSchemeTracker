@@ -5,18 +5,15 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, ChevronDown, UserPlus, ListFilter, CreditCard } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, History, ListChecksIcon, UserPlus, ListFilter, CreditCard } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
-import { getMockSchemes, updateMockSchemePayment, recordNextDuePaymentsForCustomerGroup, getGroupDetails } from '@/lib/mock-data';
+import { getMockSchemes, updateMockSchemePayment, getGroupDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
 import { isPast, parseISO, differenceInDays } from 'date-fns';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
-// import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog'; // No longer used
-import { RecordIndividualPaymentDialog, type IndividualPaymentDetails } from '@/components/dialogs/RecordIndividualPaymentDialog';
 import { useToast } from '@/hooks/use-toast';
 
 // Define a constant empty array for stable reference
@@ -28,9 +25,7 @@ export default function DashboardPage() {
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
   
-  const [isPayDialogOpen, setIsPayDialogOpen] = useState(false); // Unified dialog state
-  const [processingStates, setProcessingStates] = useState<{ [key: string]: boolean }>({});
-
+  // processingStates removed as page handles its own loading for submit
 
   const loadSchemesData = useCallback(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
@@ -41,7 +36,6 @@ export default function DashboardPage() {
       return { ...tempS, ...totals, status };
     });
     setSchemes(loadedSchemesInitial);
-    // No need to return here unless specifically used by caller of loadSchemesData
   }, []);
 
   useEffect(() => {
@@ -99,126 +93,20 @@ export default function DashboardPage() {
     setIsHistoryPanelOpen(true);
   };
 
-  const recordableIndividualSchemesForDialog = useMemo((): Scheme[] => {
-    return schemes.filter(s => {
-        if (s.status === 'Active' || s.status === 'Overdue') {
-          for (let i = 0; i < s.payments.length; i++) {
-            if (getPaymentStatus(s.payments[i], s.startDate) !== 'Paid') {
-              let allPreviousPaid = true;
-              for (let j = 0; j < i; j++) {
-                if (getPaymentStatus(s.payments[j], s.startDate) !== 'Paid') {
-                  allPreviousPaid = false;
-                  break;
-                }
-              }
-              if (allPreviousPaid) return true;
-            }
-          }
-        }
-        return false;
-      })
-      .sort((a,b) => {
-        const nextDueA = a.payments.find(p => getPaymentStatus(p, a.startDate) !== 'Paid');
-        const nextDueB = b.payments.find(p => getPaymentStatus(p, b.startDate) !== 'Paid');
-        if (nextDueA && nextDueB) {
-          const dateDiff = parseISO(nextDueA.dueDate).getTime() - parseISO(nextDueB.dueDate).getTime();
-          if (dateDiff !== 0) return dateDiff;
-        }
-        return a.customerName.localeCompare(b.customerName);
-      });
-  }, [schemes]);
-
-  const allGroupsForDialog = useMemo(() => {
-    // Ensure this is called and data is fresh when schemes change.
-    // If getGroupDetails depends on the current state of schemes, it should be re-calculated.
-    // For now, assuming getGroupDetails fetches based on the persisted MOCK_SCHEMES.
-    return getGroupDetails();
-  }, [schemes]); // Re-calculate when schemes change if getGroupDetails is dependent
-
-
-  const handlePaymentSubmit = async (details: IndividualPaymentDetails) => {
-    const { schemeId, paymentDate, modeOfPayment, numberOfMonths } = details;
-    const schemeToUpdate = schemes.find(s => s.id === schemeId);
-
-    if (!schemeToUpdate) {
-      toast({ title: "Error", description: `Scheme ${schemeId} not found.`, variant: "destructive" });
-      return;
-    }
-
-    setProcessingStates(prev => ({ ...prev, [schemeId]: true }));
-
-    let successfulRecords = 0;
-    let totalAmountRecorded = 0;
-    let errors = 0;
-
-    let firstPaymentToRecordIndex = -1;
-    for (let i = 0; i < schemeToUpdate.payments.length; i++) {
-        if (getPaymentStatus(schemeToUpdate.payments[i], schemeToUpdate.startDate) !== 'Paid') {
-            let allPreviousPaid = true;
-            for (let j = 0; j < i; j++) {
-                if (getPaymentStatus(schemeToUpdate.payments[j], schemeToUpdate.startDate) !== 'Paid') {
-                    allPreviousPaid = false;
-                    break;
-                }
-            }
-            if (allPreviousPaid) {
-                firstPaymentToRecordIndex = i;
-                break;
-            }
-        }
-    }
-    
-    if (firstPaymentToRecordIndex === -1) {
-        toast({ title: "No Payments Due", description: `No recordable payments found for scheme ${schemeId.toUpperCase()}.`, variant: "default" });
-        setProcessingStates(prev => ({ ...prev, [schemeId]: false }));
-        return;
-    }
-
-    for (let i = 0; i < numberOfMonths; i++) {
-      const paymentIndexToRecord = firstPaymentToRecordIndex + i;
-      if (paymentIndexToRecord < schemeToUpdate.payments.length) {
-        const paymentToRecord = schemeToUpdate.payments[paymentIndexToRecord];
-        if (getPaymentStatus(paymentToRecord, schemeToUpdate.startDate) !== 'Paid') {
-          const updatedScheme = updateMockSchemePayment(schemeId, paymentToRecord.id, {
-            paymentDate: paymentDate,
-            amountPaid: paymentToRecord.amountExpected, // Full payment is recorded
-            modeOfPayment: modeOfPayment,
-          });
-          if (updatedScheme) { successfulRecords++; totalAmountRecorded += paymentToRecord.amountExpected; } else { errors++; }
-        } else {
-          errors++;
-        }
-      } else { errors++; break; } 
-    }
-
-    if (successfulRecords > 0) {
-      toast({
-        title: "Payments Recorded",
-        description: `${successfulRecords} payment(s) totaling ${formatCurrency(totalAmountRecorded)} for ${schemeToUpdate.customerName} (Scheme: ${schemeId.toUpperCase()}) recorded. ${errors > 0 ? `${errors} error(s).` : ''}`
-      });
-      loadSchemesData(); // Crucial to reload schemes to reflect updates
-    } else if (errors > 0) {
-      toast({ title: "Error Recording Payments", description: `${errors} error(s) occurred. Some payments might not have been recorded.`, variant: "destructive" });
-    } else {
-      toast({ title: "No Payments Recorded", description: "No new payments were recorded for this scheme." });
-    }
-    setProcessingStates(prev => ({ ...prev, [schemeId]: false }));
-    // Dialog closure is handled by the dialog itself or user action.
-  };
-
-
   return (
     <>
     <div className="flex flex-col gap-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-headline font-semibold">Dashboard</h1>
         <div className="flex gap-2">
-            <Button size="lg" variant="default" onClick={() => setIsPayDialogOpen(true)} disabled={recordableIndividualSchemesForDialog.length === 0}>
-                <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
+            <Button size="lg" variant="default" asChild>
+                <Link href="/payments/record">
+                    <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
+                </Link>
             </Button>
           <Link href="/schemes/new">
             <Button size="lg" variant="outline">
-              <ListFilter className="mr-2 h-5 w-5" /> Add New Scheme
+              <UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
             </Button>
           </Link>
         </div>
@@ -335,17 +223,9 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
-
-    {isPayDialogOpen && (
-      <RecordIndividualPaymentDialog
-        isOpen={isPayDialogOpen}
-        onClose={() => setIsPayDialogOpen(false)}
-        allRecordableSchemes={recordableIndividualSchemesForDialog}
-        allGroups={allGroupsForDialog} // Pass group data
-        onSubmit={handlePaymentSubmit} // Unified submit handler
-        isLoading={Object.values(processingStates).some(s => s)}
-      />
-    )}
+    {/* Removed RecordIndividualPaymentDialog as it's now a page */}
     </>
   );
 }
+
+    
