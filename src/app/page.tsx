@@ -10,11 +10,11 @@ import { UserPlus, CreditCard, Search, PackageCheck, ListChecks, Repeat, Calenda
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
-import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts";
 import { parseISO, format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion'; // Commented out framer-motion
 
 interface RecentTransaction extends Payment {
   customerName: string;
@@ -29,8 +29,8 @@ export default function DashboardPage() {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       const tempS = { ...s };
       tempS.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-      const totals = calculateSchemeTotals(s);
-      const status = getSchemeStatus(s);
+      const totals = calculateSchemeTotals(tempS);
+      const status = getSchemeStatus(tempS);
       return { ...tempS, ...totals, status };
     });
     setAllSchemes(loadedSchemesInitial);
@@ -102,24 +102,15 @@ export default function DashboardPage() {
     totalCollected: { label: "Collected", color: "hsl(var(--positive-value))" },
   };
 
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (i) => { // Removed : number type annotation from 'i'
-      return {
-        opacity: 1,
-        y: 0,
-        transition: { delay: i * 0.15, duration: 0.5 },
-      };
-    },
-  };
+  // const cardVariants = {}; // Commented out as motion.div is removed
 
   return (
     <div className="flex flex-col gap-8">
       {/* Top Section: Header and Actions */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+      <div
+        // initial={{ opacity: 0, y: -20 }} // motion props removed
+        // animate={{ opacity: 1, y: 0 }}
+        // transition={{ duration: 0.5 }}
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
@@ -135,10 +126,10 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </div>
-      </motion.div>
+      </div>
 
       {/* Search Bar */}
-      <motion.div custom={0} initial="hidden" animate="visible" variants={cardVariants}>
+      <div> {/* Replaced motion.div */}
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardContent className="p-4 sm:p-5">
             <div className="relative">
@@ -153,10 +144,10 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
 
       {/* Total Schemes Display */}
-      <motion.div custom={1} initial="hidden" animate="visible" variants={cardVariants}>
+      <div> {/* Replaced motion.div */}
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -172,13 +163,13 @@ export default function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
 
       {/* Main Grid for Lists and Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Monthly Collections Chart */}
-        <motion.div custom={2} initial="hidden" animate="visible" variants={cardVariants} className="lg:col-span-2">
+        <div className="lg:col-span-2"> {/* Replaced motion.div */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -211,10 +202,10 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Monthly Collections List */}
-        <motion.div custom={3} initial="hidden" animate="visible" variants={cardVariants}>
+        <div> {/* Replaced motion.div */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -246,12 +237,12 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recently Completed Schemes */}
-        <motion.div custom={4} initial="hidden" animate="visible" variants={cardVariants}>
+        <div> {/* Replaced motion.div */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -294,10 +285,10 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Recent Transactions */}
-        <motion.div custom={5} initial="hidden" animate="visible" variants={cardVariants}>
+        <div> {/* Replaced motion.div */}
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -344,7 +335,7 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
