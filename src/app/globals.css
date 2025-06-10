@@ -5,83 +5,101 @@
 
 @layer base {
   :root {
-    /* New Light & Airy Theme - Inspired by modern UIs */
-    --background: 30 100% 98%; /* Very Light Warm Off-White / Cream */
-    --foreground: 240 10% 15%; /* Darker Slate Gray for strong contrast */
+    /* Monochrome Theme - Base: Light Mode */
+    --background: 0 0% 98%; /* Very Light Gray / Off-White */
+    --foreground: 240 10% 3.9%; /* Almost Black */
 
-    --muted: 220 20% 96%;    /* Lighter Gray for muted backgrounds */
-    --muted-foreground: 220 10% 45%; /* Softer Gray for muted text */
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 240 10% 3.9%;
 
-    --popover: 0 0% 100%;    /* White for popovers */
-    --popover-foreground: 240 10% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
 
-    --card: 0 0% 100%;       /* White for cards, can add slight transparency if backdrop-filter is used heavily elsewhere */
-    --card-foreground: 240 10% 15%;
+    --primary: 240 5.9% 10%; /* Dark Gray / Near Black for primary actions */
+    --primary-foreground: 0 0% 98%; /* Light Gray for text on primary */
 
-    --border: 220 15% 88%;    /* Softer Gray Border */
-    --input: 220 15% 92%;     /* Lighter Gray Input Background */
+    --secondary: 0 0% 96.1%; /* Light Gray */
+    --secondary-foreground: 240 5.9% 10%;
 
-    --primary: 200 60% 50%;   /* A calm, modern Blue */
-    --primary-foreground: 0 0% 100%; /* White */
+    --muted: 0 0% 94%; /* Slightly darker muted */
+    --muted-foreground: 240 3.8% 46.1%; /* Softer Gray for muted text */
 
-    --secondary: 210 15% 95%;  /* Very Light Gray for secondary elements */
-    --secondary-foreground: 240 10% 25%; /* Darker Gray for text on secondary */
+    --accent: 240 4.8% 95.9%; /* Very light gray for subtle accents */
+    --accent-foreground: 240 5.9% 10%;
 
-    --accent: 260 60% 60%;     /* A gentle Violet/Lavender for accents */
-    --accent-foreground: 0 0% 100%; /* White */
+    --destructive: 0 84.2% 60.2%; /* Red */
+    --destructive-foreground: 0 0% 98%;
 
-    --destructive: 0 75% 55%;   /* A clear Red for destructive actions */
-    --destructive-foreground: 0 0% 100%; 
+    --border: 0 0% 89.8%; /* Light Gray Border */
+    --input: 0 0% 93%;     /* Slightly darker input background */
+    --ring: 240 5.9% 10%;
 
-    --ring: 200 60% 55%; /* Primary color for rings/focus indicators */
+    --radius: 0.75rem; /* Consistent rounded corners */
 
-    --radius: 0.75rem; /* Slightly larger radius for a softer feel */
+    /* Semantic Colors */
+    --positive-value: 142.1 70.6% 45.3%; /* Green for positive financial values */
+    --negative-value: 0 84.2% 60.2%;   /* Red for negative/overdue values */
+    --warning-value: 47.9 95.8% 53.1%; /* Yellow for pending/warning */
+    
+    --progress-paid: 142.1 70.6% 45.3%;   /* Green */
+    --progress-pending: 47.9 95.8% 53.1%; /* Yellow */
+    --progress-overdue: 0 84.2% 60.2%;    /* Red */
+    --progress-upcoming: 0 0% 85%;      /* Light Gray */
 
-    /* Chart colors - can be updated to match the new theme's vibe */
-    --chart-1: hsl(var(--primary)); 
-    --chart-2: hsl(var(--accent));
-    --chart-3: 220 50% 65%; /* A different shade of blue */
-    --chart-4: 30 80% 60%;  /* A warm orange/yellow */
-    --chart-5: 150 40% 50%; /* A muted green */
+    /* Chart colors - monochrome + semantic */
+    --chart-1: hsl(var(--foreground)); /* Main data - dark gray/black */
+    --chart-2: hsl(var(--positive-value)); /* Positive - green */
+    --chart-3: hsl(var(--negative-value)); /* Negative - red */
+    --chart-4: hsl(var(--warning-value));  /* Warning - yellow */
+    --chart-5: hsl(var(--muted-foreground)); /* Muted data - gray */
   }
 
   .dark {
-    /* Dark Theme - Modern & Clean */
-    --background: 220 25% 12%; /* Deep Dark Blue-Gray */
-    --foreground: 210 30% 92%; /* Light Gray/Off-White text */
+    /* Monochrome Theme - Dark Mode */
+    --background: 240 10% 3.9%; /* Almost Black */
+    --foreground: 0 0% 98%; /* Very Light Gray / Off-White */
 
-    --muted: 220 20% 18%;    /* Darker Gray */
-    --muted-foreground: 210 20% 60%; 
+    --card: 240 5.9% 10%; /* Dark Gray / Near Black */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 220 25% 10%;    /* Very Dark for popovers */
-    --popover-foreground: 210 30% 92%;
+    --popover: 240 5.9% 10%;
+    --popover-foreground: 0 0% 98%;
 
-    --card: 220 22% 16%;       /* Dark Gray for cards */
-    --card-foreground: 210 30% 90%;
+    --primary: 0 0% 98%; /* Light Gray for primary actions */
+    --primary-foreground: 240 5.9% 10%; /* Dark Gray for text on primary */
 
-    --border: 220 15% 25%;    /* Muted Border */
-    --input: 220 15% 22%;     /* Dark Input Background */
+    --secondary: 240 3.7% 15.9%; /* Darker Gray */
+    --secondary-foreground: 0 0% 98%;
 
-    --primary: 200 65% 60%;   /* Brighter Blue for Dark Mode */
-    --primary-foreground: 220 20% 10%; 
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 0 0% 62.8%; /* Softer Light Gray for muted text */
 
-    --secondary: 220 20% 20%;  
-    --secondary-foreground: 210 30% 85%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
 
-    --accent: 260 65% 70%;     /* Brighter Violet/Lavender */
-    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%; /* Darker Red */
+    --destructive-foreground: 0 0% 98%;
 
-    --destructive: 0 70% 60%;   
-    --destructive-foreground: 0 0% 100%; 
+    --border: 240 3.7% 15.9%; /* Dark Gray Border */
+    --input: 240 3.7% 15.9%;
+    --ring: 0 0% 83.1%;
 
-    --ring: 200 65% 65%;
+    /* Semantic Colors - Dark Mode (adjust if needed, greens/reds might need more brightness) */
+    --positive-value: 142.1 60% 55%; 
+    --negative-value: 0 70% 60%;   
+    --warning-value: 47.9 80% 60%; 
+    
+    --progress-paid: 142.1 60% 55%;
+    --progress-pending: 47.9 80% 60%;
+    --progress-overdue: 0 70% 60%;
+    --progress-upcoming: 0 0% 30%; /* Darker Gray for upcoming in dark mode */
 
-    /* Chart colors for dark theme */
-    --chart-1: hsl(var(--primary));
-    --chart-2: hsl(var(--accent));
-    --chart-3: 220 50% 55%; 
-    --chart-4: 30 70% 50%;  
-    --chart-5: 150 40% 40%;
+    /* Chart colors - dark mode */
+    --chart-1: hsl(var(--foreground));
+    --chart-2: hsl(var(--positive-value));
+    --chart-3: hsl(var(--negative-value));
+    --chart-4: hsl(var(--warning-value));
+    --chart-5: hsl(var(--muted-foreground));
   }
 }
 
@@ -108,9 +126,6 @@
     border-width: 0;
   }
   .glassmorphism {
-    @apply bg-background/80 backdrop-blur-lg border-white/20;
-  }
-  .dark .glassmorphism {
-     @apply bg-background/70 backdrop-blur-lg border-white/10;
+    @apply bg-card/60 dark:bg-card/50 backdrop-blur-lg border-white/20 dark:border-white/10;
   }
 }
