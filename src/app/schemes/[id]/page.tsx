@@ -6,34 +6,46 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, DollarSign, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil, ArrowLeft, FileWarning, CreditCard } from 'lucide-react';
+import { Edit, DollarSign, Loader2, PieChart, Eye, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
-import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge';
-import { RecordPaymentForm } from '@/components/forms/RecordPaymentForm';
 import { useToast } from '@/hooks/use-toast';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, Legend, Tooltip as RechartsTooltip, BarChart as RechartsBarChart } from "recharts"
-import { isPast, parseISO, formatISO, startOfDay } from 'date-fns';
-import { MonthlyCircularProgress } from '@/components/shared/MonthlyCircularProgress';
-import { Label } from '@/components/ui/label'; // Removed Popover, PopoverTrigger, PopoverContent, Calendar
-// Removed RadioGroup, RadioGroupItem, Checkbox from this import as they are not directly used in the file-level scope for new dialog
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { isPast, parseISO, formatISO, startOfDay, format as formatDateFns } from 'date-fns';
+import { SchemeCompletionArc } from '@/components/shared/SchemeCompletionArc';
+import { Label } from '@/components/ui/label';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
 import { EditCustomerDetailsDialog, type EditCustomerDetailsFormValues } from '@/components/dialogs/EditCustomerDetailsDialog';
-import { Badge } from '@/components/ui/badge';
-// Removed FormItem for AlertDialog usage
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Form, FormControl, FormField, FormItem, FormLabel as HookFormLabel, FormMessage, FormDescription } from '@/components/ui/form'; // Using react-hook-form for inline payment
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 
-const paymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI', 'System Closure'];
 
-interface SelectedPaymentContext extends Payment {
-  schemeIdToUpdate: string;
-}
+const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
+const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
+  'Card': CreditCard,
+  'Cash': Landmark,
+  'UPI': Smartphone,
+  'System Closure': FileWarning, // Or some other appropriate icon
+  'Imported': FileWarning,
+};
+
+const inlinePaymentFormSchema = z.object({
+  paymentDate: z.date({ required_error: 'Payment date is required.' }),
+  // monthsToPay will be managed by separate state, not part of this RHF schema directly for +/- buttons
+  // modeOfPayment also by separate state for direct checkbox interaction
+});
+type InlinePaymentFormValues = z.infer<typeof inlinePaymentFormSchema>;
+
 
 export default function SchemeDetailsPage() {
   const router = useRouter();
@@ -42,87 +54,61 @@ export default function SchemeDetailsPage() {
   const schemeIdFromUrl = urlParams.id as string;
 
   const [scheme, setScheme] = useState<Scheme | null>(null);
-  const [allSchemesForThisCustomer, setAllSchemesForThisCustomer] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
-  const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<SelectedPaymentContext | null>(null);
-  
-  // Removed state for "Settle & Close" (isCloseSchemeAlertOpen, schemeToCloseInDialog, closureDate, closureType, closureModeOfPayment)
-
   const [isManualCloseDialogOpen, setIsManualCloseDialogOpen] = useState(false);
   const [schemeForManualCloseDialog, setSchemeForManualCloseDialog] = useState<Scheme | null>(null);
   const [manualClosureDate, setManualClosureDate] = useState<Date | undefined>(new Date());
   const [isProcessingManualClose, setIsProcessingManualClose] = useState(false);
 
-
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   const [isAssignGroupDialogOpen, setIsAssignGroupDialogOpen] = useState(false);
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
   
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string | undefined>(schemeIdFromUrl);
-
   const [isEditCustomerDetailsDialogOpen, setIsEditCustomerDetailsDialogOpen] = useState(false);
   const [isUpdatingCustomerDetails, setIsUpdatingCustomerDetails] = useState(false);
 
-  const loadSchemeData = useCallback((currentCustomerName?: string) => {
-    if (schemeIdFromUrl) {
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+
+  // State for Inline Payment Card
+  const [inlineMonthsToPay, setInlineMonthsToPay] = useState(1);
+  const [inlinePaymentModes, setInlinePaymentModes] = useState<PaymentMode[]>(['Cash']);
+  const [isInlinePaymentProcessing, setIsInlinePaymentProcessing] = useState(false);
+
+  const inlinePaymentForm = useForm<InlinePaymentFormValues>({
+    resolver: zodResolver(inlinePaymentFormSchema),
+    defaultValues: {
+      paymentDate: new Date(),
+    },
+    mode: 'onTouched',
+  });
+
+
+  const loadSchemeData = useCallback((currentSchemeId?: string) => {
+    const idToLoad = currentSchemeId || schemeIdFromUrl;
+    if (idToLoad) {
       setIsLoading(true);
-      const fetchedScheme = getMockSchemeById(schemeIdFromUrl);
+      const fetchedScheme = getMockSchemeById(idToLoad);
       if (fetchedScheme) {
-        const customerNameToFilterBy = currentCustomerName || fetchedScheme.customerName;
+        setScheme(fetchedScheme);
+        // Reset inline payment form when scheme data loads/reloads
+        const initialMonths = (fetchedScheme.durationMonths - (fetchedScheme.paymentsMadeCount || 0)) > 0 ? 1 : 0;
+        setInlineMonthsToPay(initialMonths);
+        setInlinePaymentModes(['Cash']);
+        inlinePaymentForm.reset({ paymentDate: new Date() });
 
-        const totals = calculateSchemeTotals(fetchedScheme);
-        fetchedScheme.payments.forEach(p => p.status = getPaymentStatus(p, fetchedScheme.startDate));
-        const status = getSchemeStatus(fetchedScheme); 
-        setScheme({ ...fetchedScheme, ...totals, status });
-        setActiveAccordionItem(fetchedScheme.id); 
-
-        const allCustomerSchemes = getMockSchemes()
-          .filter(s => s.customerName === customerNameToFilterBy)
-          .map(s => {
-            const sTotals = calculateSchemeTotals(s);
-            s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-            const sStatus = getSchemeStatus(s);
-            return { ...s, ...sTotals, status: sStatus };
-          })
-          .sort((a,b) => parseISO(b.startDate).getTime() - parseISO(a.startDate).getTime()); 
-        setAllSchemesForThisCustomer(allCustomerSchemes);
+      } else {
+        setScheme(null); // Scheme not found
       }
       setExistingGroupNames(getUniqueGroupNames());
       setIsLoading(false);
     }
-  }, [schemeIdFromUrl]);
+  }, [schemeIdFromUrl, inlinePaymentForm]);
 
   useEffect(() => {
     loadSchemeData();
   }, [loadSchemeData]);
 
-  const handleRecordPayment = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
-    if (!selectedPaymentForRecord) return;
-
-    setIsRecordingPayment(true);
-    const updatedSchemeFromMock = updateMockSchemePayment(selectedPaymentForRecord.schemeIdToUpdate, selectedPaymentForRecord.id, data);
-    
-    if (updatedSchemeFromMock) {
-       setAllSchemesForThisCustomer(prevAll => 
-        prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s)
-      );
-      if (scheme && scheme.id === updatedSchemeFromMock.id) {
-        setScheme(updatedSchemeFromMock);
-      }
-      if (activeAccordionItem === updatedSchemeFromMock.id) {
-        setActiveAccordionItem(updatedSchemeFromMock.id); 
-      }
-      toast({ title: 'Payment Recorded', description: `Payment for month ${selectedPaymentForRecord.monthNumber} of scheme ${selectedPaymentForRecord.schemeIdToUpdate.toUpperCase()} recorded.` });
-    } else {
-      toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
-    }
-    setSelectedPaymentForRecord(null);
-    setIsRecordingPayment(false);
-  };
-  
-  // Removed openSettleAndCloseDialog and handleConfirmSettleAndClose functions
 
   const openManualCloseDialog = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Closed') return;
@@ -142,13 +128,7 @@ export default function SchemeDetailsPage() {
 
     const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
     if (closedSchemeResult) {
-      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
-      if (scheme && scheme.id === closedSchemeResult.id) {
-        setScheme(closedSchemeResult);
-      }
-      if (activeAccordionItem === closedSchemeResult.id) {
-        setActiveAccordionItem(closedSchemeResult.id);
-      }
+      setScheme(closedSchemeResult); // Update current scheme state
       toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
     } else {
       toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
@@ -163,10 +143,7 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(true);
     const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
     if (updatedSchemeFromMock) {
-      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
-      if (scheme && updatedSchemeFromMock.id === scheme.id) {
-        setScheme(updatedSchemeFromMock);
-      }
+      setScheme(updatedSchemeFromMock); // Update current scheme state
       toast({
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
@@ -185,15 +162,17 @@ export default function SchemeDetailsPage() {
     setIsUpdatingCustomerDetails(true);
     const result = updateMockCustomerDetails(originalName, newDetails);
 
-    if (result.success) {
+    if (result.success && result.updatedSchemes) {
       toast({
         title: 'Customer Details Updated',
         description: `Details for ${newDetails.customerName} have been updated.`,
       });
-      if (newDetails.customerName !== originalName && scheme && scheme.id === schemeIdFromUrl) {
-        loadSchemeData(newDetails.customerName); 
+      // If current scheme's customer name changed, reload its data
+      if (newDetails.customerName !== originalName && scheme && result.updatedSchemes.some(s => s.id === scheme.id)) {
+        loadSchemeData(scheme.id); 
       } else {
-        loadSchemeData(scheme?.customerName); 
+        // If name didn't change but other details might affect current scheme display (unlikely here but good practice)
+        loadSchemeData();
       }
     } else {
       toast({
@@ -206,89 +185,6 @@ export default function SchemeDetailsPage() {
     setIsUpdatingCustomerDetails(false);
   };
 
-
-  const customerSummaryStats = useMemo(() => {
-    if (!allSchemesForThisCustomer.length) {
-      return {
-        totalSchemesCount: 0,
-        activeOverdueSchemesCount: 0,
-        completedSchemesCount: 0,
-        aggregateTotalCollected: 0,
-        aggregateTotalRemaining: 0,
-      };
-    }
-    const totalSchemesCount = allSchemesForThisCustomer.length;
-    const activeOverdueSchemesCount = allSchemesForThisCustomer.filter(s => s.status === 'Active' || s.status === 'Overdue').length;
-    const completedSchemesCount = allSchemesForThisCustomer.filter(s => s.status === 'Completed' || s.status === 'Closed').length;
-    const aggregateTotalCollected = allSchemesForThisCustomer.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
-    const aggregateTotalRemaining = allSchemesForThisCustomer
-      .filter(s => s.status === 'Active' || s.status === 'Overdue')
-      .reduce((sum, s) => sum + (s.totalRemaining || 0), 0);
-
-    return {
-      totalSchemesCount,
-      activeOverdueSchemesCount,
-      completedSchemesCount,
-      aggregateTotalCollected,
-      aggregateTotalRemaining,
-    };
-  }, [allSchemesForThisCustomer]);
-  
-  const schemeForVisuals = useMemo(() => {
-    return allSchemesForThisCustomer.find(s => s.id === activeAccordionItem) || scheme;
-  }, [activeAccordionItem, allSchemesForThisCustomer, scheme]);
-
-
-  const paymentChartData = useMemo(() => {
-    if (!schemeForVisuals) return [];
-    return schemeForVisuals.payments.map(p => ({
-      month: `M${p.monthNumber}`,
-      expected: p.amountExpected,
-      paid: p.amountPaid || 0,
-    }));
-  }, [schemeForVisuals]);
-
-  const cumulativePaymentData = useMemo(() => {
-    if (!schemeForVisuals) return [];
-    let cumulativePaid = 0;
-    let cumulativeExpected = 0;
-    return schemeForVisuals.payments.map(p => {
-      cumulativePaid += (p.amountPaid || 0);
-      cumulativeExpected += p.amountExpected;
-      return {
-        month: `M${p.monthNumber}`,
-        cumulativePaid,
-        cumulativeExpected,
-      };
-    });
-  }, [schemeForVisuals]);
-
-  const chartConfig = {
-    paid: { label: "Paid", color: "hsl(var(--chart-2))" },
-    expected: { label: "Expected", color: "hsl(var(--chart-4))" },
-    cumulativePaid: { label: "Cumulative Paid", color: "hsl(var(--chart-1))" },
-    cumulativeExpected: { label: "Cumulative Expected", color: "hsl(var(--chart-5))" },
-  }
-
-  const isPaymentRecordable = (payment: Payment, currentScheme: Scheme): boolean => {
-    if (currentScheme.status === 'Completed' || currentScheme.status === 'Closed' || payment.status === 'Paid') {
-      return false;
-    }
-    const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
-
-    for (let i = 0; i < payment.monthNumber - 1; i++) {
-      if (getPaymentStatus(schemeToCheck.payments[i], schemeToCheck.startDate) !== 'Paid') {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const nextRecordablePaymentForActiveScheme = useMemo(() => {
-    if (!schemeForVisuals) return null;
-    return schemeForVisuals.payments.find(p => isPaymentRecordable(p, schemeForVisuals));
-  }, [schemeForVisuals, allSchemesForThisCustomer]); // Added allSchemes to dependency for isPaymentRecordable
-  
   const handleAddNewSchemeForCustomer = () => {
     if (!scheme) return;
     const queryParams = new URLSearchParams();
@@ -302,334 +198,355 @@ export default function SchemeDetailsPage() {
     router.push(`/schemes/new?${queryParams.toString()}`);
   };
 
-  const handleRecordPaymentForActiveScheme = () => {
-    if (nextRecordablePaymentForActiveScheme && schemeForVisuals) {
-      setSelectedPaymentForRecord({
-        ...nextRecordablePaymentForActiveScheme,
-        schemeIdToUpdate: schemeForVisuals.id,
-      });
-      // The Dialog with RecordPaymentForm will open due to selectedPaymentForRecord being set
-    } else {
-      toast({ title: "No Payment Due", description: "No recordable payment found for the active scheme.", variant: "default"});
-    }
+  // Inline Payment Card Logic
+  const maxInlineMonthsToPay = useMemo(() => {
+    if (!scheme) return 0;
+    return scheme.durationMonths - (scheme.paymentsMadeCount || 0);
+  }, [scheme]);
+
+  const handleInlinePaymentMonthsChange = (delta: number) => {
+    setInlineMonthsToPay(prev => {
+      let newMonths = prev + delta;
+      if (newMonths < 1 && maxInlineMonthsToPay > 0) newMonths = 1;
+      if (newMonths <= 0 && maxInlineMonthsToPay <=0) newMonths = 0;
+      if (newMonths > maxInlineMonthsToPay) newMonths = maxInlineMonthsToPay;
+      return newMonths;
+    });
   };
+
+  const handleInlinePaymentModeChange = (mode: PaymentMode, checked: boolean) => {
+    setInlinePaymentModes(prev => {
+      const newModes = checked
+        ? [...prev, mode]
+        : prev.filter(m => m !== mode);
+      return newModes;
+    });
+  };
+
+  const totalInlinePaymentAmount = useMemo(() => {
+    if (!scheme || inlineMonthsToPay <= 0) return 0;
+    return scheme.monthlyPaymentAmount * inlineMonthsToPay;
+  }, [scheme, inlineMonthsToPay]);
+
+  const handleConfirmInlinePayment = async (formData: InlinePaymentFormValues) => {
+    if (!scheme || inlineMonthsToPay <= 0 || inlinePaymentModes.length === 0 || !formData.paymentDate) {
+      toast({ title: "Invalid Payment Details", description: "Ensure months to pay, payment date, and mode are set.", variant: "destructive" });
+      return;
+    }
+
+    setIsInlinePaymentProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let currentSchemeStateForLoop: Scheme | undefined = JSON.parse(JSON.stringify(scheme)); // Deep copy for loop processing
+
+    for (let i = 0; i < inlineMonthsToPay; i++) {
+      if (!currentSchemeStateForLoop) {
+        errorCount++;
+        break;
+      }
+      const nextPaymentToRecord = currentSchemeStateForLoop.payments.find(p => getPaymentStatus(p, currentSchemeStateForLoop!.startDate) !== 'Paid');
+      
+      if (!nextPaymentToRecord) {
+        errorCount++;
+        break; 
+      }
+
+      const paymentData = {
+        paymentDate: formatISO(formData.paymentDate),
+        amountPaid: currentSchemeStateForLoop.monthlyPaymentAmount,
+        modeOfPayment: inlinePaymentModes,
+      };
+
+      const result = updateMockSchemePayment(currentSchemeStateForLoop.id, nextPaymentToRecord.id, paymentData);
+      if (result) {
+        successCount++;
+        currentSchemeStateForLoop = result; // Update scheme state for the next iteration
+      } else {
+        errorCount++;
+        break; 
+      }
+    }
+    
+    if (successCount > 0) {
+      toast({ title: "Payments Recorded", description: `${successCount} payment installment(s) recorded for ${scheme.customerName}.` });
+      loadSchemeData(); // Reload to get fresh scheme data and reset inline form
+    } else if (errorCount > 0) {
+      toast({ title: "Error Recording Payments", description: `Could not record ${errorCount} payment installments.`, variant: "destructive" });
+    }
+    
+    setIsInlinePaymentProcessing(false);
+  };
+
+  const canRecordPayment = useMemo(() => {
+    if (!scheme) return false;
+    return scheme.status !== 'Closed' && scheme.status !== 'Completed' && maxInlineMonthsToPay > 0;
+  }, [scheme, maxInlineMonthsToPay]);
 
 
   if (isLoading || !scheme) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return (
+        <div className="flex flex-col gap-6 items-center justify-center min-h-[calc(100vh-200px)]">
+            {isLoading ? (
+                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            ) : (
+                <Card className="w-full max-w-md glassmorphism">
+                    <CardHeader className="items-center">
+                        <FileWarning className="h-10 w-10 text-destructive mb-3" />
+                        <CardTitle className="font-headline text-2xl">Scheme Not Found</CardTitle>
+                        <CardDescription>The requested scheme ID could not be found or is invalid.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center">
+                        <Button onClick={() => router.push('/schemes')}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Go Back to All Schemes
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
   }
   
   return (
-    <div key={schemeIdFromUrl} className="flex flex-col gap-6">
+    <div key={scheme.id} className="flex flex-col gap-6">
       <div className="mb-2">
         <Button variant="outline" size="sm" onClick={() => router.push('/schemes')}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to All Schemes
         </Button>
       </div>
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+
+      {/* Scheme Overview & Progress Card */}
+      <Card className="glassmorphism overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <CardTitle className="font-headline text-2xl mb-1">{scheme.customerName}</CardTitle>
-            <CardDescription>
-              ID: {scheme.id.toUpperCase()}<br/>
-              Phone: {scheme.customerPhone || 'N/A'}<br/>
-              Address: {scheme.customerAddress || 'N/A'}<br/>
-              {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
-              {scheme.status === 'Closed' && scheme.closureDate && (<>Manually Closed on: {formatDate(scheme.closureDate)}</>)}
-              {scheme.status === 'Completed' && scheme.payments.every(p => p.status === 'Paid') && !scheme.closureDate && (<>Completed on: {formatDate(scheme.payments[scheme.payments.length-1].paymentDate!)} (All payments made)</>)}
+            <CardTitle className="font-headline text-3xl mb-1.5 text-foreground">{scheme.customerName}</CardTitle>
+            <CardDescription className="space-y-0.5 text-sm">
+              <span>ID: <span className="font-medium text-foreground/90">{scheme.id.toUpperCase()}</span></span><br/>
+              {scheme.customerPhone && <span>Phone: <span className="font-medium text-foreground/90">{scheme.customerPhone}</span></span>}<br/>
+              {scheme.customerAddress && <span>Address: <span className="font-medium text-foreground/90">{scheme.customerAddress}</span></span>}<br/>
+              {scheme.customerGroupName && (<span>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline font-medium">{scheme.customerGroupName}</Link><br/></span>)}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2 mt-4 sm:mt-0 flex-wrap">
-            <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
-                 <DialogTrigger asChild>
-                    <Button 
-                        onClick={handleRecordPaymentForActiveScheme}
-                        variant="default" 
-                        size="sm"
-                        disabled={!nextRecordablePaymentForActiveScheme || isRecordingPayment}
-                    >
-                        <CreditCard className="mr-2 h-4 w-4" /> Record Payment for Active Scheme
-                    </Button>
-                 </DialogTrigger>
-                 {selectedPaymentForRecord && schemeForVisuals && selectedPaymentForRecord.schemeIdToUpdate === schemeForVisuals.id && (
-                    <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="font-headline">Record Payment for {schemeForVisuals.customerName}</DialogTitle>
-                        <CardDescription>Scheme ID: {schemeForVisuals.id.toUpperCase()} (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
-                    </DialogHeader>
-                    <RecordPaymentForm
-                        payment={selectedPaymentForRecord}
-                        onSubmit={handleRecordPayment}
-                        isLoading={isRecordingPayment}
-                    />
-                    </DialogContent>
-                )}
-            </Dialog>
-            <Button
-              onClick={() => setIsEditCustomerDetailsDialogOpen(true)}
-              variant="outline"
-              size="sm"
-              disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose}
-            >
+          <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
+             <Button onClick={() => setIsEditCustomerDetailsDialogOpen(true)} variant="outline" size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
               <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </Button>
-             <Button 
-                onClick={handleAddNewSchemeForCustomer}
-                variant="outline" 
-                size="sm"
-              >
+             <Button onClick={handleAddNewSchemeForCustomer} variant="outline" size="sm" disabled={isInlinePaymentProcessing}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme for {scheme.customerName.split(' ')[0]}
             </Button>
-            <Button 
-              onClick={() => setIsAssignGroupDialogOpen(true)} 
-              variant="outline"
-              size="sm"
-              disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose}
-            >
+            <Button onClick={() => setIsAssignGroupDialogOpen(true)} variant="outline"size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
+            </Button>
+             <Button onClick={() => setIsHistoryPanelOpen(true)} variant="outline" size="sm" disabled={isInlinePaymentProcessing}>
+                <ListOrdered className="mr-2 h-4 w-4" /> View History
             </Button>
           </div>
         </CardHeader>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-            <CardTitle className="font-headline">All Schemes Enrolled by {scheme.customerName}</CardTitle>
-            <CardDescription>View and manage payment schedules for all schemes associated with this customer.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            {allSchemesForThisCustomer.length > 0 ? (
-                <Accordion 
-                    type="single" 
-                    collapsible 
-                    className="w-full space-y-3" 
-                    value={activeAccordionItem} 
-                    onValueChange={setActiveAccordionItem}
-                >
-                {allSchemesForThisCustomer.map((s) => (
-                    <AccordionItem value={s.id} key={s.id} id={s.id + "-accordion"} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow bg-card">
-                    <AccordionTrigger className="p-4 hover:bg-muted/50 data-[state=open]:bg-muted/30">
-                        <div className="flex justify-between items-center w-full">
-                        <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
-                            <span className="font-medium">ID: {s.id.toUpperCase()}</span>
-                            <SchemeStatusBadge status={s.status} />
-                            {s.status === 'Completed' && !s.closureDate && <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">All Payments Made</Badge>}
-                            {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
-                        </div>
-                        <div className="text-xs text-muted-foreground text-right">
-                            <span>Started: {formatDate(s.startDate)}</span><br/>
-                            <span>Monthly: {formatCurrency(s.monthlyPaymentAmount)}</span>
-                        </div>
-                        </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="p-0">
-                        <div className="border-t p-4 space-y-4">
-                            <p className="text-sm font-semibold mb-2">Details for Scheme {s.id.toUpperCase()}</p>
-                            {s.status === 'Closed' || (s.status === 'Completed' && s.payments.every(p => p.status === 'Paid')) ? (
-                            <div className="text-sm">
-                                <p className="font-semibold">
-                                  {s.status === 'Closed' ? 'Scheme Manually Closed' : 'Scheme Completed (All Payments Made)'}
-                                </p>
-                                {s.closureDate && <p>Closed on: {formatDate(s.closureDate)}</p>}
-                                {!s.closureDate && s.status === 'Completed' && s.payments.every(p => p.status === 'Paid') && s.payments[s.payments.length-1].paymentDate &&
-                                  <p>Final payment on: {formatDate(s.payments[s.payments.length-1].paymentDate!)}</p>
-                                }
-                                <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
-                            </div>
-                            ) : null}
-
-                            {(s.status !== 'Closed' && s.status !== 'Completed') || (s.status === 'Completed' && !s.payments.every(p => p.status === 'Paid')) ? (
-                            <>
-                                <div className="overflow-x-auto">
-                                    <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                        <TableHead>Month</TableHead>
-                                        <TableHead>Due Date</TableHead>
-                                        <TableHead>Expected</TableHead>
-                                        <TableHead>Paid Amount</TableHead>
-                                        <TableHead>Payment Date</TableHead>
-                                        <TableHead>Mode(s)</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {s.payments.map((payment) => (
-                                        <TableRow key={payment.id}>
-                                            <TableCell>{payment.monthNumber}</TableCell>
-                                            <TableCell>{formatDate(payment.dueDate)}</TableCell>
-                                            <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
-                                            <TableCell>{formatCurrency(payment.amountPaid)}</TableCell>
-                                            <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                                            <TableCell>{payment.modeOfPayment?.join(' | ') || '-'}</TableCell>
-                                            <TableCell><PaymentStatusBadge status={getPaymentStatus(payment, s.startDate)} /></TableCell>
-                                            <TableCell className="text-right">
-                                            {isPaymentRecordable(payment, s) ? (
-                                                <Dialog onOpenChange={(open) => !open && setSelectedPaymentForRecord(null)}>
-                                                <DialogTrigger asChild>
-                                                    <Button variant="outline" size="sm" onClick={() => setSelectedPaymentForRecord({...payment, schemeIdToUpdate: s.id })}>
-                                                    <DollarSign className="mr-1 h-4 w-4" /> Record
-                                                    </Button>
-                                                </DialogTrigger>
-                                                {selectedPaymentForRecord && selectedPaymentForRecord.id === payment.id && selectedPaymentForRecord.schemeIdToUpdate === s.id && (
-                                                    <DialogContent>
-                                                    <DialogHeader>
-                                                        <DialogTitle className="font-headline">Record Payment for {s.customerName}</DialogTitle>
-                                                        <CardDescription>Scheme ID: {s.id.toUpperCase()} (Month {selectedPaymentForRecord.monthNumber})</CardDescription>
-                                                    </DialogHeader>
-                                                    <RecordPaymentForm
-                                                        payment={selectedPaymentForRecord}
-                                                        onSubmit={handleRecordPayment}
-                                                        isLoading={isRecordingPayment}
-                                                    />
-                                                    </DialogContent>
-                                                )}
-                                                </Dialog>
-                                            ) : (
-                                                (getPaymentStatus(payment, s.startDate) === 'Paid') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
-                                            )}
-                                            </TableCell>
-                                        </TableRow>
-                                        ))}
-                                    </TableBody>
-                                    </Table>
-                                </div>
-                            </>
-                            ): null }
-
-                            <div className="flex justify-end items-center mt-4 space-x-2">
-                                {/* Removed Settle & Close (Full Payment) button */}
-                                <Button 
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => openManualCloseDialog(s)}
-                                    disabled={s.status === 'Closed' || isUpdatingGroup || isProcessingManualClose}
-                                >
-                                    <FileWarning className="mr-2 h-4 w-4" /> Close Manually
-                                </Button>
-                            </div>
-                        </div>
-                    </AccordionContent>
-                    </AccordionItem>
-                ))}
-                </Accordion>
-            ) : (
-                <p className="text-center text-muted-foreground py-4">No schemes found for this customer.</p>
-            )}
+        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          <div className="md:col-span-1 flex flex-col items-center justify-center">
+             <SchemeCompletionArc 
+                paymentsMadeCount={scheme.paymentsMadeCount || 0} 
+                durationMonths={scheme.durationMonths}
+                size={200}
+                strokeWidth={20}
+             />
+          </div>
+          <div className="md:col-span-2 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">Start Date</p>
+              <p className="font-semibold text-base text-foreground">{formatDate(scheme.startDate)}</p>
+            </div>
+             <div className="space-y-0.5">
+              <p className="text-muted-foreground">Monthly Amount</p>
+              <p className="font-semibold text-base text-foreground">{formatCurrency(scheme.monthlyPaymentAmount)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">Duration</p>
+              <p className="font-semibold text-base text-foreground">{scheme.durationMonths} Months</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">Status</p>
+              <SchemeStatusBadge status={scheme.status} />
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">Total Collected</p>
+              <p className="font-semibold text-base text-green-600 dark:text-green-500">{formatCurrency(scheme.totalCollected)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">Total Remaining</p>
+              <p className="font-semibold text-base text-orange-600 dark:text-orange-500">{formatCurrency(scheme.totalRemaining)}</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
       
-      <Card>
-        <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><ListFilter className="h-5 w-5 text-primary" />Overall Customer Summary for {scheme.customerName}</CardTitle>
-            <CardDescription>Aggregate financial overview across all enrolled schemes.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Total Schemes:</strong> {customerSummaryStats.totalSchemesCount}</div>
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Active/Overdue:</strong> {customerSummaryStats.activeOverdueSchemesCount}</div>
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Completed/Closed:</strong> {customerSummaryStats.completedSchemesCount}</div>
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Total Collected (All Schemes):</strong> {formatCurrency(customerSummaryStats.aggregateTotalCollected)}</div>
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Total Remaining (Active/Overdue):</strong> {formatCurrency(customerSummaryStats.aggregateTotalRemaining)}</div>
-        </CardContent>
-      </Card>
-      
-      {schemeForVisuals && (
-        <Card>
+      {/* Inline Payment Recording & Scheme Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {canRecordPayment && (
+          <Card className="lg:col-span-2 glassmorphism">
             <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2"><LineChartIcon className="h-5 w-5 text-primary" />Visuals for Scheme ID: {schemeForVisuals.id.toUpperCase()}</CardTitle>
+              <CardTitle className="font-headline flex items-center gap-2 text-xl">
+                <DollarSign className="h-5 w-5 text-primary" /> Record Payment(s) for this Scheme
+              </CardTitle>
+              <CardDescription>Select payment date, number of months, and mode of payment.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-                    <Card className="flex flex-col shadow-none border">
-                        <CardHeader>
-                            <CardTitle className="font-headline text-base">Monthly Progress</CardTitle>
-                            <CardDescription className="text-xs">Visual breakdown of payments for the selected scheme.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-grow flex items-center justify-center p-2 sm:p-4">
-                            <MonthlyCircularProgress 
-                            payments={schemeForVisuals.payments} 
-                            startDate={schemeForVisuals.startDate}
-                            durationMonths={schemeForVisuals.durationMonths}
+              <Form {...inlinePaymentForm}>
+                <form onSubmit={inlinePaymentForm.handleSubmit(handleConfirmInlinePayment)} className="space-y-5">
+                  <FormField
+                    control={inlinePaymentForm.control}
+                    name="paymentDate"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <HookFormLabel>Payment Date</HookFormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant={'outline'}
+                                className={cn('w-full sm:w-[260px] pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
+                                disabled={isInlinePaymentProcessing}
+                              >
+                                {field.value ? formatDateFns(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
+                                <CalendarIconLucide className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              disabled={(date) => date > new Date() || date < new Date("1900-01-01") || isInlinePaymentProcessing}
+                              initialFocus
                             />
-                        </CardContent>
-                    </Card>
-                    <Card className="shadow-none border">
-                    <CardHeader>
-                        <CardTitle className="font-headline text-base">Payment Trends</CardTitle>
-                        <CardDescription className="text-xs">Expected vs. Paid amounts over time for the selected scheme.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6 p-2 sm:p-4">
-                        <div>
-                        <h3 className="text-sm font-semibold mb-1">Monthly Payments</h3>
-                        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
-                            <ResponsiveContainer>
-                            <RechartsBarChart data={paymentChartData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" fontSize={10} />
-                                <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
-                                <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                                <ChartLegend content={<ChartLegendContent />} />
-                                <Bar dataKey="expected" fill="var(--color-expected)" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="paid" fill="var(--color-paid)" radius={[4, 4, 0, 0]} />
-                            </RechartsBarChart>
-                            </ResponsiveContainer>
-                        </ChartContainer>
-                        </div>
-                        <div>
-                        <h3 className="text-sm font-semibold mb-1">Cumulative Payments</h3>
-                        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] w-full">
-                            <ResponsiveContainer>
-                            <LineChart data={cumulativePaymentData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" fontSize={10} />
-                                <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹', '')} fontSize={10} width={70} />
-                                <RechartsTooltip content={<ChartTooltipContent />} formatter={(value) => formatCurrency(Number(value))}/>
-                                <ChartLegend content={<ChartLegendContent />} />
-                                <Line type="monotone" dataKey="cumulativeExpected" stroke="var(--color-cumulativeExpected)" strokeWidth={2} dot={false}/>
-                                <Line type="monotone" dataKey="cumulativePaid" stroke="var(--color-cumulativePaid)" strokeWidth={2} />
-                            </LineChart>
-                            </ResponsiveContainer>
-                        </ChartContainer>
-                        </div>
-                    </CardContent>
-                    </Card>
-                </div>
-                {(schemeForVisuals.status === 'Completed' || schemeForVisuals.status === 'Closed') && (
-                    <div className="mt-6">
-                        <h3 className="font-semibold mb-2 text-lg">Scheme {schemeForVisuals.status} Summary</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
-                            <div className="flex items-center gap-3">
-                                <PackageCheck className="h-8 w-8 text-green-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Status</p>
-                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">
-                                        {schemeForVisuals.status === 'Closed' ? 'Manually Closed' : 'Successfully Completed'}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <DollarSign className="h-8 w-8 text-green-600" />
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Total Amount Paid</p>
-                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">{formatCurrency(schemeForVisuals.totalCollected || 0)}</p>
-                                </div>
-                            </div>
-                        </div>
-                        {schemeForVisuals.closureDate && <p className="mt-2 text-sm">This scheme was marked closed on <strong>{formatDate(schemeForVisuals.closureDate)}</strong>.</p>}
-                         {!schemeForVisuals.closureDate && schemeForVisuals.status === 'Completed' && schemeForVisuals.payments.every(p=>p.status === 'Paid') &&
-                           <p className="mt-2 text-sm">All payments for this scheme were completed on <strong>{formatDate(schemeForVisuals.payments[schemeForVisuals.payments.length - 1].paymentDate!)}</strong>.</p>
-                        }
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-      )}
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-      {/* Dialog for Settle & Close (Full Payment) - REMOVED */}
-      
-      {/* Dialog for Manual Close */}
+                  <div>
+                    <HookFormLabel>Number of Months to Pay ({inlineMonthsToPay} / {maxInlineMonthsToPay} remaining)</HookFormLabel>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-full" onClick={() => handleInlinePaymentMonthsChange(-1)} disabled={inlineMonthsToPay <= 1 || isInlinePaymentProcessing || maxInlineMonthsToPay === 0}>
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <Input 
+                        type="text" 
+                        readOnly 
+                        value={inlineMonthsToPay} 
+                        className="w-16 h-9 text-center font-semibold text-base" 
+                        disabled={maxInlineMonthsToPay === 0}
+                        />
+                      <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-full" onClick={() => handleInlinePaymentMonthsChange(1)} disabled={inlineMonthsToPay >= maxInlineMonthsToPay || isInlinePaymentProcessing || maxInlineMonthsToPay === 0}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {maxInlineMonthsToPay === 0 && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
+                  </div>
+
+                  <div>
+                    <HookFormLabel>Mode of Payment</HookFormLabel>
+                    <div className="flex flex-wrap gap-x-6 gap-y-3 mt-2">
+                      {availablePaymentModes.map((mode) => {
+                        const Icon = paymentModeIcons[mode];
+                        return (
+                          <div key={mode} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`inline-mop-${mode}`}
+                              checked={inlinePaymentModes.includes(mode)}
+                              onCheckedChange={(checked) => handleInlinePaymentModeChange(mode, !!checked)}
+                              disabled={isInlinePaymentProcessing || inlineMonthsToPay === 0}
+                            />
+                            <label htmlFor={`inline-mop-${mode}`} className="font-normal text-sm flex items-center gap-1.5 cursor-pointer">
+                               {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+                               {mode}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                     {inlineMonthsToPay > 0 && inlinePaymentModes.length === 0 && (
+                        <p className="text-xs text-destructive mt-1.5">Please select at least one payment mode.</p>
+                    )}
+                  </div>
+                  
+                  <div className="border-t pt-4 space-y-3">
+                     {inlineMonthsToPay > 0 && (
+                        <div className="text-lg font-semibold text-right">
+                            Total to Record: {formatCurrency(totalInlinePaymentAmount)}
+                        </div>
+                     )}
+                    <Button 
+                        type="submit" 
+                        disabled={isInlinePaymentProcessing || inlineMonthsToPay === 0 || inlinePaymentModes.length === 0 || !inlinePaymentForm.formState.isValid} 
+                        className="w-full"
+                        size="lg"
+                    >
+                      {isInlinePaymentProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle className="mr-2 h-5 w-5" />}
+                      Confirm & Record Payment(s)
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        )}
+
+        {(!canRecordPayment && scheme.status !== 'Closed' && scheme.status !== 'Completed') && (
+           <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
+            <CardContent className="text-center py-10">
+                <Info className="h-10 w-10 text-primary mx-auto mb-3" />
+                <p className="text-lg font-semibold text-foreground">No Payments Due</p>
+                <p className="text-muted-foreground">There are no pending payments for this scheme currently.</p>
+            </CardContent>
+           </Card>
+        )}
+
+        {(scheme.status === 'Closed' || scheme.status === 'Completed') && (
+             <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
+                <CardContent className="text-center py-10">
+                    <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
+                    <p className="text-lg font-semibold text-foreground">
+                        Scheme {scheme.status}
+                    </p>
+                    <p className="text-muted-foreground">
+                        {scheme.status === 'Closed' ? `This scheme was manually closed on ${formatDate(scheme.closureDate!)}.` : 'All payments for this scheme have been completed.'}
+                    </p>
+                     {scheme.status === 'Completed' && !scheme.closureDate && (
+                         <p className="text-xs text-muted-foreground mt-1">You can still manually close it via Scheme Actions.</p>
+                     )}
+                </CardContent>
+             </Card>
+        )}
+
+        <Card className="lg:col-span-1 glassmorphism">
+          <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2 text-xl">
+                <FileWarning className="h-5 w-5 text-primary"/> Scheme Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button 
+                size="lg"
+                variant="destructive"
+                className="w-full"
+                onClick={() => openManualCloseDialog(scheme)}
+                disabled={scheme.status === 'Closed' || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing}
+            >
+                <FileWarning className="mr-2 h-4 w-4" /> Close Manually
+            </Button>
+            <p className="text-xs text-muted-foreground">
+                Manually closing a scheme will mark it as 'Closed' on a selected date. This is an administrative action and does not automatically reconcile pending payments.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Dialogs for actions */}
       {isManualCloseDialogOpen && schemeForManualCloseDialog && (
         <AlertDialog open={isManualCloseDialogOpen} onOpenChange={(open) => {
             if (!open) {
@@ -647,31 +564,28 @@ export default function SchemeDetailsPage() {
             <div className="space-y-4 py-2">
                 <div>
                     <Label htmlFor="manual-closure-date">Closure Date</Label>
-                    <Dialog> {/* Using Dialog to wrap Popover for better styling/focus control in AlertDialog */}
-                        <DialogTrigger asChild>
+                    <Popover>
+                        <PopoverTrigger asChild>
                              <Button
                                 id="manual-closure-date"
                                 variant={'outline'}
                                 className={cn('w-full justify-start text-left font-normal mt-1', !manualClosureDate && 'text-muted-foreground')}
                                 disabled={isProcessingManualClose}
                             >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {manualClosureDate ? formatDate(manualClosureDate.toISOString()) : <span>Pick a date</span>}
+                                <CalendarIconLucide className="mr-2 h-4 w-4" />
+                                {manualClosureDate ? formatDateFns(manualClosureDate, "dd MMM yyyy") : <span>Pick a date</span>}
                             </Button>
-                        </DialogTrigger>
-                        <DialogContent className="w-auto p-0"> {/* PopoverContent becomes DialogContent */}
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
                              <Calendar
                                 mode="single"
                                 selected={manualClosureDate}
-                                onSelect={(date) => {
-                                    setManualClosureDate(date);
-                                    // Consider closing the popover-like dialog here if needed
-                                }}
+                                onSelect={(date) => setManualClosureDate(date)}
                                 disabled={(date) => date > new Date() || (schemeForManualCloseDialog?.startDate ? date < parseISO(schemeForManualCloseDialog.startDate) : false) }
                                 initialFocus
                             />
-                        </DialogContent>
-                    </Dialog>
+                        </PopoverContent>
+                    </Popover>
                 </div>
                  <AlertDialogDescription className="text-xs pt-2">
                     This action will mark the scheme as 'Closed' on the selected date. 
@@ -714,6 +628,11 @@ export default function SchemeDetailsPage() {
           isLoading={isUpdatingCustomerDetails}
         />
       )}
+      <SchemeHistoryPanel
+        isOpen={isHistoryPanelOpen}
+        onClose={() => setIsHistoryPanelOpen(false)}
+        scheme={scheme}
+      />
     </div>
   );
 }
