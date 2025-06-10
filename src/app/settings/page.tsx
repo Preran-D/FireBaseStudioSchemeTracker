@@ -1,12 +1,12 @@
 
 'use client';
 
-import { useState, type ReactNode, useEffect, useRef } from 'react';
+import { useState, type ReactNode, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp } from 'lucide-react';
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames } from '@/lib/mock-data';
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme } from '@/lib/mock-data';
 import type { Scheme, PaymentMode, GroupDetail, Payment } from '@/types/scheme';
 import { formatDate, formatCurrency, getPaymentStatus, generateId } from '@/lib/utils';
 import { exportToExcel } from '@/lib/excelUtils';
@@ -21,6 +21,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { formatISO, format as formatDateFns, parseISO, isValid as isValidDate } from 'date-fns';
 
@@ -46,11 +48,31 @@ function DataManagementTabContent() {
   const [existingGroupNamesForImport, setExistingGroupNamesForImport] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // State for Closed Scheme Management
+  const [completedSchemes, setCompletedSchemes] = useState<Scheme[]>([]);
+  const [selectedClosedSchemeIds, setSelectedClosedSchemeIds] = useState<string[]>([]);
+  const [isReopeningClosedSchemes, setIsReopeningClosedSchemes] = useState(false);
+  const [isDeletingClosedSchemes, setIsDeletingClosedSchemes] = useState(false);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [schemesPendingDeletionInfo, setSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
+
+
+  const loadAllData = useCallback(() => {
     if (isImportSectionVisible) {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
+    const allSchemes = getMockSchemes();
+    const completed = allSchemes
+      .filter(s => s.status === 'Completed')
+      .sort((a, b) => (a.closureDate && b.closureDate ? parseISO(b.closureDate).getTime() - parseISO(a.closureDate).getTime() : 0));
+    setCompletedSchemes(completed);
+    setSelectedClosedSchemeIds([]); // Clear selection on reload
   }, [isImportSectionVisible]);
+
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
+
 
   const handleExportAllToExcel = () => {
     setIsExporting(true);
@@ -309,21 +331,20 @@ function DataManagementTabContent() {
     toast({title: "Sample File Downloaded", description: "Scheme_Import_Sample.xlsx has been downloaded."});
   };
 
-
   const handleProcessImportFromUI = async () => {
     if (importRows.length === 0) {
       toast({ title: 'No Data', description: 'Please add at least one scheme to import, either manually or by uploading an Excel file.', variant: 'destructive' });
       return;
     }
     setIsImportProcessing(true);
-    setImportResults(null); 
+    setImportResults(null);
     const localResults: { successCount: number; errorCount: number; messages: string[] } = {
       successCount: 0,
       errorCount: 0,
       messages: [],
     };
     const processedCustomerNamesInThisBatch = new Set<string>();
-    const allExistingSchemes = getMockSchemes(); // Fetch global schemes once
+    const allExistingSchemes = getMockSchemes(); 
 
     for (let i = 0; i < importRows.length; i++) {
       const row = importRows[i];
@@ -333,26 +354,23 @@ function DataManagementTabContent() {
       if (!customerNameForProcessing) {
         localResults.messages.push(`${rowNumForMsg}: Customer Name is required. Skipping.`);
         localResults.errorCount++;
-        continue; 
+        continue;
       }
-
       const lowerCaseCustomerNameFromRow = customerNameForProcessing.toLowerCase();
 
-      // Global duplicate check
       const isGloballyExisting = allExistingSchemes.some(
         (scheme) => scheme.customerName.trim().toLowerCase() === lowerCaseCustomerNameFromRow
       );
       if (isGloballyExisting) {
         localResults.messages.push(`${rowNumForMsg}: Customer "${customerNameForProcessing}" already exists in the system. Skipping.`);
         localResults.errorCount++;
-        continue; 
+        continue;
       }
 
-      // Batch duplicate check
       if (processedCustomerNamesInThisBatch.has(lowerCaseCustomerNameFromRow)) {
         localResults.messages.push(`${rowNumForMsg}: Customer Name "${customerNameForProcessing}" is a duplicate within this import batch. Skipping.`);
         localResults.errorCount++;
-        continue; 
+        continue;
       }
       
       if (!row.startDate || !isValidDate(row.startDate)) {
@@ -373,7 +391,6 @@ function DataManagementTabContent() {
         continue;
       }
       
-      // If all checks pass up to this point, add to batch set
       processedCustomerNamesInThisBatch.add(lowerCaseCustomerNameFromRow);
 
       try {
@@ -389,7 +406,7 @@ function DataManagementTabContent() {
         if (!createdScheme) {
           localResults.messages.push(`${rowNumForMsg}: Failed to create scheme for "${customerNameForProcessing}". This could be due to an internal issue.`);
           localResults.errorCount++;
-          continue; 
+          continue;
         }
         localResults.messages.push(`${rowNumForMsg}: Successfully created scheme for "${createdScheme.customerName}" (ID: ${createdScheme.id.toUpperCase()}).`);
         
@@ -438,8 +455,10 @@ function DataManagementTabContent() {
     if (localResults.successCount > 0 && localResults.errorCount === 0) {
       toast({ title: 'Import Successful', description: `${localResults.successCount} schemes imported successfully.` });
       setImportRows([]); 
+      loadAllData();
     } else if (localResults.successCount > 0 && localResults.errorCount > 0) {
       toast({ title: 'Import Partially Successful', description: `${localResults.successCount} schemes imported, ${localResults.errorCount} errors/skipped. Check results below.`, variant: 'default', duration: 10000 });
+      loadAllData();
     } else if (localResults.errorCount > 0) {
       toast({ title: 'Import Failed', description: `${localResults.errorCount} errors/skipped rows. Check results below.`, variant: 'destructive', duration: 10000 });
     } else { 
@@ -458,8 +477,84 @@ function DataManagementTabContent() {
     }
   };
 
+  // --- Closed Scheme Management Logic ---
+  const handleSelectClosedScheme = (schemeId: string, checked: boolean) => {
+    setSelectedClosedSchemeIds(prev =>
+      checked ? [...prev, schemeId] : prev.filter(id => id !== schemeId)
+    );
+  };
+
+  const handleSelectAllClosedSchemes = (checked: boolean) => {
+    if (checked) {
+      setSelectedClosedSchemeIds(completedSchemes.map(s => s.id));
+    } else {
+      setSelectedClosedSchemeIds([]);
+    }
+  };
+
+  const handleReopenSelectedSchemes = async () => {
+    if (selectedClosedSchemeIds.length === 0) return;
+    setIsReopeningClosedSchemes(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const schemeId of selectedClosedSchemeIds) {
+      const reopened = reopenMockScheme(schemeId);
+      if (reopened) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+    }
+    toast({
+      title: "Reopen Operation Complete",
+      description: `${successCount} scheme(s) reopened. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`
+    });
+    loadAllData(); // Refresh the list of completed schemes and other data potentially
+    setIsReopeningClosedSchemes(false);
+  };
+
+  const handleInitiateDeleteSelectedSchemes = () => {
+    if (selectedClosedSchemeIds.length === 0) return;
+    const info = selectedClosedSchemeIds.map(id => {
+      const scheme = completedSchemes.find(s => s.id === id);
+      return { id, customerName: scheme?.customerName || 'Unknown', schemeId: scheme?.id.toUpperCase() || 'Unknown ID' };
+    });
+    setSchemesPendingDeletionInfo(info);
+    setShowDeleteConfirmDialog(true);
+  };
+
+  const handleConfirmDeleteSelectedSchemes = async () => {
+    if (selectedClosedSchemeIds.length === 0) return;
+    setIsDeletingClosedSchemes(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const schemeId of selectedClosedSchemeIds) {
+      const deleted = deleteFullMockScheme(schemeId);
+      if (deleted) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+    }
+    toast({
+      title: "Deletion Operation Complete",
+      description: `${successCount} scheme(s) permanently deleted. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`,
+      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
+    });
+    loadAllData(); // Refresh the list of completed schemes
+    setShowDeleteConfirmDialog(false);
+    setSchemesPendingDeletionInfo([]);
+    setIsDeletingClosedSchemes(false);
+  };
+
+  const isAllCompletedSelected = completedSchemes.length > 0 && selectedClosedSchemeIds.length === completedSchemes.length;
+
+
   return (
     <div className="flex flex-col gap-8 mt-6">
+      {/* Export Card */}
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
@@ -482,6 +577,7 @@ function DataManagementTabContent() {
         </CardContent>
       </Card>
 
+      {/* Bulk Import Card */}
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
@@ -692,6 +788,7 @@ function DataManagementTabContent() {
         </CardContent>
       </Card>
 
+      {/* Import Results Card */}
       {importResults && isImportSectionVisible && (
         <Card className="mt-6">
           <CardHeader>
@@ -718,6 +815,114 @@ function DataManagementTabContent() {
           </CardContent>
         </Card>
       )}
+
+      {/* Closed Scheme Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ArchiveRestore className="h-5 w-5 text-primary" />
+            Closed Scheme Management
+          </CardTitle>
+          <CardDescription>
+            Manage schemes that have been marked as 'Completed'. You can reopen or permanently delete them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <Button
+              onClick={handleReopenSelectedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes}
+            >
+              {isReopeningClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Reopen Selected ({selectedClosedSchemeIds.length})
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleInitiateDeleteSelectedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes}
+            >
+              {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Delete Selected ({selectedClosedSchemeIds.length})
+            </Button>
+          </div>
+          {completedSchemes.length > 0 ? (
+            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead padding="checkbox" className="w-12">
+                      <Checkbox
+                        checked={isAllCompletedSelected}
+                        onCheckedChange={handleSelectAllClosedSchemes}
+                        aria-label="Select all completed schemes"
+                        disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
+                      />
+                    </TableHead>
+                    <TableHead>Customer Name</TableHead>
+                    <TableHead>Scheme ID</TableHead>
+                    <TableHead>Closure Date</TableHead>
+                    <TableHead className="text-right">Total Collected</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {completedSchemes.map((scheme) => (
+                    <TableRow key={scheme.id} data-state={selectedClosedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedClosedSchemeIds.includes(scheme.id)}
+                          onCheckedChange={(checked) => handleSelectClosedScheme(scheme.id, !!checked)}
+                          aria-label={`Select scheme ${scheme.id.toUpperCase()}`}
+                          disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                      <TableCell>{scheme.id.toUpperCase()}</TableCell>
+                      <TableCell>{formatDate(scheme.closureDate)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(scheme.totalCollected)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No completed schemes found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {showDeleteConfirmDialog && (
+        <AlertDialog open={showDeleteConfirmDialog} onOpenChange={(open) => !open && setShowDeleteConfirmDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                Confirm Permanent Deletion
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                You are about to permanently delete {schemesPendingDeletionInfo.length} scheme(s):
+                <ul className="list-disc pl-5 mt-2 text-sm max-h-40 overflow-y-auto">
+                  {schemesPendingDeletionInfo.map(s => <li key={s.id}>{s.customerName} (ID: {s.schemeId})</li>)}
+                </ul>
+                This action cannot be undone. Associated payments and history will also be removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteConfirmDialog(false)} disabled={isDeletingClosedSchemes}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteSelectedSchemes}
+                disabled={isDeletingClosedSchemes}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
     </div>
   );
 }
