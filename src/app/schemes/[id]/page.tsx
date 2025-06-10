@@ -6,15 +6,14 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Edit, DollarSign, Loader2, PieChart, Eye, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone } from 'lucide-react';
+import { Edit, DollarSign, Loader2, PieChart, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
-import { isPast, parseISO, formatISO, startOfDay, format as formatDateFns } from 'date-fns';
+import { isPast, parseISO, formatISO, startOfDay, format as formatDateFns, isValid as isValidDate } from 'date-fns';
 import { SchemeCompletionArc } from '@/components/shared/SchemeCompletionArc';
 import { Label } from '@/components/ui/label';
 import { AssignGroupDialog } from '@/components/dialogs/AssignGroupDialog';
@@ -24,10 +23,11 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Form, FormControl, FormField, FormItem, FormLabel as HookFormLabel, FormMessage, FormDescription } from '@/components/ui/form'; // Using react-hook-form for inline payment
+import { Form, FormControl, FormField, FormItem, FormLabel as HookFormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
@@ -35,14 +35,12 @@ const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
   'Card': CreditCard,
   'Cash': Landmark,
   'UPI': Smartphone,
-  'System Closure': FileWarning, // Or some other appropriate icon
+  'System Closure': FileWarning,
   'Imported': FileWarning,
 };
 
 const inlinePaymentFormSchema = z.object({
   paymentDate: z.date({ required_error: 'Payment date is required.' }),
-  // monthsToPay will be managed by separate state, not part of this RHF schema directly for +/- buttons
-  // modeOfPayment also by separate state for direct checkbox interaction
 });
 type InlinePaymentFormValues = z.infer<typeof inlinePaymentFormSchema>;
 
@@ -54,6 +52,7 @@ export default function SchemeDetailsPage() {
   const schemeIdFromUrl = urlParams.id as string;
 
   const [scheme, setScheme] = useState<Scheme | null>(null);
+  const [otherCustomerSchemes, setOtherCustomerSchemes] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [isManualCloseDialogOpen, setIsManualCloseDialogOpen] = useState(false);
@@ -70,7 +69,6 @@ export default function SchemeDetailsPage() {
 
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
 
-  // State for Inline Payment Card
   const [inlineMonthsToPay, setInlineMonthsToPay] = useState(1);
   const [inlinePaymentModes, setInlinePaymentModes] = useState<PaymentMode[]>(['Cash']);
   const [isInlinePaymentProcessing, setIsInlinePaymentProcessing] = useState(false);
@@ -83,22 +81,29 @@ export default function SchemeDetailsPage() {
     mode: 'onTouched',
   });
 
-
-  const loadSchemeData = useCallback((currentSchemeId?: string) => {
-    const idToLoad = currentSchemeId || schemeIdFromUrl;
+  const loadSchemeData = useCallback((currentSchemeIdToLoad?: string) => {
+    const idToLoad = currentSchemeIdToLoad || schemeIdFromUrl;
     if (idToLoad) {
       setIsLoading(true);
       const fetchedScheme = getMockSchemeById(idToLoad);
+      
       if (fetchedScheme) {
         setScheme(fetchedScheme);
-        // Reset inline payment form when scheme data loads/reloads
         const initialMonths = (fetchedScheme.durationMonths - (fetchedScheme.paymentsMadeCount || 0)) > 0 ? 1 : 0;
         setInlineMonthsToPay(initialMonths);
         setInlinePaymentModes(['Cash']);
         inlinePaymentForm.reset({ paymentDate: new Date() });
 
+        // Fetch and set other schemes by the same customer
+        const allSystemSchemes = getMockSchemes();
+        const schemesForThisCustomer = allSystemSchemes
+          .filter(s => s.customerName === fetchedScheme.customerName)
+          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()); // Sort by start date
+        setOtherCustomerSchemes(schemesForThisCustomer);
+
       } else {
-        setScheme(null); // Scheme not found
+        setScheme(null);
+        setOtherCustomerSchemes([]);
       }
       setExistingGroupNames(getUniqueGroupNames());
       setIsLoading(false);
@@ -107,8 +112,7 @@ export default function SchemeDetailsPage() {
 
   useEffect(() => {
     loadSchemeData();
-  }, [loadSchemeData]);
-
+  }, [loadSchemeData, schemeIdFromUrl]); // Add schemeIdFromUrl dependency to reload if URL changes
 
   const openManualCloseDialog = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Closed') return;
@@ -118,7 +122,10 @@ export default function SchemeDetailsPage() {
   };
 
   const handleConfirmManualCloseScheme = () => {
-    if (!schemeForManualCloseDialog || !manualClosureDate) return;
+    if (!schemeForManualCloseDialog || !manualClosureDate || !isValidDate(manualClosureDate)) {
+        toast({title: "Invalid Date", description: "Please select a valid closure date.", variant: "destructive"});
+        return;
+    };
     setIsProcessingManualClose(true);
 
     const closureOptions = {
@@ -128,7 +135,9 @@ export default function SchemeDetailsPage() {
 
     const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
     if (closedSchemeResult) {
-      setScheme(closedSchemeResult); // Update current scheme state
+      setScheme(closedSchemeResult);
+      // Update the scheme in otherCustomerSchemes list as well
+      setOtherCustomerSchemes(prev => prev.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
       toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
     } else {
       toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
@@ -138,12 +147,12 @@ export default function SchemeDetailsPage() {
     setSchemeForManualCloseDialog(null);
   };
 
-
   const handleAssignGroupSubmit = (updatedSchemeId: string, groupName?: string) => {
     setIsUpdatingGroup(true);
     const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
     if (updatedSchemeFromMock) {
-      setScheme(updatedSchemeFromMock); // Update current scheme state
+      setScheme(updatedSchemeFromMock);
+      setOtherCustomerSchemes(prev => prev.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
       toast({
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
@@ -165,15 +174,9 @@ export default function SchemeDetailsPage() {
     if (result.success && result.updatedSchemes) {
       toast({
         title: 'Customer Details Updated',
-        description: `Details for ${newDetails.customerName} have been updated.`,
+        description: `Details for ${newDetails.customerName} have been updated. All associated schemes reflect this change.`,
       });
-      // If current scheme's customer name changed, reload its data
-      if (newDetails.customerName !== originalName && scheme && result.updatedSchemes.some(s => s.id === scheme.id)) {
-        loadSchemeData(scheme.id); 
-      } else {
-        // If name didn't change but other details might affect current scheme display (unlikely here but good practice)
-        loadSchemeData();
-      }
+      loadSchemeData(scheme?.id); // Reload all data if customer name might have changed
     } else {
       toast({
         title: 'Error',
@@ -198,7 +201,6 @@ export default function SchemeDetailsPage() {
     router.push(`/schemes/new?${queryParams.toString()}`);
   };
 
-  // Inline Payment Card Logic
   const maxInlineMonthsToPay = useMemo(() => {
     if (!scheme) return 0;
     return scheme.durationMonths - (scheme.paymentsMadeCount || 0);
@@ -229,15 +231,15 @@ export default function SchemeDetailsPage() {
   }, [scheme, inlineMonthsToPay]);
 
   const handleConfirmInlinePayment = async (formData: InlinePaymentFormValues) => {
-    if (!scheme || inlineMonthsToPay <= 0 || inlinePaymentModes.length === 0 || !formData.paymentDate) {
-      toast({ title: "Invalid Payment Details", description: "Ensure months to pay, payment date, and mode are set.", variant: "destructive" });
+    if (!scheme || inlineMonthsToPay <= 0 || inlinePaymentModes.length === 0 || !formData.paymentDate || !isValidDate(formData.paymentDate)) {
+      toast({ title: "Invalid Payment Details", description: "Ensure months to pay, a valid payment date, and mode are set.", variant: "destructive" });
       return;
     }
 
     setIsInlinePaymentProcessing(true);
     let successCount = 0;
     let errorCount = 0;
-    let currentSchemeStateForLoop: Scheme | undefined = JSON.parse(JSON.stringify(scheme)); // Deep copy for loop processing
+    let currentSchemeStateForLoop: Scheme | undefined = JSON.parse(JSON.stringify(scheme));
 
     for (let i = 0; i < inlineMonthsToPay; i++) {
       if (!currentSchemeStateForLoop) {
@@ -260,7 +262,7 @@ export default function SchemeDetailsPage() {
       const result = updateMockSchemePayment(currentSchemeStateForLoop.id, nextPaymentToRecord.id, paymentData);
       if (result) {
         successCount++;
-        currentSchemeStateForLoop = result; // Update scheme state for the next iteration
+        currentSchemeStateForLoop = result; 
       } else {
         errorCount++;
         break; 
@@ -269,7 +271,7 @@ export default function SchemeDetailsPage() {
     
     if (successCount > 0) {
       toast({ title: "Payments Recorded", description: `${successCount} payment installment(s) recorded for ${scheme.customerName}.` });
-      loadSchemeData(); // Reload to get fresh scheme data and reset inline form
+      loadSchemeData(scheme.id); 
     } else if (errorCount > 0) {
       toast({ title: "Error Recording Payments", description: `Could not record ${errorCount} payment installments.`, variant: "destructive" });
     }
@@ -315,7 +317,53 @@ export default function SchemeDetailsPage() {
         </Button>
       </div>
 
-      {/* Scheme Overview & Progress Card */}
+      {/* Other Schemes by Customer Section */}
+      {otherCustomerSchemes.length > 1 && (
+        <Card className="glassmorphism">
+          <CardHeader>
+            <CardTitle className="font-headline text-xl">Other Schemes by {scheme.customerName}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex space-x-4 pb-4">
+                {otherCustomerSchemes.map((otherScheme) => {
+                  const isCurrentScheme = otherScheme.id === scheme.id;
+                  return (
+                    <Link href={`/schemes/${otherScheme.id}`} key={otherScheme.id} className="block">
+                      <Card
+                        className={cn(
+                          "min-w-[220px] w-[220px] transition-all hover:shadow-lg",
+                          isCurrentScheme ? "border-primary ring-2 ring-primary shadow-xl bg-primary/5" : "bg-card/80 hover:bg-card",
+                          "glassmorphism"
+                        )}
+                      >
+                        <CardHeader className="pb-2 pt-3 px-3">
+                          <CardTitle className="text-lg font-bold tracking-tight text-primary truncate">
+                            SCHEME-{otherScheme.id.toUpperCase().substring(0,4)}
+                          </CardTitle>
+                          <CardDescription className="text-xs">{formatDate(otherScheme.startDate, 'MMM yyyy')}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-3 pb-3 space-y-1">
+                          <SchemeStatusBadge status={otherScheme.status} />
+                          <p className="text-sm font-medium">
+                            {otherScheme.paymentsMadeCount || 0} / {otherScheme.durationMonths} Paid
+                          </p>
+                           <p className="text-xs text-muted-foreground">
+                            Amt: {formatCurrency(otherScheme.monthlyPaymentAmount)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Scheme Overview & Progress Card */}
       <Card className="glassmorphism overflow-hidden">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
@@ -338,7 +386,7 @@ export default function SchemeDetailsPage() {
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
              <Button onClick={() => setIsHistoryPanelOpen(true)} variant="outline" size="sm" disabled={isInlinePaymentProcessing}>
-                <ListOrdered className="mr-2 h-4 w-4" /> View History
+                <History className="mr-2 h-4 w-4" /> View History
             </Button>
           </div>
         </CardHeader>
@@ -380,15 +428,14 @@ export default function SchemeDetailsPage() {
         </CardContent>
       </Card>
       
-      {/* Inline Payment Recording & Scheme Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {canRecordPayment && (
           <Card className="lg:col-span-2 glassmorphism">
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2 text-xl">
-                <DollarSign className="h-5 w-5 text-primary" /> Record Payment(s) for this Scheme
+                <DollarSign className="h-5 w-5 text-primary" /> Record Payment(s)
               </CardTitle>
-              <CardDescription>Select payment date, number of months, and mode of payment.</CardDescription>
+              <CardDescription>Select payment date, number of months, and mode of payment for this scheme.</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...inlinePaymentForm}>
@@ -516,7 +563,7 @@ export default function SchemeDetailsPage() {
                     <p className="text-muted-foreground">
                         {scheme.status === 'Closed' ? `This scheme was manually closed on ${formatDate(scheme.closureDate!)}.` : 'All payments for this scheme have been completed.'}
                     </p>
-                     {scheme.status === 'Completed' && !scheme.closureDate && (
+                     {scheme.status === 'Completed' && !scheme.closureDate && ( // Condition to show if completed but not yet closed
                          <p className="text-xs text-muted-foreground mt-1">You can still manually close it via Scheme Actions.</p>
                      )}
                 </CardContent>
@@ -546,7 +593,6 @@ export default function SchemeDetailsPage() {
         </Card>
       </div>
 
-      {/* Dialogs for actions */}
       {isManualCloseDialogOpen && schemeForManualCloseDialog && (
         <AlertDialog open={isManualCloseDialogOpen} onOpenChange={(open) => {
             if (!open) {
@@ -581,7 +627,7 @@ export default function SchemeDetailsPage() {
                                 mode="single"
                                 selected={manualClosureDate}
                                 onSelect={(date) => setManualClosureDate(date)}
-                                disabled={(date) => date > new Date() || (schemeForManualCloseDialog?.startDate ? date < parseISO(schemeForManualCloseDialog.startDate) : false) }
+                                disabled={(date) => (date ? date > new Date() : true) || (schemeForManualCloseDialog?.startDate ? (date ? date < parseISO(schemeForManualCloseDialog.startDate) : true) : false) || isProcessingManualClose}
                                 initialFocus
                             />
                         </PopoverContent>
@@ -596,7 +642,7 @@ export default function SchemeDetailsPage() {
               <AlertDialogCancel onClick={() => { setIsManualCloseDialogOpen(false); setSchemeForManualCloseDialog(null);}} disabled={isProcessingManualClose}>Cancel</AlertDialogCancel>
               <AlertDialogAction 
                 onClick={handleConfirmManualCloseScheme} 
-                disabled={isProcessingManualClose || !manualClosureDate}
+                disabled={isProcessingManualClose || !manualClosureDate || !isValidDate(manualClosureDate)}
                 className="bg-destructive hover:bg-destructive/90"
               >
                 {isProcessingManualClose ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
