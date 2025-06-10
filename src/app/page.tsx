@@ -6,15 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UserPlus, CreditCard, Search, PackageCheck, ListChecks, Repeat, CalendarDays, LineChart as LineChartIcon, ChevronRight, Users } from 'lucide-react';
+import { UserPlus, CreditCard, Search, PackageCheck, ListChecks, CalendarDays, LineChart as LineChartIcon, ChevronRight, Users, Repeat } from 'lucide-react';
 import Link from 'next/link';
 import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus } from '@/lib/utils';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
+import { ChartContainer, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts";
-import { parseISO, format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
-// import { motion } from 'framer-motion'; // Commented out framer-motion
+import { parseISO, format, startOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
+// import { motion } from 'framer-motion'; // Framer motion removed
 
 interface RecentTransaction extends Payment {
   customerName: string;
@@ -102,15 +102,10 @@ export default function DashboardPage() {
     totalCollected: { label: "Collected", color: "hsl(var(--positive-value))" },
   };
 
-  // const cardVariants = {}; // Commented out as motion.div is removed
-
   return (
     <div className="flex flex-col gap-8">
       {/* Top Section: Header and Actions */}
       <div
-        // initial={{ opacity: 0, y: -20 }} // motion props removed
-        // animate={{ opacity: 1, y: 0 }}
-        // transition={{ duration: 0.5 }}
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
@@ -129,7 +124,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Search Bar */}
-      <div> {/* Replaced motion.div */}
+      <div>
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardContent className="p-4 sm:p-5">
             <div className="relative">
@@ -147,7 +142,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Total Schemes Display */}
-      <div> {/* Replaced motion.div */}
+      <div>
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -169,7 +164,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Monthly Collections Chart */}
-        <div className="lg:col-span-2"> {/* Replaced motion.div */}
+        <div className="lg:col-span-2">
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -205,7 +200,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Monthly Collections List */}
-        <div> {/* Replaced motion.div */}
+        <div>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -242,7 +237,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recently Completed Schemes */}
-        <div> {/* Replaced motion.div */}
+        <div>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -288,7 +283,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Transactions */}
-        <div> {/* Replaced motion.div */}
+        <div>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -299,7 +294,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
               {recentTransactions.length > 0 ? (
-                <Table className="text-sm">
+                <><Table className="text-sm">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Customer</TableHead>
@@ -315,7 +310,7 @@ export default function DashboardPage() {
                           <p className="text-xs text-muted-foreground block sm:hidden">Paid: {formatDate(tx.paymentDate)}</p>
                           {tx.customerGroupName && (
                             <p className="text-xs text-muted-foreground block sm:hidden flex items-center gap-1">
-                                <Users className="h-3 w-3"/> {tx.customerGroupName}
+                              <Users className="h-3 w-3" /> {tx.customerGroupName}
                             </p>
                           )}
                         </TableCell>
@@ -324,12 +319,11 @@ export default function DashboardPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
-                 <div className="mt-3 text-center">
+                </Table><div className="mt-3 text-center">
                     <Button variant="link" asChild size="sm" className="text-primary">
-                        <Link href="/transactions">View All Transactions <ChevronRight className="h-4 w-4 ml-1" /></Link>
+                      <Link href="/transactions">View All Transactions <ChevronRight className="h-4 w-4 ml-1" /></Link>
                     </Button>
-                </div>
+                  </div></>
               ) : (
                 <p className="text-muted-foreground text-center py-4">No transactions recorded yet.</p>
               )}

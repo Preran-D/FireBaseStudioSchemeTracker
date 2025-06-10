@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users2, Edit, Trash2, DollarSign, Eye, Loader2, MoreHorizontal, PlusCircle, Filter } from 'lucide-react';
+import { Users2, Edit, Trash2, DollarSign, Eye, Loader2, MoreHorizontal, Filter } from 'lucide-react'; // Removed PlusCircle
 import type { GroupDetail, Scheme, PaymentMode } from '@/types/scheme';
 import { getGroupDetails, updateMockGroupName, deleteMockGroup, getMockSchemes, updateMockSchemePayment } from '@/lib/mock-data';
 import { useToast } from '@/hooks/use-toast';
@@ -103,11 +103,7 @@ export default function GroupsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-headline font-semibold">Customer Groups</h1>
-        <Button asChild>
-          <Link href="/schemes/new">
-            <PlusCircle className="mr-2 h-4 w-4" /> Create Scheme & Assign Group
-          </Link>
-        </Button>
+        {/* "Create Scheme & Assign Group" button removed */}
       </div>
 
       <Card>
@@ -148,7 +144,11 @@ export default function GroupsPage() {
               <TableBody>
                 {filteredGroups.map((group) => (
                   <TableRow key={group.groupName}>
-                    <TableCell className="font-medium">{group.groupName}</TableCell>
+                    <TableCell className="font-medium">
+                       <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="text-primary hover:underline">
+                        {group.groupName}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-center">{group.customerNames.length}</TableCell>
                     <TableCell className="text-center">{group.totalSchemesInGroup}</TableCell>
                     <TableCell className="text-center">{group.recordableSchemeCount}</TableCell>
@@ -172,11 +172,7 @@ export default function GroupsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                               <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="flex items-center">
-                                <Eye className="mr-2 h-4 w-4" /> View Details
-                              </Link>
-                            </DropdownMenuItem>
+                            {/* "View Details" removed from menu */}
                             <DropdownMenuItem onClick={() => setGroupToEdit(group)} disabled={processingPayment || isEditingName || isDeletingGroup}>
                               <Edit className="mr-2 h-4 w-4" /> Edit Name
                             </DropdownMenuItem>
