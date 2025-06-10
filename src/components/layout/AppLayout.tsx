@@ -4,8 +4,8 @@
 import type { PropsWithChildren } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap } from 'lucide-react';
-import { AppLogo } from '@/components/shared/AppLogo';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User } from 'lucide-react';
+// Removed AppLogo import as we're using text for the logo to match the image
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,42 +18,90 @@ const navItems = [
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
+// Placeholder for items that might not have routes yet, or for future implementation
+const utilityNavItems = [
+    { href: '#!', label: 'Settings', icon: Settings, showLabel: true },
+    { href: '#!', label: 'Notifications', icon: Bell, showLabel: false, hasNotification: true },
+    { href: '#!', label: 'Profile', icon: User, showLabel: false },
+];
+
+
 function TopNavigationBar() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 py-2 shadow-sm backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2.5">
-          <AppLogo className="h-8 w-8 text-primary" />
-          <span className="font-headline text-xl font-semibold text-foreground hidden sm:inline-block">
+    <header className="py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
+      <div 
+        className="container mx-auto flex h-16 items-center justify-between rounded-full px-3 shadow-lg
+                   bg-gray-100/70 dark:bg-zinc-900/70 backdrop-blur-lg border border-gray-200/50 dark:border-zinc-700/50"
+      >
+        {/* Left: Logo */}
+        <Link href="/" className="flex items-center">
+          <div 
+            className="px-5 py-2 border border-gray-400/80 dark:border-zinc-600/80 rounded-full 
+                       text-foreground font-semibold text-base hover:bg-gray-200/50 dark:hover:bg-zinc-800/50 transition-colors"
+          >
             Scheme Tracker
-          </span>
+          </div>
         </Link>
-        <nav className="flex items-center gap-1 sm:gap-2">
+
+        {/* Center: Navigation Links */}
+        <nav 
+          className="hidden md:flex items-center gap-1 rounded-full px-2 py-1.5 shadow-inner
+                     bg-white/80 dark:bg-zinc-800/80 border border-gray-200/30 dark:border-zinc-700/40"
+        >
           {navItems.map((item) => (
-            <Button
+            <Link
               key={item.label}
-              variant={pathname === item.href ? "secondary" : "ghost"}
-              size="sm"
-              asChild
+              href={item.href}
               className={cn(
-                "px-3 py-1.5 h-auto text-sm font-medium",
-                pathname === item.href 
-                  ? "bg-primary/10 text-primary" 
-                  : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+                "px-4 py-1.5 rounded-full text-sm font-medium transition-colors",
+                pathname === item.href
+                  ? "bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 shadow-md"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-zinc-700/70"
               )}
             >
-              <Link href={item.href} className="flex items-center gap-1.5">
-                <item.icon className="h-4 w-4" />
-                <span className="hidden md:inline-block">{item.label}</span>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Right: Utility Icons & Theme Toggle */}
+        <div className="flex items-center gap-2">
+          {utilityNavItems.map((item) => (
+            <Button
+              key={item.label}
+              variant="ghost"
+              size={item.showLabel ? "default" : "icon"}
+              asChild
+              className="rounded-full bg-white/80 dark:bg-zinc-800/80 hover:bg-gray-200/80 dark:hover:bg-zinc-700/80 
+                         text-gray-700 dark:text-gray-300 hover:text-foreground
+                         h-10 w-auto px-3 data-[size=icon]:w-10 data-[size=icon]:px-0 relative shadow-sm border border-gray-200/30 dark:border-zinc-700/40"
+            >
+              <Link href={item.href}>
+                <item.icon className="h-5 w-5" />
+                {item.showLabel && <span className="ml-1.5 text-sm">{item.label}</span>}
+                {item.hasNotification && (
+                    <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-white/80 dark:ring-zinc-800/80" />
+                )}
+                <span className="sr-only">{item.label}</span>
               </Link>
             </Button>
           ))}
-        </nav>
-        <div className="ml-auto flex items-center">
-          <ThemeToggle />
+          <ThemeToggle /> {/* ThemeToggle will use its own button styling */}
         </div>
+      </div>
+       {/* Mobile navigation (hamburger menu) placeholder - can be implemented later */}
+      <div className="md:hidden flex items-center justify-between mt-2 px-4">
+        <Link href="/" className="flex items-center">
+            <div className="px-4 py-1.5 border border-gray-400/80 dark:border-zinc-600/80 rounded-full text-foreground font-semibold text-sm">
+                Scheme Tracker
+            </div>
+        </Link>
+        {/* Placeholder for a mobile menu button */}
+        <Button variant="ghost" size="icon" className="rounded-full">
+            <LayoutDashboard className="h-5 w-5"/> {/* Or Menu icon */}
+        </Button>
       </div>
     </header>
   );
