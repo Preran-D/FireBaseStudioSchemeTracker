@@ -1,3 +1,4 @@
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -11,10 +12,7 @@ const Table = React.forwardRef<
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}
       {...props}
-    >{/* Ensure no space/newline before children */}
-      {children}
-    {/* Ensure no space/newline after children before closing tag */}
-    </table>
+    >{children}</table>
   </div>
 ))
 Table.displayName = "Table"
