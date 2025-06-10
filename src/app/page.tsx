@@ -14,7 +14,6 @@ import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, get
 import { ChartContainer, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts";
 import { parseISO, format, startOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
-// import { motion } from 'framer-motion'; // Framer motion removed
 
 interface RecentTransaction extends Payment {
   customerName: string;
@@ -41,14 +40,23 @@ export default function DashboardPage() {
   }, [allSchemes]);
 
   const recentlyCompletedSchemes = useMemo(() => {
-    return allSchemes
+    let schemes = allSchemes
       .filter(s => s.status === 'Completed' && s.closureDate)
-      .sort((a, b) => parseISO(b.closureDate!).getTime() - parseISO(a.closureDate!).getTime())
-      .slice(0, 10);
-  }, [allSchemes]);
+      .sort((a, b) => parseISO(b.closureDate!).getTime() - parseISO(a.closureDate!).getTime());
+
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      schemes = schemes.filter(s =>
+        s.customerName.toLowerCase().includes(lowerSearchTerm) ||
+        s.id.toLowerCase().includes(lowerSearchTerm) ||
+        (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm))
+      );
+    }
+    return schemes.slice(0, 10);
+  }, [allSchemes, searchTerm]);
 
   const recentTransactions = useMemo(() => {
-    const transactions: RecentTransaction[] = [];
+    let transactions: RecentTransaction[] = [];
     allSchemes.forEach(scheme => {
       scheme.payments.forEach(payment => {
         if (payment.status === 'Paid' && payment.paymentDate) {
@@ -60,10 +68,20 @@ export default function DashboardPage() {
         }
       });
     });
-    return transactions
-      .sort((a, b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
-      .slice(0, 10);
-  }, [allSchemes]);
+
+    let sortedTransactions = transactions
+      .sort((a, b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime());
+
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      sortedTransactions = sortedTransactions.filter(tx =>
+        tx.customerName.toLowerCase().includes(lowerSearchTerm) ||
+        tx.schemeId.toLowerCase().includes(lowerSearchTerm) ||
+        (tx.customerGroupName && tx.customerGroupName.toLowerCase().includes(lowerSearchTerm))
+      );
+    }
+    return sortedTransactions.slice(0, 10);
+  }, [allSchemes, searchTerm]);
 
   const monthlyCollectionsData = useMemo(() => {
     const collections: Record<string, number> = {};
@@ -244,7 +262,7 @@ export default function DashboardPage() {
                 <PackageCheck className="mr-2.5 h-6 w-6 text-primary" />
                 Recently Completed Schemes
               </CardTitle>
-              <CardDescription>Top 10 schemes marked as completed.</CardDescription>
+              <CardDescription>Top 10 schemes marked as completed. {searchTerm && `(Filtered by "${searchTerm}")`}</CardDescription>
             </CardHeader>
             <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
               {recentlyCompletedSchemes.length > 0 ? (
@@ -276,7 +294,9 @@ export default function DashboardPage() {
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-muted-foreground text-center py-4">No schemes completed yet.</p>
+                <p className="text-muted-foreground text-center py-4">
+                  {searchTerm ? `No completed schemes match "${searchTerm}".` : "No schemes completed yet."}
+                </p>
               )}
             </CardContent>
           </Card>
@@ -290,7 +310,7 @@ export default function DashboardPage() {
                 <Repeat className="mr-2.5 h-6 w-6 text-primary" />
                 Recent Transactions
               </CardTitle>
-              <CardDescription>Last 10 payments recorded across all schemes.</CardDescription>
+              <CardDescription>Last 10 payments recorded. {searchTerm && `(Filtered by "${searchTerm}")`}</CardDescription>
             </CardHeader>
             <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
               {recentTransactions.length > 0 ? (
@@ -325,7 +345,9 @@ export default function DashboardPage() {
                     </Button>
                   </div></>
               ) : (
-                <p className="text-muted-foreground text-center py-4">No transactions recorded yet.</p>
+                <p className="text-muted-foreground text-center py-4">
+                  {searchTerm ? `No transactions match "${searchTerm}".` : "No transactions recorded yet."}
+                </p>
               )}
             </CardContent>
           </Card>
@@ -334,3 +356,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
