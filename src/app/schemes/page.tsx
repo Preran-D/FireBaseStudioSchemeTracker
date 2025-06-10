@@ -9,13 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle } from 'lucide-react';
+import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle, ListChecks } from 'lucide-react';
 import type { Scheme, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { BulkAssignGroupDialog } from '@/components/dialogs/BulkAssignGroupDialog';
 import { useToast } from '@/hooks/use-toast';
+import { motion } from 'framer-motion';
 
 export default function SchemesPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
@@ -122,139 +123,172 @@ export default function SchemesPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-headline font-semibold">All Schemes</h1>
-          <div className="flex gap-2">
+      <div className="flex flex-col gap-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+        >
+          <h1 className="text-4xl font-headline font-semibold text-foreground flex items-center">
+            <ListChecks className="mr-3 h-10 w-10 text-primary" />
+            Scheme Management
+          </h1>
+          <div className="flex gap-3">
             {!isBulkAssignMode && (
-              <Button variant="outline" onClick={handleToggleBulkAssignMode}>
-                <Users2 className="mr-2 h-4 w-4" /> Bulk Assign Group
+              <Button variant="outline" onClick={handleToggleBulkAssignMode} className="rounded-lg shadow-md hover:shadow-lg transition-shadow h-11 px-5 text-base">
+                <Users2 className="mr-2 h-5 w-5" /> Bulk Assign Group
               </Button>
             )}
             <Link href="/schemes/new">
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme
+              <Button className="rounded-lg shadow-lg hover:shadow-xl transition-shadow h-11 px-5 text-base">
+                <PlusCircle className="mr-2 h-5 w-5" /> Add New Scheme
               </Button>
             </Link>
           </div>
-        </div>
+        </motion.div>
         
         {isBulkAssignMode && (
-          <Card className="border-primary/50 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="text-lg text-primary">Bulk Group Assignment Mode</CardTitle>
-              <CardDescription>Select schemes from the table below to assign them to a group or remove them from their current group.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row gap-2 items-center">
-               <Button 
-                onClick={() => setIsBulkAssignDialogOpen(true)} 
-                disabled={selectedSchemeIds.length === 0 || isProcessingBulkAssign}
-              >
-                {isProcessingBulkAssign ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Users2 className="mr-2 h-4 w-4" />}
-                Assign Group to {selectedSchemeIds.length} Selected
-              </Button>
-              <Button variant="ghost" onClick={handleToggleBulkAssignMode} className="text-muted-foreground">
-                <XCircle className="mr-2 h-4 w-4" /> Cancel Bulk Mode
-              </Button>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card className="rounded-xl shadow-lg bg-card/80 dark:bg-card/70 backdrop-blur-md border border-border/50">
+              <CardHeader>
+                <CardTitle className="text-xl font-headline text-foreground">Bulk Group Assignment Mode</CardTitle>
+                <CardDescription>Select schemes from the table below to assign them to a group or remove them from their current group.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col sm:flex-row gap-3 items-center">
+                 <Button 
+                  onClick={() => setIsBulkAssignDialogOpen(true)} 
+                  disabled={selectedSchemeIds.length === 0 || isProcessingBulkAssign}
+                  className="rounded-lg h-10 px-5 text-base"
+                >
+                  {isProcessingBulkAssign ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Users2 className="mr-2 h-5 w-5" />}
+                  Assign Group to {selectedSchemeIds.length} Selected
+                </Button>
+                <Button variant="ghost" onClick={handleToggleBulkAssignMode} className="text-muted-foreground rounded-lg h-10 px-5 text-base">
+                  <XCircle className="mr-2 h-5 w-5" /> Cancel Bulk Mode
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Scheme Overview</CardTitle>
-            <CardDescription>Manage and track all customer schemes. Filter by name, group, or status.</CardDescription>
-            <div className="mt-4 flex flex-col sm:flex-row gap-4">
-              <Input
-                placeholder="Filter by customer, group name or scheme ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => {
-                  setStatusFilter(value as SchemeStatus | 'all');
-                  setSelectedSchemeIds([]); // Clear selection when filter changes
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schemeStatusOptions.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {filteredSchemes.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {isBulkAssignMode && (
-                      <TableHead padding="checkbox" className="w-12">
-                        <Checkbox
-                          checked={isAllFilteredSelected}
-                          onCheckedChange={handleSelectAllSchemes}
-                          aria-label="Select all filtered schemes"
-                          disabled={filteredSchemes.length === 0}
-                        />
-                      </TableHead>
-                    )}
-                    <TableHead>Customer Name</TableHead>
-                    <TableHead>Group Name</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>Monthly Amount</TableHead>
-                    <TableHead>Payments Made</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSchemes.map((scheme) => (
-                    <TableRow key={scheme.id} data-state={selectedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
-                       {isBulkAssignMode && (
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            checked={selectedSchemeIds.includes(scheme.id)}
-                            onCheckedChange={(checked) => handleSchemeSelection(scheme.id, !!checked)}
-                            aria-label={`Select scheme ${scheme.id}`}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell className="font-medium">
-                        <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
-                          {scheme.customerName}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{scheme.customerGroupName || '-'}</TableCell>
-                      <TableCell>{formatDate(scheme.startDate)}</TableCell>
-                      <TableCell>{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
-                      <TableCell>{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
-                      <TableCell>
-                        <SchemeStatusBadge status={scheme.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                <p>No schemes match your filters.</p>
-                {searchTerm === '' && statusFilter === 'all' && (
-                  <Link href="/schemes/new" className="text-primary hover:underline">
-                      Add your first scheme
-                  </Link>
-                )}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+        >
+          <Card className="rounded-xl shadow-xl overflow-hidden glassmorphism">
+            <CardHeader className="p-6">
+              <CardTitle className="text-2xl font-headline text-foreground">Scheme Overview</CardTitle>
+              <CardDescription>Manage and track all customer schemes. Filter by name, group, or status.</CardDescription>
+              <div className="mt-6 flex flex-col sm:flex-row gap-4">
+                <Input
+                  placeholder="Filter by customer, group name or scheme ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="max-w-md rounded-lg text-base h-11"
+                />
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value as SchemeStatus | 'all');
+                    setSelectedSchemeIds([]); 
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-[200px] rounded-lg text-base h-11">
+                    <Filter className="mr-2 h-5 w-5 text-muted-foreground" />
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    {schemeStatusOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value} className="text-base py-2">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="p-0">
+              {filteredSchemes.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 dark:bg-muted/20">
+                        {isBulkAssignMode && (
+                          <TableHead padding="checkbox" className="w-12 sticky left-0 bg-card z-10">
+                            <Checkbox
+                              className="h-5 w-5 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                              checked={isAllFilteredSelected}
+                              onCheckedChange={handleSelectAllSchemes}
+                              aria-label="Select all filtered schemes"
+                              disabled={filteredSchemes.length === 0}
+                            />
+                          </TableHead>
+                        )}
+                        <TableHead className={`text-base font-semibold ${isBulkAssignMode ? "pl-0" : ""}`}>Customer Name</TableHead>
+                        <TableHead className="text-base font-semibold">Group Name</TableHead>
+                        <TableHead className="text-base font-semibold">Start Date</TableHead>
+                        <TableHead className="text-base font-semibold">Monthly Amount</TableHead>
+                        <TableHead className="text-base font-semibold text-center">Payments Made</TableHead>
+                        <TableHead className="text-base font-semibold">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSchemes.map((scheme, index) => (
+                        <motion.tr 
+                          key={scheme.id} 
+                          data-state={selectedSchemeIds.includes(scheme.id) ? 'selected' : ''}
+                          className="border-b border-border/50 hover:bg-muted/20 transition-colors data-[state=selected]:bg-primary/10"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.03, duration: 0.3 }}
+                        >
+                           {isBulkAssignMode && (
+                            <TableCell padding="checkbox" className="sticky left-0 bg-card data-[state=selected]:bg-primary/5 z-10">
+                              <Checkbox
+                                className="h-5 w-5 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                                checked={selectedSchemeIds.includes(scheme.id)}
+                                onCheckedChange={(checked) => handleSchemeSelection(scheme.id, !!checked)}
+                                aria-label={`Select scheme ${scheme.id}`}
+                              />
+                            </TableCell>
+                          )}
+                          <TableCell className={`font-medium text-base ${isBulkAssignMode ? "pl-0" : ""}`}>
+                            <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
+                              {scheme.customerName}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-base text-muted-foreground">{scheme.customerGroupName || 'N/A'}</TableCell>
+                          <TableCell className="text-base text-muted-foreground">{formatDate(scheme.startDate)}</TableCell>
+                          <TableCell className="text-base font-semibold">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
+                          <TableCell className="text-base text-center text-muted-foreground">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
+                          <TableCell>
+                            <SchemeStatusBadge status={scheme.status} />
+                          </TableCell>
+                        </motion.tr>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <p className="text-lg mb-2">No schemes match your filters.</p>
+                  {searchTerm === '' && statusFilter === 'all' && (
+                    <Link href="/schemes/new" className="text-primary hover:underline text-base">
+                        Click here to add your first scheme
+                    </Link>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
       
       {isBulkAssignMode && (
@@ -270,3 +304,5 @@ export default function SchemesPage() {
     </>
   );
 }
+
+    
