@@ -30,7 +30,7 @@ export default function DashboardPage() {
       const tempS = { ...s };
       tempS.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
       const totals = calculateSchemeTotals(s);
-      const status = getSchemeStatus(tempS);
+      const status = getSchemeStatus(s);
       return { ...tempS, ...totals, status };
     });
     setAllSchemes(loadedSchemesInitial);
@@ -104,11 +104,13 @@ export default function DashboardPage() {
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: (i:number) => ({
-      opacity: 1,
-      y: 0,
-      transition: { delay: i * 0.15, duration: 0.5 }
-    }),
+    visible: (i) => { // Removed : number type annotation from 'i'
+      return {
+        opacity: 1,
+        y: 0,
+        transition: { delay: i * 0.15, duration: 0.5 },
+      };
+    },
   };
 
   return (
