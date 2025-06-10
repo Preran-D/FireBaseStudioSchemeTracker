@@ -2,12 +2,14 @@
 'use client';
 
 import type { PropsWithChildren } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap, Settings, Bell, User, Menu, X } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -18,37 +20,47 @@ const navItems = [
 ];
 
 const utilityNavItems = [
-    { href: '#!', label: 'Settings', icon: Settings, showLabel: true },
-    { href: '#!', label: 'Notifications', icon: Bell, showLabel: false, hasNotification: true },
-    { href: '#!', label: 'Profile', icon: User, showLabel: false },
+    { href: '#!', label: 'Settings', icon: Settings },
+    { href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
+    { href: '#!', label: 'Profile', icon: User },
 ];
 
 
 function TopNavigationBar() {
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Close mobile menu on route change
+    if (isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
   return (
-    <header className="py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
+    <header className="sticky top-0 z-50 py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
       <div
         className="container mx-auto flex h-16 items-center justify-between rounded-full px-3 shadow-lg
-                   bg-gray-100/70 dark:bg-zinc-900/70 backdrop-blur-lg border border-gray-200/50 dark:border-zinc-700/50"
+                   bg-card/60 dark:bg-card/50 backdrop-blur-lg border border-white/20 dark:border-white/10"
       >
         {/* Left: Logo - Stays on the far left */}
         <Link href="/" className="flex items-center">
           <div
-            className="px-5 py-2 border border-gray-400/80 dark:border-zinc-600/80 rounded-full
-                       text-foreground font-semibold text-base hover:bg-gray-200/50 dark:hover:bg-zinc-800/50 transition-colors"
+            className="px-5 py-2 border border-[hsl(var(--border)/0.6)] dark:border-[hsl(var(--border)/0.5)] rounded-full
+                       text-foreground font-semibold text-base hover:bg-muted/50 transition-colors"
           >
             Scheme Tracker
           </div>
         </Link>
 
-        {/* Right: Group for Navigation Links and Utility Icons */}
-        <div className="flex items-center gap-4">
-          {/* Main Navigation Links */}
+        {/* Right: Group for Navigation Links and Utility Icons (Desktop) */}
+        <div className="hidden md:flex items-center gap-4">
           <nav
-            className="hidden md:flex items-center gap-1 rounded-full px-2 py-1.5 shadow-inner
-                       bg-white/80 dark:bg-zinc-800/80 border border-gray-200/30 dark:border-zinc-700/40"
+            className="flex items-center gap-1 rounded-full px-2 py-1.5 shadow-inner
+                       bg-background/80 dark:bg-zinc-800/80 border border-[hsl(var(--border)/0.4)] dark:border-[hsl(var(--border)/0.4)]"
           >
             {navItems.map((item) => (
               <Link
@@ -57,8 +69,8 @@ function TopNavigationBar() {
                 className={cn(
                   "px-4 py-1.5 rounded-full text-sm font-medium transition-colors",
                   pathname === item.href
-                    ? "bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 shadow-md"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-zinc-700/70"
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/70"
                 )}
               >
                 {item.label}
@@ -66,23 +78,21 @@ function TopNavigationBar() {
             ))}
           </nav>
 
-          {/* Utility Icons & Theme Toggle */}
           <div className="flex items-center gap-2">
             {utilityNavItems.map((item) => (
               <Button
                 key={item.label}
                 variant="ghost"
-                size={item.showLabel ? "default" : "icon"}
+                size="icon" 
                 asChild
-                className="rounded-full bg-white/80 dark:bg-zinc-800/80 hover:bg-gray-200/80 dark:hover:bg-zinc-700/80
-                           text-gray-700 dark:text-gray-300 hover:text-foreground
-                           h-10 w-auto px-3 data-[size=icon]:w-10 data-[size=icon]:px-0 relative shadow-sm border border-gray-200/30 dark:border-zinc-700/40"
+                className="rounded-full bg-background/80 dark:bg-zinc-800/80 hover:bg-muted/80
+                           text-muted-foreground hover:text-foreground
+                           h-10 w-10 relative shadow-sm border border-[hsl(var(--border)/0.4)] dark:border-[hsl(var(--border)/0.4)]"
               >
                 <Link href={item.href}>
                   <item.icon className="h-5 w-5" />
-                  {item.showLabel && <span className="ml-1.5 text-sm">{item.label}</span>}
                   {item.hasNotification && (
-                      <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-white/80 dark:ring-zinc-800/80" />
+                      <span className="absolute top-1.5 right-1.5 block h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-background/80" />
                   )}
                   <span className="sr-only">{item.label}</span>
                 </Link>
@@ -91,19 +101,76 @@ function TopNavigationBar() {
             <ThemeToggle />
           </div>
         </div>
+
+        {/* Mobile Menu Button */}
+        <div className="md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMobileMenu}
+            className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/70"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
       </div>
-       {/* Mobile navigation (hamburger menu) placeholder - can be implemented later */}
-      <div className="md:hidden flex items-center justify-between mt-2 px-4">
-        <Link href="/" className="flex items-center">
-            <div className="px-4 py-1.5 border border-gray-400/80 dark:border-zinc-600/80 rounded-full text-foreground font-semibold text-sm">
-                Scheme Tracker
+      
+      {/* Mobile Menu Panel */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden absolute top-20 left-0 right-0 mx-4 shadow-xl z-40"
+          >
+            <div className="rounded-xl border border-border bg-card/80 dark:bg-card/70 backdrop-blur-lg p-4">
+              <nav className="flex flex-col space-y-2 mb-4">
+                {navItems.map((item) => (
+                  <Link
+                    key={`mobile-${item.label}`}
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium transition-colors",
+                      pathname === item.href
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
+              <div className="border-t border-border pt-4 space-y-2">
+                 {utilityNavItems.map((item) => (
+                  <Link
+                    key={`mobile-util-${item.label}`}
+                    href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-foreground hover:bg-muted relative"
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                    {item.hasNotification && (
+                      <span className="absolute top-1/2 right-3 -translate-y-1/2 block h-2.5 w-2.5 rounded-full bg-accent" />
+                    )}
+                  </Link>
+                ))}
+                <div className="flex justify-between items-center px-3 py-2.5 rounded-lg hover:bg-muted">
+                    <span className="flex items-center gap-3 text-base font-medium text-foreground">
+                        <Settings className="h-5 w-5"/> Theme
+                    </span>
+                    <ThemeToggle />
+                </div>
+              </div>
             </div>
-        </Link>
-        {/* Placeholder for a mobile menu button */}
-        <Button variant="ghost" size="icon" className="rounded-full">
-            <LayoutDashboard className="h-5 w-5"/> {/* Or Menu icon */}
-        </Button>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
@@ -118,3 +185,5 @@ export default function AppLayout({ children }: PropsWithChildren) {
     </div>
   );
 }
+
+    
