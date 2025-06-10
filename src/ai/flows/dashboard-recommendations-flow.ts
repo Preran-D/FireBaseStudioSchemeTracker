@@ -4,6 +4,7 @@
 'use server';
 /**
  * @fileOverview Provides AI-driven recommendations for the scheme dashboard.
+ * THIS FLOW IS CURRENTLY NOT USED BY THE DASHBOARD PAGE.
  *
  * - getDashboardRecommendations - A function to fetch recommendations based on dashboard summary data.
  * - DashboardInsightsInput - The input type for the recommendation flow.

@@ -4,60 +4,34 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Users, AlertTriangle, DollarSign, PackageCheck, ListChecksIcon, UserPlus, CreditCard, ChevronRight, FileText, LineChart } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { UserPlus, CreditCard, Search, PackageCheck, ListChecks, Repeat, CalendarDays, LineChart as LineChartIcon, ChevronRight, Users } from 'lucide-react';
 import Link from 'next/link';
-import type { Scheme } from '@/types/scheme';
+import type { Scheme, Payment } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart } from "recharts"
-import { isPast, parseISO, differenceInDays } from 'date-fns';
-import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts"
+import { parseISO, format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
 import { motion } from 'framer-motion';
 
-interface StatItemProps {
-  title: string;
-  value: string | number;
-  icon: React.ElementType;
-  description?: string;
-  link?: string;
-  linkText?: string;
-  valueClass?: string;
-  itemIndex: number;
+interface RecentTransaction extends Payment {
+  customerName: string;
+  customerGroupName?: string;
 }
 
-const StatListItem: React.FC<StatItemProps> = ({ title, value, icon: Icon, description, link, linkText, valueClass, itemIndex }) => (
-  <motion.li
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: itemIndex * 0.1 + 0.2, duration: 0.5 }}
-    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg hover:bg-muted/50 transition-colors"
-  >
-    <div className="flex items-center gap-4 mb-2 sm:mb-0">
-      <div className="p-2.5 bg-primary/10 rounded-lg">
-        <Icon className="h-6 w-6 text-primary" />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <p className={cn("text-3xl font-headline font-bold", valueClass)}>{value}</p>
-        {description && <p className="text-xs text-muted-foreground pt-0.5">{description}</p>}
-      </div>
-    </div>
-    {link && linkText && (
-      <Button variant="link" size="sm" asChild className="text-xs text-primary p-0 h-auto hover:underline font-medium self-start sm:self-center">
-        <Link href={link}>{linkText} <ChevronRight className="h-3.5 w-3.5 ml-0.5"/></Link>
-      </Button>
-    )}
-  </motion.li>
-);
-
+interface MonthlyCollection {
+  month: string; // YYYY-MM format
+  monthLabel: string; // MMM yyyy format
+  totalCollected: number;
+}
 
 export default function DashboardPage() {
-  const [schemes, setSchemes] = useState<Scheme[]>([]);
-  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
-  const [schemeForHistory, setSchemeForHistory] = useState<Scheme | null>(null);
-  
-  const loadSchemesData = useCallback(() => {
+  const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
+  const [searchTerm, setSearchTerm] = useState(''); // Basic search state
+
+  useEffect(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       const tempS = { ...s };
       tempS.payments.forEach(p => p.status = getPaymentStatus(p, tempS.startDate));
@@ -65,226 +39,316 @@ export default function DashboardPage() {
       const status = getSchemeStatus(tempS);
       return { ...tempS, ...totals, status };
     });
-    setSchemes(loadedSchemesInitial);
+    setAllSchemes(loadedSchemesInitial);
   }, []);
 
-  useEffect(() => {
-    loadSchemesData();
-  }, [loadSchemesData]);
+  const totalSchemesCount = useMemo(() => allSchemes.length, [allSchemes]);
 
-  const summaryStats = useMemo(() => {
-    const activeSchemes = schemes.filter(s => s.status === 'Active' || s.status === 'Overdue');
-    const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
-    const totalExpectedFromActive = activeSchemes.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected, 0), 0);
+  const recentlyCompletedSchemes = useMemo(() => {
+    return allSchemes
+      .filter(s => s.status === 'Completed' && s.closureDate)
+      .sort((a, b) => parseISO(b.closureDate!).getTime() - parseISO(a.closureDate!).getTime())
+      .slice(0, 10);
+  }, [allSchemes]);
 
-    const totalOverdueAmount = schemes
-      .flatMap(s => s.payments.map(p => ({ ...p, schemeStartDate: s.startDate })))
-      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
-      .reduce((sum, p) => sum + p.amountExpected, 0);
-      
-    const overdueSchemes = schemes.filter(s => s.status === 'Overdue');
+  const recentTransactions = useMemo(() => {
+    const transactions: RecentTransaction[] = [];
+    allSchemes.forEach(scheme => {
+      scheme.payments.forEach(payment => {
+        if (payment.status === 'Paid' && payment.paymentDate) {
+          transactions.push({
+            ...payment,
+            customerName: scheme.customerName,
+            customerGroupName: scheme.customerGroupName,
+          });
+        }
+      });
+    });
+    return transactions
+      .sort((a, b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
+      .slice(0, 10);
+  }, [allSchemes]);
 
-    return {
-      totalSchemes: schemes.length,
-      activeSchemesCount: activeSchemes.length,
-      totalCollected,
-      totalPending: totalExpectedFromActive - totalCollected > 0 ? totalExpectedFromActive - totalCollected : 0,
-      totalOverdueAmount,
-      overdueSchemesCount: overdueSchemes.length,
-      completedSchemesCount: schemes.filter(s => s.status === 'Completed').length,
-    };
-  }, [schemes]);
+  const monthlyCollectionsData = useMemo(() => {
+    const collections: Record<string, number> = {};
+    const endDate = new Date();
+    const startDate = subMonths(endDate, 11); // Last 12 months including current
 
-  const chartData = useMemo(() => [
-    { name: 'Collected', value: summaryStats.totalCollected, fill: 'hsl(var(--positive-value))' },
-    { name: 'Pending', value: summaryStats.totalPending, fill: 'hsl(var(--warning-value))' },
-  ], [summaryStats.totalCollected, summaryStats.totalPending]);
+    const monthsInterval = eachMonthOfInterval({ start: startDate, end: endDate });
 
-  const chartConfig = {
-    collected: { label: 'Collected', color: 'hsl(var(--positive-value))' },
-    pending: { label: 'Pending', color: 'hsl(var(--warning-value))' },
+    monthsInterval.forEach(monthStart => {
+      const monthKey = format(monthStart, 'yyyy-MM');
+      collections[monthKey] = 0;
+    });
+    
+    allSchemes.forEach(scheme => {
+      scheme.payments.forEach(payment => {
+        if (payment.status === 'Paid' && payment.paymentDate) {
+          const paymentDateObj = parseISO(payment.paymentDate);
+          if (isWithinInterval(paymentDateObj, { start: startDate, end: endDate })) {
+            const monthKey = format(paymentDateObj, 'yyyy-MM');
+            collections[monthKey] = (collections[monthKey] || 0) + (payment.amountPaid || 0);
+          }
+        }
+      });
+    });
+
+    return Object.entries(collections)
+      .map(([month, totalCollected]) => ({
+        month,
+        monthLabel: format(parseISO(month + '-01'), 'MMM yyyy'), // Use first day for formatting
+        totalCollected,
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month)); // Sort by YYYY-MM
+  }, [allSchemes]);
+
+  const monthlyCollectionsChartConfig = {
+    totalCollected: { label: "Collected", color: "hsl(var(--positive-value))" },
   };
 
-  const upcomingPaymentsList = useMemo(() => {
-    return schemes
-      .flatMap(s => s.payments.map(p => ({ ...p, customerName: s.customerName, schemeStartDate: s.startDate, schemeId: s.id })))
-      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Upcoming' && differenceInDays(parseISO(p.dueDate), new Date()) <= 30 && !isPast(parseISO(p.dueDate)))
-      .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime())
-      .slice(0, 5);
-  }, [schemes]);
 
-  const overduePaymentsList = useMemo(() => {
-    return schemes
-      .flatMap(s => s.payments.map(p => ({ ...p, customerName: s.customerName, schemeStartDate: s.startDate, schemeId: s.id })))
-      .filter(p => getPaymentStatus(p, p.schemeStartDate) === 'Overdue')
-      .sort((a, b) => parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime())
-      .slice(0, 5);
-  }, [schemes]);
-
-  const statItems: StatItemProps[] = [
-    { itemIndex: 0, title: "Total Schemes", value: summaryStats.totalSchemes, icon: ListChecksIcon, description: `${summaryStats.activeSchemesCount} active`, link: "/schemes", linkText: "View all schemes"},
-    { itemIndex: 1, title: "Collected (All Time)", value: formatCurrency(summaryStats.totalCollected), icon: DollarSign, valueClass: "text-[hsl(var(--positive-value))]", link: "/transactions", linkText: "View transactions"},
-    { itemIndex: 2, title: "Pending (Active)", value: formatCurrency(summaryStats.totalPending), icon: TrendingUp, valueClass: "text-[hsl(var(--warning-value))]" },
-    { itemIndex: 3, title: "Overdue Amount", value: formatCurrency(summaryStats.totalOverdueAmount), icon: AlertTriangle, valueClass: "text-[hsl(var(--negative-value))]", description: `${summaryStats.overdueSchemesCount} overdue schemes` },
-    { itemIndex: 4, title: "Completed Schemes", value: summaryStats.completedSchemesCount, icon: PackageCheck, valueClass: "text-primary" },
-  ];
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i:number) => ({ 
+      opacity: 1, 
+      y: 0, 
+      transition: { delay: i * 0.15, duration: 0.5 } 
+    }),
+  };
 
   return (
-    <>
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <motion.h1 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-4xl font-headline font-semibold text-foreground"
-        >
-          Dashboard
-        </motion.h1>
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex gap-3"
-        >
-            <Button size="lg" variant="default" asChild className="rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-                <Link href="/payments/record">
-                    <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
-                </Link>
-            </Button>
-          <Button size="lg" variant="outline" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
-             <Link href="/schemes/new">
-                <UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
+      {/* Top Section: Header and Actions */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+      >
+        <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
+        <div className="flex gap-3">
+          <Button size="lg" variant="default" asChild className="rounded-lg shadow-lg hover:shadow-xl transition-shadow">
+            <Link href="/payments/record">
+              <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
             </Link>
           </Button>
-        </motion.div>
-      </div>
+          <Button size="lg" variant="outline" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
+            <Link href="/schemes/new">
+              <UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
+            </Link>
+          </Button>
+        </div>
+      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
-      >
-        <Card className="glassmorphism rounded-xl shadow-xl overflow-hidden">
-          <CardHeader className="pb-2 pt-5 px-5">
-            <CardTitle className="text-xl font-headline text-foreground">Key Metrics</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ul className="divide-y divide-border">
-              {statItems.map((item) => (
-                <StatListItem key={item.title} {...item} />
-              ))}
-            </ul>
+      {/* Search Bar */}
+      <motion.div custom={0} initial="hidden" animate="visible" variants={cardVariants}>
+        <Card className="glassmorphism rounded-xl shadow-xl">
+          <CardContent className="p-4 sm:p-5">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search schemes, customers, or groups..."
+                className="pl-10 h-12 text-base rounded-lg focus:ring-2 focus:ring-primary/50"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </CardContent>
         </Card>
       </motion.div>
 
-      <SchemeHistoryPanel isOpen={isHistoryPanelOpen} onClose={() => setIsHistoryPanelOpen(false)} scheme={schemeForHistory} />
+      {/* Total Schemes Display */}
+      <motion.div custom={1} initial="hidden" animate="visible" variants={cardVariants}>
+        <Card className="glassmorphism rounded-xl shadow-xl">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-xl font-headline text-foreground flex items-center">
+              <ListChecks className="mr-2.5 h-6 w-6 text-primary" />
+              Total Active Schemes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            <p className="text-5xl font-bold text-foreground">{allSchemes.filter(s => s.status === 'Active' || s.status === 'Overdue').length}</p>
+            <p className="text-sm text-muted-foreground">out of {totalSchemesCount} total schemes registered.</p>
+            <Link href="/schemes" className="text-sm text-primary hover:underline mt-2 inline-flex items-center">
+                View All Schemes <ChevronRight className="h-4 w-4 ml-1" />
+            </Link>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}>
-          <Card className="lg:col-span-2 shadow-xl rounded-xl bg-card">
-            <CardHeader className="px-6 pt-6 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <LineChart className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="font-headline text-2xl text-foreground">Payment Progress</CardTitle>
-              </div>
-              <CardDescription className="text-sm ml-11">Collected vs. Pending amounts for all active schemes.</CardDescription>
+      {/* Main Grid for Lists and Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Monthly Collections Chart */}
+        <motion.div custom={2} initial="hidden" animate="visible" variants={cardVariants} className="lg:col-span-2">
+          <Card className="glassmorphism rounded-xl shadow-xl h-full">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <CardTitle className="text-xl font-headline text-foreground flex items-center">
+                <LineChartIcon className="mr-2.5 h-6 w-6 text-primary" />
+                Monthly Collections (Last 12 Months)
+              </CardTitle>
+              <CardDescription>Total amount collected each month.</CardDescription>
             </CardHeader>
-            <CardContent className="h-[380px] p-4">
-              {chartData.some(d => d.value > 0) ? (
-                <ChartContainer config={chartConfig} className="h-full w-full">
+            <CardContent className="h-[350px] p-4 sm:p-5">
+              {monthlyCollectionsData.length > 0 ? (
+                <ChartContainer config={monthlyCollectionsChartConfig} className="h-full w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RechartsBarChart data={chartData} layout="vertical" margin={{ right: 40, left: 10, top: 5, bottom: 20 }} barSize={40} barGap={15}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border) / 0.5)" />
-                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value).replace('₹', '')} stroke="hsl(var(--muted-foreground))" fontSize={12} axisLine={{ stroke: 'hsl(var(--border))' }} tickLine={{ stroke: 'hsl(var(--border))' }} />
-                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={100} stroke="hsl(var(--muted-foreground))" fontSize={14} />
-                      <ChartTooltip 
-                        content={<ChartTooltipContent 
-                            formatter={(value, name) => ( 
-                                <div className="flex flex-col p-1.5 rounded-md shadow-lg bg-popover border">
-                                    <span className="capitalize font-semibold text-sm text-popover-foreground">{name}</span>
-                                    <span className="text-popover-foreground">{formatCurrency(Number(value))}</span>
-                                </div>
-                            )}
-                        />} 
-                        cursor={{ fill: 'hsl(var(--muted) / 0.3)', radius: 8 }}
+                    <RechartsBarChart data={monthlyCollectionsData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border)/0.5)" />
+                      <XAxis dataKey="monthLabel" fontSize={11} stroke="hsl(var(--muted-foreground))" tickLine={false} axisLine={{ stroke: 'hsl(var(--border)/0.7)' }} />
+                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('₹','')} fontSize={11} stroke="hsl(var(--muted-foreground))" tickLine={false} axisLine={{ stroke: 'hsl(var(--border)/0.7)' }} />
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)'}}
+                        labelStyle={{ color: 'hsl(var(--popover-foreground))', fontWeight: 'bold' }}
+                        itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                        formatter={(value: number) => [formatCurrency(value), "Collected"]}
                       />
-                      <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '15px'}} />} />
-                      <Bar dataKey="value" radius={[0, 12, 12, 0]} />
+                      <ChartLegend content={<ChartLegendContent wrapperStyle={{paddingTop: '10px'}} />} />
+                      <Bar dataKey="totalCollected" fill="var(--color-totalCollected)" radius={[6, 6, 0, 0]} barSize={30}/>
                     </RechartsBarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
-              ) : ( <div className="flex items-center justify-center h-full text-muted-foreground">No data to display for payment progress.</div> )}
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">No collection data for the past 12 months.</div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
 
-        <div className="space-y-8">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.5 }}>
-            <Card className="shadow-xl rounded-xl bg-card">
-              <CardHeader className="px-5 pt-5 pb-3">
-                <CardTitle className="font-headline text-xl text-foreground">Upcoming Payments</CardTitle>
-                <CardDescription className="text-sm">Next 5 payments due in 30 days.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                {upcomingPaymentsList.length > 0 ? (
-                  <ul className="space-y-3.5">
-                    {upcomingPaymentsList.map((payment, idx) => (
-                       <motion.li 
-                        key={payment.id} 
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 + 0.75, duration: 0.3 }}
-                        className="flex items-center justify-between p-3.5 bg-muted/60 rounded-lg hover:bg-muted transition-colors shadow-sm"
-                      >
-                        <div>
-                          <Link href={`/schemes/${payment.schemeId}`} className="font-medium hover:underline text-sm text-foreground">{payment.customerName}</Link>
-                          <p className="text-xs text-muted-foreground">Due: {formatDate(payment.dueDate)}</p>
-                        </div>
-                        <span className="text-sm font-semibold text-[hsl(var(--warning-value))]">{formatCurrency(payment.amountExpected)}</span>
-                      </motion.li>
+        {/* Monthly Collections List */}
+        <motion.div custom={3} initial="hidden" animate="visible" variants={cardVariants}>
+          <Card className="glassmorphism rounded-xl shadow-xl h-full">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <CardTitle className="text-xl font-headline text-foreground flex items-center">
+                <CalendarDays className="mr-2.5 h-6 w-6 text-primary" />
+                Collections by Month
+              </CardTitle>
+              <CardDescription>Breakdown of collections from the past year.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-2 sm:px-3 pb-4 max-h-[350px] overflow-y-auto">
+              {monthlyCollectionsData.filter(m => m.totalCollected > 0).length > 0 ? (
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead className="text-right">Collected</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {monthlyCollectionsData.filter(m => m.totalCollected > 0).reverse().map((item) => (
+                      <TableRow key={item.month}>
+                        <TableCell className="font-medium py-2.5">{item.monthLabel}</TableCell>
+                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold">{formatCurrency(item.totalCollected)}</TableCell>
+                      </TableRow>
                     ))}
-                  </ul>
-                ) : ( <p className="text-muted-foreground text-center py-4 text-sm">No upcoming payments in the next 30 days.</p> )}
-              </CardContent>
-            </Card>
-          </motion.div>
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No collections recorded in the past 12 months.</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Recently Completed Schemes */}
+        <motion.div custom={4} initial="hidden" animate="visible" variants={cardVariants}>
+          <Card className="glassmorphism rounded-xl shadow-xl h-full">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <CardTitle className="text-xl font-headline text-foreground flex items-center">
+                <PackageCheck className="mr-2.5 h-6 w-6 text-primary" />
+                Recently Completed Schemes
+              </CardTitle>
+              <CardDescription>Top 10 schemes marked as completed.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
+              {recentlyCompletedSchemes.length > 0 ? (
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead className="hidden sm:table-cell">Group</TableHead>
+                      <TableHead className="text-right">Closed On</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentlyCompletedSchemes.map((scheme) => (
+                      <TableRow key={scheme.id}>
+                        <TableCell className="font-medium py-2.5">
+                          <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">{scheme.customerName}</Link>
+                          <p className="text-xs text-muted-foreground block sm:hidden">ID: {scheme.id.toUpperCase()}</p>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell py-2.5">
+                            {scheme.customerGroupName ? (
+                                <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="hover:underline text-xs text-primary">
+                                    {scheme.customerGroupName}
+                                </Link>
+                            ): <span className="text-xs text-muted-foreground">N/A</span>}
+                        </TableCell>
+                        <TableCell className="text-right py-2.5">{formatDate(scheme.closureDate)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No schemes completed yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}>
-            <Card className="shadow-xl rounded-xl bg-card">
-              <CardHeader className="px-5 pt-5 pb-3">
-                <CardTitle className="font-headline text-xl text-foreground">Recent Overdue</CardTitle>
-                <CardDescription className="text-sm">Top 5 most recent overdue payments.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                {overduePaymentsList.length > 0 ? (
-                   <ul className="space-y-3.5">
-                    {overduePaymentsList.map((payment, idx) => (
-                       <motion.li 
-                        key={payment.id} 
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 + 0.85, duration: 0.3 }}
-                        className="flex items-center justify-between p-3.5 bg-destructive/10 rounded-lg hover:bg-destructive/20 transition-colors shadow-sm"
-                      >
-                        <div>
-                          <Link href={`/schemes/${payment.schemeId}`} className="font-medium hover:underline text-destructive text-sm">{payment.customerName}</Link>
-                          <p className="text-xs text-destructive/80">Was Due: {formatDate(payment.dueDate)}</p>
-                        </div>
-                        <span className="text-sm font-semibold text-destructive">{formatCurrency(payment.amountExpected)}</span>
-                      </motion.li>
+        {/* Recent Transactions */}
+        <motion.div custom={5} initial="hidden" animate="visible" variants={cardVariants}>
+          <Card className="glassmorphism rounded-xl shadow-xl h-full">
+            <CardHeader className="px-5 pt-5 pb-3">
+              <CardTitle className="text-xl font-headline text-foreground flex items-center">
+                <Repeat className="mr-2.5 h-6 w-6 text-primary" />
+                Recent Transactions
+              </CardTitle>
+              <CardDescription>Last 10 payments recorded across all schemes.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-2 sm:px-3 pb-4 max-h-[400px] overflow-y-auto">
+              {recentTransactions.length > 0 ? (
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentTransactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="font-medium py-2.5">
+                          <Link href={`/schemes/${tx.schemeId}`} className="hover:underline text-primary">{tx.customerName}</Link>
+                          <p className="text-xs text-muted-foreground block sm:hidden">Paid: {formatDate(tx.paymentDate)}</p>
+                          {tx.customerGroupName && (
+                            <p className="text-xs text-muted-foreground block sm:hidden flex items-center gap-1">
+                                <Users className="h-3 w-3"/> {tx.customerGroupName}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell py-2.5">{formatDate(tx.paymentDate)}</TableCell>
+                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold">{formatCurrency(tx.amountPaid)}</TableCell>
+                      </TableRow>
                     ))}
-                  </ul>
-                ) : ( <p className="text-muted-foreground text-center py-4 text-sm">No overdue payments. Great job!</p> )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+                  </TableBody>
+                </Table>
+                 <div className="mt-3 text-center">
+                    <Button variant="link" asChild size="sm" className="text-primary">
+                        <Link href="/transactions">View All Transactions <ChevronRight className="h-4 w-4 ml-1" /></Link>
+                    </Button>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No transactions recorded yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </div>
-    </>
   );
 }
