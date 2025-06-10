@@ -1,6 +1,6 @@
 
 export type PaymentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Upcoming';
-export type PaymentMode = 'Card' | 'Cash' | 'UPI' | 'System Closure';
+export type PaymentMode = 'Card' | 'Cash' | 'UPI' | 'System Closure' | 'Imported';
 
 export interface Payment {
   id: string;
@@ -41,4 +41,3 @@ export interface GroupDetail {
   totalSchemesInGroup: number;
   recordableSchemeCount: number; // Number of schemes in this group with a next payment due
 }
-

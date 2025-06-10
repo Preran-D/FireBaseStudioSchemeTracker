@@ -5,25 +5,32 @@ import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet } from 'lucide-react';
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle } from 'lucide-react';
 import { getMockSchemes, getGroupDetails } from '@/lib/mock-data';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import { exportToExcel } from '@/lib/excelUtils';
+import { processImportData } from '@/lib/importUtils'; // New import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea"; // New import
+import { ScrollArea } from "@/components/ui/scroll-area"; // New import
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 function DataManagementTabContent() {
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+  const [isImportSectionVisible, setIsImportSectionVisible] = useState(false);
+  const [importPastedData, setImportPastedData] = useState('');
+  const [isImportProcessing, setIsImportProcessing] = useState(false);
+  const [importResults, setImportResults] = useState<{ successCount: number; errorCount: number; messages: string[] } | null>(null);
+
 
   const handleExportAllToExcel = () => {
     setIsExporting(true);
     try {
-      // 1. Schemes Data
       const schemes = getMockSchemes();
       const schemesSheetData: any[][] = [[
         'Scheme ID', 'Customer Name', 'Group Name', 'Phone', 'Address',
@@ -48,12 +55,11 @@ function DataManagementTabContent() {
         ]);
       });
 
-      // 2. Payments Data
       const paymentsSheetData: any[][] = [[
         'Payment ID', 'Scheme ID', 'Customer Name', 'Month #', 'Due Date',
         'Payment Date', 'Amount Expected', 'Amount Paid', 'Mode of Payment', 'Payment Status'
       ]];
-      schemes.forEach(s => { // Can reuse schemes fetched for schemesSheetData
+      schemes.forEach(s => {
         s.payments.forEach(p => {
           paymentsSheetData.push([
             p.id,
@@ -70,9 +76,8 @@ function DataManagementTabContent() {
         });
       });
 
-      // 3. Customers Data
       const customerMap = new Map<string, { name: string, phone: string, address: string, groups: Set<string> }>();
-      schemes.forEach(s => { // Can reuse schemes
+      schemes.forEach(s => {
         if (!customerMap.has(s.customerName)) {
           customerMap.set(s.customerName, {
             name: s.customerName,
@@ -96,7 +101,6 @@ function DataManagementTabContent() {
         ]);
       });
 
-      // 4. Groups Data
       const groups = getGroupDetails();
       const groupsSheetData: any[][] = [['Group Name', 'Number of Customers', 'Number of Schemes', 'Customer Names']];
       groups.forEach(g => {
@@ -123,6 +127,41 @@ function DataManagementTabContent() {
     setIsExporting(false);
   };
 
+  const handleProcessImport = () => {
+    if (!importPastedData.trim()) {
+      toast({ title: 'No Data', description: 'Please paste data into the text area.', variant: 'destructive' });
+      return;
+    }
+    setIsImportProcessing(true);
+    setImportResults(null); // Clear previous results
+    
+    // Simulate async operation for UX
+    setTimeout(() => {
+      const results = processImportData(importPastedData);
+      setImportResults(results);
+      setIsImportProcessing(false);
+      if (results.successCount > 0 && results.errorCount === 0) {
+        toast({ title: 'Import Successful', description: `${results.successCount} schemes imported successfully.` });
+      } else if (results.successCount > 0 && results.errorCount > 0) {
+        toast({ title: 'Import Partially Successful', description: `${results.successCount} schemes imported, ${results.errorCount} errors. Check details below.`, variant: 'default' });
+      } else if (results.errorCount > 0) {
+        toast({ title: 'Import Failed', description: `${results.errorCount} errors occurred. Check details below.`, variant: 'destructive' });
+      } else {
+         toast({ title: 'Import Complete', description: 'No schemes were imported. Check logs if data was provided.', variant: 'default' });
+      }
+      // Optionally clear data or hide section
+      // setImportPastedData('');
+      // setIsImportSectionVisible(false);
+    }, 500);
+  };
+
+  const cancelImport = () => {
+    setIsImportSectionVisible(false);
+    setImportPastedData('');
+    setImportResults(null);
+  };
+
+
   return (
     <div className="flex flex-col gap-8 mt-6">
       <Card>
@@ -132,13 +171,13 @@ function DataManagementTabContent() {
             Export All Data to Excel
           </CardTitle>
           <CardDescription>
-            Download a single Excel (.xlsx) file containing all your application data, organized into separate sheets for Schemes, Payments, Customers, and Groups.
+            Download a single Excel (.xlsx) file containing all your application data, organized into separate sheets.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button
             onClick={handleExportAllToExcel}
-            disabled={isExporting}
+            disabled={isExporting || isImportProcessing}
             className="w-full sm:w-auto"
           >
             {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
@@ -146,6 +185,103 @@ function DataManagementTabContent() {
           </Button>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <UploadCloud className="h-5 w-5 text-primary" />
+            Bulk Import Schemes
+          </CardTitle>
+          <CardDescription>
+            Import multiple schemes by pasting data from a spreadsheet (e.g., Excel, Google Sheets).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!isImportSectionVisible ? (
+            <Button
+              onClick={() => setIsImportSectionVisible(true)}
+              disabled={isExporting || isImportProcessing}
+              className="w-full sm:w-auto"
+            >
+              <FileText className="mr-2 h-4 w-4" /> Show Import Form
+            </Button>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-medium mb-1">Instructions:</h3>
+                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                  <li>Paste data from your spreadsheet. Data should be comma-separated (CSV) or tab-separated (TSV).</li>
+                  <li>The expected columns are, in order:
+                    <ol className="list-decimal list-inside pl-4 mt-1">
+                        <li><strong>Customer Name</strong> (Required)</li>
+                        <li><strong>Group Name</strong> (Optional)</li>
+                        <li><strong>Phone</strong> (Optional)</li>
+                        <li><strong>Address</strong> (Optional)</li>
+                        <li><strong>Start Date</strong> (Required, format: YYYY-MM-DD)</li>
+                        <li><strong>Monthly Payment Amount</strong> (Required, numeric)</li>
+                        <li><strong>Number of Initial Payments Paid</strong> (Optional, numeric, defaults to 0)</li>
+                    </ol>
+                  </li>
+                  <li>Do not include a header row in the pasted data.</li>
+                  <li>Schemes are assumed to be for 12 months.</li>
+                </ul>
+              </div>
+              <Label htmlFor="import-data-textarea">Paste Scheme Data Here:</Label>
+              <Textarea
+                id="import-data-textarea"
+                value={importPastedData}
+                onChange={(e) => setImportPastedData(e.target.value)}
+                placeholder="John Doe,Alpha Group,1234567890,1 Test St,2023-01-15,1000,2..."
+                rows={10}
+                disabled={isImportProcessing}
+              />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  onClick={handleProcessImport}
+                  disabled={isImportProcessing || !importPastedData.trim()}
+                >
+                  {isImportProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  Process Import
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={cancelImport}
+                  disabled={isImportProcessing}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {importResults && isImportSectionVisible && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-primary" /> Import Results
+            </CardTitle>
+            <CardDescription>
+              Successfully imported: {importResults.successCount} | Errors: {importResults.errorCount}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {importResults.messages.length > 0 ? (
+              <ScrollArea className="h-60 w-full rounded-md border p-3 text-sm">
+                {importResults.messages.map((msg, index) => (
+                  <p key={index} className={`mb-1 ${msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed') ? 'text-destructive' : msg.toLowerCase().includes('info') ? 'text-muted-foreground' : 'text-foreground'}`}>
+                    {msg.startsWith('Row') && <AlertCircle className="inline h-3.5 w-3.5 mr-1.5 relative -top-px" />}
+                    {msg}
+                  </p>
+                ))}
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground">No messages from the import process.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
