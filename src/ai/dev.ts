@@ -1,3 +1,5 @@
+// Genkit AI functionality has been removed from this application.
+// This file previously imported AI flows for development purposes.
+// It is now empty as there are no AI flows to import.
 
-// Flows will be imported for their side effects in this file.
-// import './flows/dashboard-recommendations-flow'; // Removed as it's no longer used by the dashboard
+export {}; // Ensures this file is treated as a module.

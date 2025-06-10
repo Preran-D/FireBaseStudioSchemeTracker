@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,20 +21,14 @@ interface RecentTransaction extends Payment {
   customerGroupName?: string;
 }
 
-interface MonthlyCollection {
-  month: string; // YYYY-MM format
-  monthLabel: string; // MMM yyyy format
-  totalCollected: number;
-}
-
 export default function DashboardPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
-  const [searchTerm, setSearchTerm] = useState(''); // Basic search state
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const loadedSchemesInitial = getMockSchemes().map(s => {
       const tempS = { ...s };
-      tempS.payments.forEach(p => p.status = getPaymentStatus(p, tempS.startDate));
+      tempS.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
       const totals = calculateSchemeTotals(tempS);
       const status = getSchemeStatus(tempS);
       return { ...tempS, ...totals, status };
@@ -80,7 +74,7 @@ export default function DashboardPage() {
       const monthKey = format(monthStart, 'yyyy-MM');
       collections[monthKey] = 0;
     });
-    
+
     allSchemes.forEach(scheme => {
       scheme.payments.forEach(payment => {
         if (payment.status === 'Paid' && payment.paymentDate) {
@@ -109,17 +103,17 @@ export default function DashboardPage() {
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: (i:number) => ({ 
-      opacity: 1, 
-      y: 0, 
-      transition: { delay: i * 0.15, duration: 0.5 } 
+    visible: (i:number) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: i * 0.15, duration: 0.5 }
     }),
   };
 
   return (
     <div className="flex flex-col gap-8">
       {/* Top Section: Header and Actions */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -179,7 +173,7 @@ export default function DashboardPage() {
 
       {/* Main Grid for Lists and Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Monthly Collections Chart */}
         <motion.div custom={2} initial="hidden" animate="visible" variants={cardVariants} className="lg:col-span-2">
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
@@ -251,7 +245,7 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recently Completed Schemes */}
         <motion.div custom={4} initial="hidden" animate="visible" variants={cardVariants}>

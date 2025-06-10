@@ -1,7 +1,5 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai';
+// Genkit AI functionality has been removed from this application.
+// This file is kept to prevent build errors from missing imports if any exist,
+// but it no longer initializes or exports any AI capabilities.
 
-export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/gemini-2.0-flash',
-});
+export {}; // Ensures this file is treated as a module.
