@@ -86,6 +86,14 @@ export default function RecordPaymentPage() {
     mode: 'onTouched',
   });
 
+  const getMockSchemeById = (id: string): Scheme | undefined => {
+    const foundScheme = allRecordableSchemes.find(s => s.id === id); // Assuming allRecordableSchemes has the latest data
+    if (foundScheme) return JSON.parse(JSON.stringify(foundScheme));
+    const globalScheme = getMockSchemes().find(s => s.id === id); // Fallback to global mock
+    if (globalScheme) return JSON.parse(JSON.stringify(globalScheme));
+    return undefined;
+  };
+
   useEffect(() => {
     const initialGroupSearchParam = searchParams.get('group');
     const loadedSchemes = getMockSchemes().filter(s => {
@@ -504,9 +512,8 @@ export default function RecordPaymentPage() {
             const currentPaymentModes = paymentModePerScheme[scheme.id] || [];
 
             return (
-              <motion.div
+              <motion.div // Outer div for item, removing 'layout' prop
                 key={scheme.id}
-                // Remove layout from here to prevent row expansion
                 variants={listItemVariants}
                 initial="hidden"
                 animate="visible"
@@ -681,3 +688,4 @@ export default function RecordPaymentPage() {
     </div>
   );
 }
+

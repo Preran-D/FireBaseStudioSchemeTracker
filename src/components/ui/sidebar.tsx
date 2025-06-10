@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -38,7 +39,7 @@ export function SideContextWrapper({ children }: { children: React.ReactNode }) 
 }
 
 const sidebarVariants = cva(
-  "fixed inset-y-0 left-0 z-40 flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out",
+  "fixed inset-y-0 left-0 z-40 flex h-full flex-col border-r bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-[hsl(var(--sidebar-border))] transition-all duration-300 ease-in-out",
   {
     variants: {
       state: {
@@ -78,7 +79,7 @@ const SidebarHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
       <div
         ref={ref}
         className={cn(
-          "flex h-16 items-center border-b border-sidebar-border px-4 shrink-0", // Added shrink-0
+          "flex h-16 items-center border-b border-[hsl(var(--sidebar-border))] px-4 shrink-0", 
           isOpen ? "justify-between" : "justify-center",
           className
         )}
@@ -104,7 +105,7 @@ const SidebarFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
   ({ className, children, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("mt-auto border-t border-sidebar-border p-4 shrink-0", className)} // Added shrink-0
+      className={cn("mt-auto border-t border-[hsl(var(--sidebar-border))] p-4 shrink-0", className)} 
       {...props}
     >
       {children}
@@ -161,9 +162,9 @@ const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButtonProps>(
         href={href!} // Assert href is present if Comp is Link
         className={cn(
           buttonVariants({ variant: 'ghost', size: 'default' }),
-          "w-full h-10 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-sidebar-ring",
+          "w-full h-10 text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))] focus-visible:ring-[hsl(var(--sidebar-ring))]",
           isOpen ? "justify-start px-3" : "justify-center px-0",
-          isActive && "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+          isActive && "bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))] hover:bg-[hsl(var(--sidebar-primary))] hover:opacity-90",
           className
         )}
         {...(href ? {} : { type: 'button' })}
@@ -178,7 +179,7 @@ const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButtonProps>(
         <TooltipProvider delayDuration={100}>
           <Tooltip>
             <TooltipTrigger asChild>{buttonElement}</TooltipTrigger>
-            <TooltipContent side="right" className="bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border shadow-lg">
+            <TooltipContent side="right" className="bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))] border-[hsl(var(--sidebar-border))] shadow-lg">
               <p>{tooltipLabel}</p>
             </TooltipContent>
           </Tooltip>
@@ -242,3 +243,4 @@ export {
   SidebarTrigger,
   SidebarInset,
 };
+
