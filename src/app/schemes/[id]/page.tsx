@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Edit, DollarSign, FileCheck2, Loader2, XCircle, PieChart, Eye, CalendarIcon, Users2, PlusCircle, LineChartIcon, PackageCheck, ListFilter, Pencil, ArrowLeft, FileWarning } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -51,11 +51,17 @@ export default function SchemeDetailsPage() {
   const [selectedPaymentForRecord, setSelectedPaymentForRecord] = useState<SelectedPaymentContext | null>(null);
   
   const [isClosingSchemeProcess, setIsClosingSchemeProcess] = useState(false);
-  const [isCloseSchemeAlertOpen, setIsCloseSchemeAlertOpen] = useState(false);
+  const [isCloseSchemeAlertOpen, setIsCloseSchemeAlertOpen] = useState(false); // For "Settle & Close"
   const [closureDate, setClosureDate] = useState<Date | undefined>(new Date());
   const [closureType, setClosureType] = useState<'full_reconciliation' | 'partial_closure'>('full_reconciliation');
   const [closureModeOfPayment, setClosureModeOfPayment] = useState<PaymentMode[]>(['Cash']);
   const [schemeToCloseInDialog, setSchemeToCloseInDialog] = useState<Scheme | null>(null);
+
+  const [isManualCloseDialogOpen, setIsManualCloseDialogOpen] = useState(false); // For "Close Manually"
+  const [schemeForManualCloseDialog, setSchemeForManualCloseDialog] = useState<Scheme | null>(null);
+  const [manualClosureDate, setManualClosureDate] = useState<Date | undefined>(new Date());
+  const [isProcessingManualClose, setIsProcessingManualClose] = useState(false);
+
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   const [isAssignGroupDialogOpen, setIsAssignGroupDialogOpen] = useState(false);
@@ -123,8 +129,8 @@ export default function SchemeDetailsPage() {
     setIsRecordingPayment(false);
   };
   
-  const openClosureDialogForSpecificScheme = (targetScheme: Scheme) => {
-    if (targetScheme.status === 'Completed') return;
+  const openSettleAndCloseDialog = (targetScheme: Scheme) => {
+    if (targetScheme.status === 'Closed') return; // Already closed, no action
     setSchemeToCloseInDialog(targetScheme);
     setClosureDate(targetScheme.closureDate ? parseISO(targetScheme.closureDate) : startOfDay(new Date()));
     setClosureType('full_reconciliation'); 
@@ -132,7 +138,7 @@ export default function SchemeDetailsPage() {
     setIsCloseSchemeAlertOpen(true);
   };
 
-  const handleConfirmCloseScheme = () => {
+  const handleConfirmSettleAndClose = () => {
     if(!schemeToCloseInDialog || !closureDate) return;
     if(closureType === 'full_reconciliation' && closureModeOfPayment.length === 0) {
         toast({ title: 'Mode of Payment Required', description: 'Please select at least one mode of payment for full reconciliation.', variant: 'destructive' });
@@ -156,14 +162,49 @@ export default function SchemeDetailsPage() {
       if (activeAccordionItem === closedSchemeResult.id) {
         setActiveAccordionItem(closedSchemeResult.id); 
       }
-      toast({ title: 'Scheme Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been updated.` });
+      toast({ title: 'Scheme Settlement Updated', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been updated to 'Closed'.` });
     } else {
-       toast({ title: 'Error', description: 'Failed to close scheme.', variant: 'destructive' });
+       toast({ title: 'Error', description: 'Failed to settle and close scheme.', variant: 'destructive' });
     }
     setIsCloseSchemeAlertOpen(false);
     setIsClosingSchemeProcess(false);
     setSchemeToCloseInDialog(null);
   }
+
+  const openManualCloseDialog = (targetScheme: Scheme) => {
+    if (targetScheme.status === 'Closed') return;
+    setSchemeForManualCloseDialog(targetScheme);
+    setManualClosureDate(startOfDay(new Date()));
+    setIsManualCloseDialogOpen(true);
+  };
+
+  const handleConfirmManualCloseScheme = () => {
+    if (!schemeForManualCloseDialog || !manualClosureDate) return;
+    setIsProcessingManualClose(true);
+
+    const closureOptions = {
+      closureDate: formatISO(manualClosureDate),
+      type: 'partial_closure' as 'partial_closure', // Just mark as closed
+    };
+
+    const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
+    if (closedSchemeResult) {
+      setAllSchemesForThisCustomer(prevAll => prevAll.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
+      if (scheme && scheme.id === closedSchemeResult.id) {
+        setScheme(closedSchemeResult);
+      }
+      if (activeAccordionItem === closedSchemeResult.id) {
+        setActiveAccordionItem(closedSchemeResult.id);
+      }
+      toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
+    } else {
+      toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
+    }
+    setIsManualCloseDialogOpen(false);
+    setIsProcessingManualClose(false);
+    setSchemeForManualCloseDialog(null);
+  };
+
 
   const handleAssignGroupSubmit = (updatedSchemeId: string, groupName?: string) => {
     setIsUpdatingGroup(true);
@@ -196,12 +237,10 @@ export default function SchemeDetailsPage() {
         title: 'Customer Details Updated',
         description: `Details for ${newDetails.customerName} have been updated.`,
       });
-      // If name changed, we need to potentially redirect or ensure data reloads correctly
       if (newDetails.customerName !== originalName && scheme && scheme.id === schemeIdFromUrl) {
-        // If current scheme's customer name changed, reload data for the new name
         loadSchemeData(newDetails.customerName); 
       } else {
-        loadSchemeData(scheme?.customerName); // Reload with current or original customer name
+        loadSchemeData(scheme?.customerName); 
       }
     } else {
       toast({
@@ -227,7 +266,7 @@ export default function SchemeDetailsPage() {
     }
     const totalSchemesCount = allSchemesForThisCustomer.length;
     const activeOverdueSchemesCount = allSchemesForThisCustomer.filter(s => s.status === 'Active' || s.status === 'Overdue').length;
-    const completedSchemesCount = allSchemesForThisCustomer.filter(s => s.status === 'Completed').length;
+    const completedSchemesCount = allSchemesForThisCustomer.filter(s => s.status === 'Completed' || s.status === 'Closed').length;
     const aggregateTotalCollected = allSchemesForThisCustomer.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
     const aggregateTotalRemaining = allSchemesForThisCustomer
       .filter(s => s.status === 'Active' || s.status === 'Overdue')
@@ -279,7 +318,7 @@ export default function SchemeDetailsPage() {
   }
 
   const isPaymentRecordable = (payment: Payment, currentScheme: Scheme): boolean => {
-    if (currentScheme.status === 'Completed' || payment.status === 'Paid') {
+    if (currentScheme.status === 'Completed' || currentScheme.status === 'Closed' || payment.status === 'Paid') {
       return false;
     }
     const schemeToCheck = allSchemesForThisCustomer.find(s => s.id === currentScheme.id) || currentScheme;
@@ -326,7 +365,8 @@ export default function SchemeDetailsPage() {
               Phone: {scheme.customerPhone || 'N/A'}<br/>
               Address: {scheme.customerAddress || 'N/A'}<br/>
               {scheme.customerGroupName && (<>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline">{scheme.customerGroupName}</Link><br/></>)}
-              {scheme.status === 'Completed' && scheme.closureDate && (<>Closed on: {formatDate(scheme.closureDate)}</>)}
+              {scheme.status === 'Closed' && scheme.closureDate && (<>Manually Closed on: {formatDate(scheme.closureDate)}</>)}
+              {scheme.status === 'Completed' && scheme.payments.every(p => p.status === 'Paid') && !scheme.closureDate && (<>Completed on: {formatDate(scheme.payments[scheme.payments.length-1].paymentDate!)} (All payments made)</>)}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-4 sm:mt-0 flex-wrap">
@@ -334,7 +374,7 @@ export default function SchemeDetailsPage() {
               onClick={() => setIsEditCustomerDetailsDialogOpen(true)}
               variant="outline"
               size="sm"
-              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails}
+              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose}
             >
               <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </Button>
@@ -349,7 +389,7 @@ export default function SchemeDetailsPage() {
               onClick={() => setIsAssignGroupDialogOpen(true)} 
               variant="outline"
               size="sm"
-              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails}
+              disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose}
             >
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
@@ -378,6 +418,7 @@ export default function SchemeDetailsPage() {
                         <div className="flex flex-col text-left sm:flex-row sm:items-center gap-x-3 gap-y-1">
                             <span className="font-medium">ID: {s.id.toUpperCase()}</span>
                             <SchemeStatusBadge status={s.status} />
+                            {s.status === 'Completed' && !s.closureDate && <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">All Payments Made</Badge>}
                             {s.id === activeAccordionItem && <Badge variant="outline" className="text-xs h-5 border-primary text-primary">Currently Viewing</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground text-right">
@@ -389,13 +430,20 @@ export default function SchemeDetailsPage() {
                     <AccordionContent className="p-0">
                         <div className="border-t p-4 space-y-4">
                             <p className="text-sm font-semibold mb-2">Details for Scheme {s.id.toUpperCase()}</p>
-                            {s.status === 'Completed' ? (
+                            {s.status === 'Closed' || (s.status === 'Completed' && s.payments.every(p => p.status === 'Paid')) ? (
                             <div className="text-sm">
-                                <p className="font-semibold">Scheme Completed</p>
+                                <p className="font-semibold">
+                                  {s.status === 'Closed' ? 'Scheme Manually Closed' : 'Scheme Completed (All Payments Made)'}
+                                </p>
                                 {s.closureDate && <p>Closed on: {formatDate(s.closureDate)}</p>}
+                                {!s.closureDate && s.status === 'Completed' && s.payments.every(p => p.status === 'Paid') && s.payments[s.payments.length-1].paymentDate &&
+                                  <p>Final payment on: {formatDate(s.payments[s.payments.length-1].paymentDate!)}</p>
+                                }
                                 <p>Total Collected: {formatCurrency(s.totalCollected || 0)}</p>
                             </div>
-                            ) : (
+                            ) : null}
+
+                            {(s.status !== 'Closed' && s.status !== 'Completed') || (s.status === 'Completed' && !s.payments.every(p => p.status === 'Paid')) ? ( // Show table if not Closed and not truly Completed
                             <>
                                 <div className="overflow-x-auto">
                                     <Table>
@@ -444,7 +492,7 @@ export default function SchemeDetailsPage() {
                                                 )}
                                                 </Dialog>
                                             ) : (
-                                                (getPaymentStatus(payment, s.startDate) === 'Paid' || s.status === 'Completed') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
+                                                (getPaymentStatus(payment, s.startDate) === 'Paid') && <CheckCircle className="h-5 w-5 text-green-500 inline-block" />
                                             )}
                                             </TableCell>
                                         </TableRow>
@@ -452,18 +500,28 @@ export default function SchemeDetailsPage() {
                                     </TableBody>
                                     </Table>
                                 </div>
-                                <div className="flex justify-end items-center mt-4">
-                                    <Button 
-                                      size="sm"
-                                      variant="destructive"
-                                      onClick={() => openClosureDialogForSpecificScheme(s)}
-                                      disabled={isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || s.status === 'Completed'}
-                                    >
-                                      <FileCheck2 className="mr-2 h-4 w-4" /> Close This Scheme
-                                    </Button>
-                                </div>
                             </>
-                            )}
+                            ): null }
+
+                            <div className="flex justify-end items-center mt-4 space-x-2">
+                                <Button 
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openSettleAndCloseDialog(s)}
+                                    disabled={s.status === 'Closed' || isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isProcessingManualClose}
+                                    title={s.status === 'Completed' ? "Reconcile and formally close this fully paid scheme." : "Settle all pending payments and close this scheme."}
+                                >
+                                    <FileCheck2 className="mr-2 h-4 w-4" /> Settle & Close (Full Payment)
+                                </Button>
+                                <Button 
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => openManualCloseDialog(s)}
+                                    disabled={s.status === 'Closed' || isClosingSchemeProcess || isCloseSchemeAlertOpen || isUpdatingGroup || isProcessingManualClose}
+                                >
+                                    <FileWarning className="mr-2 h-4 w-4" /> Close Manually
+                                </Button>
+                            </div>
                         </div>
                     </AccordionContent>
                     </AccordionItem>
@@ -483,7 +541,7 @@ export default function SchemeDetailsPage() {
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div className="p-3 border rounded-md bg-muted/30"><strong>Total Schemes:</strong> {customerSummaryStats.totalSchemesCount}</div>
             <div className="p-3 border rounded-md bg-muted/30"><strong>Active/Overdue:</strong> {customerSummaryStats.activeOverdueSchemesCount}</div>
-            <div className="p-3 border rounded-md bg-muted/30"><strong>Completed:</strong> {customerSummaryStats.completedSchemesCount}</div>
+            <div className="p-3 border rounded-md bg-muted/30"><strong>Completed/Closed:</strong> {customerSummaryStats.completedSchemesCount}</div>
             <div className="p-3 border rounded-md bg-muted/30"><strong>Total Collected (All Schemes):</strong> {formatCurrency(customerSummaryStats.aggregateTotalCollected)}</div>
             <div className="p-3 border rounded-md bg-muted/30"><strong>Total Remaining (Active/Overdue):</strong> {formatCurrency(customerSummaryStats.aggregateTotalRemaining)}</div>
         </CardContent>
@@ -550,15 +608,17 @@ export default function SchemeDetailsPage() {
                     </CardContent>
                     </Card>
                 </div>
-                {schemeForVisuals.status === 'Completed' && (
+                {(schemeForVisuals.status === 'Completed' || schemeForVisuals.status === 'Closed') && (
                     <div className="mt-6">
-                        <h3 className="font-semibold mb-2 text-lg">Scheme Completion Summary</h3>
+                        <h3 className="font-semibold mb-2 text-lg">Scheme {schemeForVisuals.status} Summary</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-lg bg-green-50 dark:bg-green-900/20">
                             <div className="flex items-center gap-3">
                                 <PackageCheck className="h-8 w-8 text-green-600" />
                                 <div>
                                     <p className="text-sm text-muted-foreground">Status</p>
-                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">Successfully Completed</p>
+                                    <p className="text-lg font-semibold text-green-700 dark:text-green-400">
+                                        {schemeForVisuals.status === 'Closed' ? 'Manually Closed' : 'Successfully Completed'}
+                                    </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -569,13 +629,17 @@ export default function SchemeDetailsPage() {
                                 </div>
                             </div>
                         </div>
-                        {schemeForVisuals.closureDate && <p className="mt-2 text-sm">This scheme was closed on <strong>{formatDate(schemeForVisuals.closureDate)}</strong>.</p>}
+                        {schemeForVisuals.closureDate && <p className="mt-2 text-sm">This scheme was marked closed on <strong>{formatDate(schemeForVisuals.closureDate)}</strong>.</p>}
+                         {!schemeForVisuals.closureDate && schemeForVisuals.status === 'Completed' && schemeForVisuals.payments.every(p=>p.status === 'Paid') &&
+                           <p className="mt-2 text-sm">All payments for this scheme were completed on <strong>{formatDate(schemeForVisuals.payments[schemeForVisuals.payments.length - 1].paymentDate!)}</strong>.</p>
+                        }
                     </div>
                 )}
             </CardContent>
         </Card>
       )}
 
+      {/* Dialog for Settle & Close (Full Payment) */}
       {isCloseSchemeAlertOpen && schemeToCloseInDialog && (
         <AlertDialog open={isCloseSchemeAlertOpen} onOpenChange={(open) => {
             if (!open) {
@@ -587,7 +651,7 @@ export default function SchemeDetailsPage() {
         }}>
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Scheme Closure for {schemeToCloseInDialog.customerName}</AlertDialogTitle>
+              <AlertDialogTitle>Settle & Close Scheme: {schemeToCloseInDialog.customerName}</AlertDialogTitle>
                <AlertDialogDescription>Scheme ID: {schemeToCloseInDialog.id.toUpperCase()}</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4 py-2">
@@ -600,14 +664,14 @@ export default function SchemeDetailsPage() {
                         className="mt-1 space-y-1"
                         disabled={isClosingSchemeProcess}
                     >
-                        <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="full_reconciliation" id="full_reconciliation" />
-                        <Label htmlFor="full_reconciliation" className="font-normal">Reconcile & Close (Mark pending as paid)</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="partial_closure" id="partial_closure" />
-                        <Label htmlFor="partial_closure" className="font-normal">Close Partially (Leave pending as is)</Label>
-                        </div>
+                        <FormItem className="flex items-center space-x-2">
+                            <RadioGroupItem value="full_reconciliation" id="full_reconciliation" />
+                            <Label htmlFor="full_reconciliation" className="font-normal">Reconcile & Close (Mark pending as paid)</Label>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2">
+                            <RadioGroupItem value="partial_closure" id="partial_closure" />
+                            <Label htmlFor="partial_closure" className="font-normal">Close Partially (Leave pending as is)</Label>
+                        </FormItem>
                     </RadioGroup>
                 </div>
 
@@ -615,8 +679,8 @@ export default function SchemeDetailsPage() {
                     <div className="space-y-2 rounded-md border p-3">
                         <Label>Mode of Payment (for reconciled payments)</Label>
                         <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        {paymentModes.filter(m => m !== 'System Closure').map((mode) => (
-                            <div key={mode} className="flex items-center space-x-2">
+                        {paymentModes.filter(m => m !== 'System Closure' && m !== 'Imported').map((mode) => (
+                            <FormItem key={mode} className="flex items-center space-x-2">
                             <Checkbox
                                 id={`closure-mop-${mode}`}
                                 checked={closureModeOfPayment.includes(mode)}
@@ -628,7 +692,7 @@ export default function SchemeDetailsPage() {
                                 disabled={isClosingSchemeProcess}
                             />
                             <Label htmlFor={`closure-mop-${mode}`} className="font-normal">{mode}</Label>
-                            </div>
+                            </FormItem>
                         ))}
                         </div>
                         {closureModeOfPayment.length === 0 && <p className="text-xs text-destructive">Please select at least one payment mode for reconciliation.</p>}
@@ -663,7 +727,7 @@ export default function SchemeDetailsPage() {
                  <AlertDialogDescription className="text-xs pt-2">
                     {closureType === 'full_reconciliation' 
                         ? "All pending payments will be marked as fully paid as of the selected closure date using the chosen mode(s). "
-                        : "The scheme will be marked 'Completed', but pending payments will remain as they are. "
+                        : "The scheme will be marked 'Closed', but pending payments will remain as they are. "
                     }
                     This action cannot be easily undone.
                 </AlertDialogDescription>
@@ -671,16 +735,77 @@ export default function SchemeDetailsPage() {
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => { setIsCloseSchemeAlertOpen(false); setSchemeToCloseInDialog(null);}} disabled={isClosingSchemeProcess}>Cancel</AlertDialogCancel>
               <AlertDialogAction 
-                onClick={handleConfirmCloseScheme} 
+                onClick={handleConfirmSettleAndClose} 
                 disabled={isClosingSchemeProcess || !closureDate || (closureType === 'full_reconciliation' && closureModeOfPayment.length === 0)}
               >
                 {isClosingSchemeProcess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm Closure
+                Confirm & Apply
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+       {/* Dialog for Manual Close */}
+      {isManualCloseDialogOpen && schemeForManualCloseDialog && (
+        <AlertDialog open={isManualCloseDialogOpen} onOpenChange={(open) => {
+            if (!open) {
+                setIsManualCloseDialogOpen(false);
+                if (!isProcessingManualClose) {
+                    setSchemeForManualCloseDialog(null);
+                }
+            }
+        }}>
+          <AlertDialogContent className="sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Manually Close Scheme: {schemeForManualCloseDialog.customerName}</AlertDialogTitle>
+              <AlertDialogDescription>Scheme ID: {schemeForManualCloseDialog.id.toUpperCase()}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-4 py-2">
+                <div>
+                    <Label htmlFor="manual-closure-date">Closure Date</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="manual-closure-date"
+                            variant={'outline'}
+                            className={cn('w-full justify-start text-left font-normal mt-1', !manualClosureDate && 'text-muted-foreground')}
+                            disabled={isProcessingManualClose}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {manualClosureDate ? formatDate(manualClosureDate.toISOString()) : <span>Pick a date</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                        <Calendar
+                            mode="single"
+                            selected={manualClosureDate}
+                            onSelect={setManualClosureDate}
+                            disabled={(date) => date > new Date() || (schemeForManualCloseDialog?.startDate ? date < parseISO(schemeForManualCloseDialog.startDate) : false) }
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                 <AlertDialogDescription className="text-xs pt-2">
+                    This action will mark the scheme as 'Closed' on the selected date. 
+                    Any pending payments will remain as they are. This is an administrative closure.
+                </AlertDialogDescription>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setIsManualCloseDialogOpen(false); setSchemeForManualCloseDialog(null);}} disabled={isProcessingManualClose}>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleConfirmManualCloseScheme} 
+                disabled={isProcessingManualClose || !manualClosureDate}
+              >
+                {isProcessingManualClose ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm Manual Closure
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       {scheme && isAssignGroupDialogOpen && (
         <AssignGroupDialog
           isOpen={isAssignGroupDialogOpen}
@@ -705,3 +830,5 @@ export default function SchemeDetailsPage() {
     </div>
   );
 }
+
+    
