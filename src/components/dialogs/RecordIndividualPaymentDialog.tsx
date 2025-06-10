@@ -20,12 +20,13 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, CreditCard, Landmark, Smartphone, Users, Info } from 'lucide-react';
+import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, CreditCard, Landmark, Smartphone, Users, Info, CalendarDays, DollarSign } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import { motion } from 'framer-motion'; // Ensure this import is present
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
@@ -57,6 +58,18 @@ interface RecordIndividualPaymentDialogProps {
   isLoading?: boolean;
   initialSearchTerm?: string;
 }
+
+const listItemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      delay: i * 0.05,
+    },
+  }),
+};
+
 
 export function RecordIndividualPaymentDialog({
   isOpen,
@@ -97,17 +110,17 @@ export function RecordIndividualPaymentDialog({
       setIsSchemePeekPanelOpen(false);
       setSchemeForPeekPanel(null);
       setActiveGroupSelection(null);
-      setGroupNameSuggestions([]);
+      
 
       if (initialSearchTerm) {
-        setSearchTerm(initialSearchTerm);
+        setSearchTerm(initialSearchTerm); // Set search term first
         const lowerInitialSearchTerm = initialSearchTerm.toLowerCase();
         const exactMatchGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerInitialSearchTerm);
-        setSuggestedGroup(exactMatchGroup || null);
+        setSuggestedGroup(exactMatchGroup || null); // Then set suggested group
         if (exactMatchGroup) {
           setGroupNameSuggestions([]);
         } else {
-          const partialMatches = allGroups.filter(g =>
+           const partialMatches = allGroups.filter(g =>
             g.groupName.toLowerCase().includes(lowerInitialSearchTerm)
           );
           setGroupNameSuggestions(partialMatches.slice(0, 5));
@@ -115,6 +128,7 @@ export function RecordIndividualPaymentDialog({
       } else {
         setSearchTerm('');
         setSuggestedGroup(null);
+        setGroupNameSuggestions([]);
       }
     }
   }, [isOpen, form, initialSearchTerm, allGroups]);
@@ -124,7 +138,7 @@ export function RecordIndividualPaymentDialog({
     setSearchTerm(newSearchTerm);
 
     if (activeGroupSelection && newSearchTerm.toLowerCase() !== activeGroupSelection.toLowerCase()) {
-      setActiveGroupSelection(null); // Clear active group if search term changes away from it
+      setActiveGroupSelection(null); // Clear active group selection if search term changes away from it
     }
 
     if (newSearchTerm.trim() === '') {
@@ -138,40 +152,38 @@ export function RecordIndividualPaymentDialog({
     setSuggestedGroup(exactMatchGroup || null);
 
     if (exactMatchGroup) {
-      setGroupNameSuggestions([]);
+      setGroupNameSuggestions([]); // Clear partial suggestions if exact match found
     } else {
+      // Find partial matches
       const partialMatches = allGroups.filter(g =>
         g.groupName.toLowerCase().includes(lowerSearchTerm)
       );
-      setGroupNameSuggestions(partialMatches.slice(0, 5));
+      setGroupNameSuggestions(partialMatches.slice(0, 5)); // Show top 5 partial matches
     }
   };
   
   const handleSuggestionClick = (group: GroupDetail) => {
-    setSearchTerm(group.groupName); 
-    setSuggestedGroup(group); // Directly set the suggestion, handleSearchTermChange will refine if needed
-    setGroupNameSuggestions([]); 
+    setSearchTerm(group.groupName); // Set search term to the full group name
+    setSuggestedGroup(group); // Set this as the active suggested group
+    setGroupNameSuggestions([]); // Clear other suggestions
   };
 
 
   const handleToggleGroupSuggestion = (groupToToggle: GroupDetail) => {
     const groupSchemeIds = groupToToggle.schemes
-      .filter(s => allRecordableSchemes.some(rs => rs.id === s.id && (rs.durationMonths - (rs.paymentsMadeCount || 0)) > 0)) // Only consider recordable schemes with pending payments
+      .filter(s => allRecordableSchemes.some(rs => rs.id === s.id && (rs.durationMonths - (rs.paymentsMadeCount || 0)) > 0))
       .map(s => s.id);
 
     let newSelectedIds = [...selectedSchemeIds];
     let newMonths = { ...monthsToPayPerScheme };
     let newModes = { ...paymentModePerScheme };
 
-    if (activeGroupSelection === groupToToggle.groupName) { // Deselecting
+    if (activeGroupSelection === groupToToggle.groupName) { // Currently selected, so deselect
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
       // Optionally clear months/modes for deselected schemes
-      groupSchemeIds.forEach(id => {
-        // delete newMonths[id]; // Or reset to 0 if preferred
-        // delete newModes[id]; // Or reset to []
-      });
+      // groupSchemeIds.forEach(id => { delete newMonths[id]; delete newModes[id]; });
       setActiveGroupSelection(null);
-    } else { // Selecting
+    } else { // Not selected, or a different group was selected, so select this one
       const currentSelectedSet = new Set(selectedSchemeIds);
       groupSchemeIds.forEach(id => currentSelectedSet.add(id));
       newSelectedIds = Array.from(currentSelectedSet);
@@ -179,10 +191,10 @@ export function RecordIndividualPaymentDialog({
       groupSchemeIds.forEach(id => {
         const scheme = allRecordableSchemes.find(s => s.id === id);
         const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
-        if (!newMonths[id] || newMonths[id] === 0) { // Only set if not already set or 0
+        if (!newMonths[id] || newMonths[id] === 0) { // Initialize only if not set or 0
           newMonths[id] = maxMonths > 0 ? 1 : 0;
         }
-        if (!newModes[id] || newModes[id].length === 0) { // Only set if not already set or empty
+        if (!newModes[id] || newModes[id].length === 0) { // Initialize only if not set or empty
           newModes[id] = ['Cash'];
         }
       });
@@ -193,23 +205,26 @@ export function RecordIndividualPaymentDialog({
     setMonthsToPayPerScheme(newMonths);
     setPaymentModePerScheme(newModes);
     
-    // Do not clear search term, user might want to see the group name they acted on
-    // Do not clear suggestedGroup as it's what was acted upon
-    // setGroupNameSuggestions([]); // This is already cleared on exact match
+    setSearchTerm(''); // Clear search term after group action
+    setSuggestedGroup(null);
+    setGroupNameSuggestions([]);
   };
 
 
   const filteredSchemes = useMemo(() => {
+    // Start with selected items, maintaining their selection order
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
-      .sort((a, b) => {
+      .sort((a, b) => { // Maintain selection order
         const indexA = selectedSchemeIds.indexOf(a.id);
         const indexB = selectedSchemeIds.indexOf(b.id);
         return indexA - indexB;
       });
 
+    // Then get unselected items
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
+    // If there's a search term AND no exact group match is currently suggested OR there are partial suggestions, filter unselectedItems
     if (searchTerm && (!suggestedGroup || groupNameSuggestions.length > 0)) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       unselectedItems = unselectedItems.filter(
@@ -219,10 +234,14 @@ export function RecordIndividualPaymentDialog({
           (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm))
       );
     }
+    // Else, if a group is suggested (exact match), we don't filter unselected further by searchTerm,
+    // as the focus is on the suggested group action or individual selections.
 
+    // Sort unselected items
     unselectedItems.sort((a, b) => {
       const nameCompare = a.customerName.localeCompare(b.customerName);
       if (nameCompare !== 0) return nameCompare;
+      // Could add secondary sort by scheme start date or ID if needed
       return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
     });
 
@@ -235,10 +254,11 @@ export function RecordIndividualPaymentDialog({
       checked ? [...prevIds, schemeId] : prevIds.filter((id) => id !== schemeId)
     );
 
+    // If checking a scheme, initialize its months and payment mode if not already set
     if (checked) {
       setMonthsToPayPerScheme((prevMonths) => {
         const newMonths = { ...prevMonths };
-        if (!newMonths[schemeId] || newMonths[schemeId] === 0) {
+        if (!newMonths[schemeId] || newMonths[schemeId] === 0) { // Only if not already set or is 0
           const scheme = allRecordableSchemes.find(s => s.id === schemeId);
           const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
           newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
@@ -247,14 +267,12 @@ export function RecordIndividualPaymentDialog({
       });
       setPaymentModePerScheme((prevModes) => {
         const newModes = { ...prevModes };
-        if (!newModes[schemeId] || newModes[schemeId].length === 0) {
-          newModes[schemeId] = ['Cash'];
+        if (!newModes[schemeId] || newModes[schemeId].length === 0) { // Only if not already set or is empty
+          newModes[schemeId] = ['Cash']; // Default mode
         }
         return newModes;
       });
     }
-    // If unchecking, potentially clear activeGroupSelection if this was the last scheme keeping it active.
-    // For simplicity, activeGroupSelection is primarily managed by the group suggestion button.
   };
 
   const handleMonthsToPayChange = (schemeId: string, delta: number) => {
@@ -266,8 +284,10 @@ export function RecordIndividualPaymentDialog({
       let newMonthsCount = currentMonths + delta;
       const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
 
+      // Ensure months to pay is at least 1 if there are recordable months, otherwise 0
       if (newMonthsCount < 1 && maxMonths > 0) newMonthsCount = 1;
-      if (newMonthsCount < 0 && maxMonths <= 0) newMonthsCount = 0;
+      if (newMonthsCount < 0 && maxMonths <= 0) newMonthsCount = 0; 
+      // Cap at max recordable months
       if (newMonthsCount > maxMonths) newMonthsCount = maxMonths;
 
       return { ...prevMonths, [schemeId]: newMonthsCount };
@@ -306,13 +326,13 @@ export function RecordIndividualPaymentDialog({
         atLeastOneSchemeHasMonths = true;
         const modes = paymentModePerScheme[schemeId] || [];
         if (modes.length === 0) {
-          return true;
+          return true; 
         }
       }
     }
-    if (!atLeastOneSchemeHasMonths && selectedSchemeIds.length > 0) return true;
+    if (!atLeastOneSchemeHasMonths && selectedSchemeIds.length > 0) return true; 
 
-    return !form.formState.isValid;
+    return !form.formState.isValid; 
   }, [isLoading, selectedSchemeIds, monthsToPayPerScheme, paymentModePerScheme, form.formState.isValid]);
 
   const handleShowSchemePeek = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, schemeId: string) => {
@@ -352,10 +372,10 @@ export function RecordIndividualPaymentDialog({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-xl md:max-w-2xl lg:max-w-3xl h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className="sm:max-w-2xl md:max-w-3xl lg:max-w-4xl h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="font-headline">Record Payment(s)</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="font-headline text-xl">Record Payment(s)</DialogTitle>
+            <DialogDescription className="text-base">
               Search customer, scheme ID, or type group name for suggestions. Select schemes and specify payment details.
             </DialogDescription>
           </DialogHeader>
@@ -367,10 +387,11 @@ export function RecordIndividualPaymentDialog({
                 placeholder="Search customer, scheme ID, or type group name..."
                 value={searchTerm}
                 onChange={handleSearchTermChange}
-                className="pl-9"
+                className="pl-9 text-base"
                 disabled={isLoading}
               />
             </div>
+            {/* Group Name Suggestions List */}
             {groupNameSuggestions.length > 0 && (
               <div className="mt-1 border rounded-md shadow-sm bg-popover max-h-40 overflow-y-auto z-10 relative">
                 <ul className="py-1">
@@ -380,12 +401,13 @@ export function RecordIndividualPaymentDialog({
                       className="px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
                       onClick={() => handleSuggestionClick(group)}
                     >
-                      {group.groupName}
+                      {group.groupName} ({group.customerNames.length} customers)
                     </li>
                   ))}
                 </ul>
               </div>
             )}
+            {/* Button to Select/Deselect all from a suggested group */}
             {suggestedGroup && (
               <div className="flex items-center gap-2 p-2 border border-dashed rounded-md bg-muted/50">
                 <Info className="h-4 w-4 text-primary"/>
@@ -403,20 +425,25 @@ export function RecordIndividualPaymentDialog({
             )}
           </div>
 
+          
           <div className="flex-1 min-h-0 h-0 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
-              {filteredSchemes.map((scheme) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3">
+              {filteredSchemes.map((scheme, index) => {
                 const isSelected = selectedSchemeIds.includes(scheme.id);
                 const currentMonthsToPay = monthsToPayPerScheme[scheme.id] || 0;
                 const maxMonthsForThisScheme = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
                 const currentPaymentModes = paymentModePerScheme[scheme.id] || [];
 
                 return (
-                  <div
+                  <motion.div
                     key={scheme.id}
+                    variants={listItemVariants}
+                    initial="hidden"
+                    animate="visible"
+                    custom={index}
                     className={cn(
-                      "p-3 border rounded-lg transition-all flex flex-col gap-2",
-                      isSelected ? "bg-primary/10 border-primary shadow-md" : "bg-card",
+                      "p-4 border rounded-lg transition-all flex flex-col gap-3", 
+                      isSelected ? "bg-primary/10 border-primary shadow-lg" : "bg-card",
                       isLoading && "opacity-70 cursor-not-allowed"
                     )}
                   >
@@ -427,85 +454,86 @@ export function RecordIndividualPaymentDialog({
                         checked={isSelected}
                         onCheckedChange={(checked) => handleSchemeSelectionToggle(scheme.id, !!checked)}
                         disabled={isLoading || maxMonthsForThisScheme <= 0}
-                        className="mt-1 flex-shrink-0"
+                        className="mt-1 flex-shrink-0 h-5 w-5" 
                       />
-                      <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer">
-                        <div className="flex justify-between items-start mb-0.5">
+                      <label htmlFor={`scheme-select-${scheme.id}`} className="flex-grow cursor-pointer space-y-1">
+                        <div className="flex justify-between items-start">
                           <a href={`/schemes/${scheme.id}`} onClick={(e) => handleShowSchemePeek(e, scheme.id)}
-                            className="font-medium text-primary hover:underline text-sm flex items-center">
-                            {scheme.customerName} <ExternalLink className="h-3 w-3 ml-1" />
+                            className="font-semibold text-primary hover:underline text-base flex items-center"> 
+                            {scheme.customerName} <ExternalLink className="h-3.5 w-3.5 ml-1.5"/> 
                           </a>
-                          <span className="font-mono text-xs text-muted-foreground">{scheme.id.toUpperCase()}</span>
+                          <span className="font-mono text-sm font-bold text-muted-foreground">{scheme.id.toUpperCase()}</span> 
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {scheme.customerGroupName && <><Users className="h-3 w-3 inline mr-1 text-muted-foreground" />{scheme.customerGroupName} <br /></>}
-                          Start Date: {formatDate(scheme.startDate, 'dd MMM yyyy')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Monthly Amt: {formatCurrency(scheme.monthlyPaymentAmount)}
-                        </p>
+                        <div className="text-sm text-muted-foreground space-y-0.5"> 
+                            {scheme.customerGroupName && <div className="flex items-center gap-1.5"><Users className="h-4 w-4"/>{scheme.customerGroupName}</div>}
+                            <div className="flex items-center gap-1.5"><CalendarDays className="h-4 w-4"/>{formatDate(scheme.startDate, 'dd MMM yyyy')}</div>
+                            <div className="flex items-center gap-1.5"><DollarSign className="h-4 w-4"/>{formatCurrency(scheme.monthlyPaymentAmount)} / month</div>
+                        </div>
                       </label>
                     </div>
 
-                    <div className="my-1">
-                      <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={isSelected ? currentMonthsToPay : 0} className="h-1.5" />
-                      <p className="text-xs text-muted-foreground mt-0.5 text-center">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths} paid</p>
+                    <div className="my-2 flex items-center gap-3"> 
+                      <div className="flex-grow">
+                        <SegmentedProgressBar scheme={scheme} paidMonthsCount={scheme.paymentsMadeCount || 0} monthsToRecord={isSelected ? currentMonthsToPay : 0} className="h-2.5" /> 
+                      </div>
+                      <p className="text-sm text-muted-foreground flex-shrink-0">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths} paid</p> 
                     </div>
 
                     {isSelected && maxMonthsForThisScheme > 0 && (
                       <>
-                        <div className="mt-1 flex items-center justify-between gap-2 p-2 border-t border-primary/20">
-                          <span className="text-xs font-medium">Months to Pay:</span>
+                        <div className="mt-1 flex items-center justify-between gap-2 p-2.5 border-t border-primary/20"> 
+                          <span className="text-sm font-medium">Months to Pay:</span> 
                           <div className="flex items-center gap-1.5">
-                            <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, -1)} disabled={currentMonthsToPay <= 1 || isLoading}>
-                              <Minus className="h-3 w-3" />
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, -1)} disabled={currentMonthsToPay <= 1 || isLoading}>
+                              <Minus className="h-3.5 w-3.5" />
                             </Button>
-                            <span className="w-5 text-center font-semibold text-xs tabular-nums">{currentMonthsToPay}</span>
-                            <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, 1)} disabled={currentMonthsToPay >= maxMonthsForThisScheme || isLoading}>
-                              <Plus className="h-3 w-3" />
+                            <span className="w-6 text-center font-semibold text-sm tabular-nums">{currentMonthsToPay}</span> 
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-full flex-shrink-0" onClick={() => handleMonthsToPayChange(scheme.id, 1)} disabled={currentMonthsToPay >= maxMonthsForThisScheme || isLoading}>
+                              <Plus className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          <span className="text-xs font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentMonthsToPay)}</span>
+                          <span className="text-sm font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentMonthsToPay)}</span> 
                         </div>
-
+                        
                         {currentMonthsToPay > 0 && (
-                          <div className="mt-1 p-2 border-t border-primary/20">
-                            <span className="text-xs font-medium block mb-1.5">Mode of Payment:</span>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                          <div className="mt-1 p-2.5 border-t border-primary/20"> 
+                            <span className="text-sm font-medium block mb-2">Mode of Payment:</span> 
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
                               {availablePaymentModes.map((mode) => {
                                 const Icon = paymentModeIcons[mode];
                                 return (
-                                  <div key={mode} className="flex items-center space-x-1.5">
+                                  <div key={mode} className="flex items-center space-x-2"> 
                                     <Checkbox
                                       type="button"
                                       id={`mop-${scheme.id}-${mode}`}
                                       checked={currentPaymentModes.includes(mode)}
                                       onCheckedChange={(checked) => handlePaymentModeChange(scheme.id, mode, !!checked)}
                                       disabled={isLoading}
+                                      className="h-5 w-5"
                                     />
-                                    <label htmlFor={`mop-${scheme.id}-${mode}`} className="text-xs font-normal flex items-center gap-1 cursor-pointer">
-                                      {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    <label htmlFor={`mop-${scheme.id}-${mode}`} className="text-sm font-normal flex items-center gap-1.5 cursor-pointer"> 
+                                      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
                                       {mode}
                                     </label>
                                   </div>
                                 );
                               })}
                             </div>
-                            {currentPaymentModes.length === 0 && currentMonthsToPay > 0 && (
-                              <p className="text-xs text-destructive mt-1">Select a payment mode for this scheme.</p>
-                            )}
+                             {currentPaymentModes.length === 0 && currentMonthsToPay > 0 && (
+                               <p className="text-sm text-destructive mt-1.5">Select a payment mode.</p> 
+                             )}
                           </div>
                         )}
                       </>
                     )}
                     {isSelected && maxMonthsForThisScheme <= 0 && (
-                      <p className="text-xs text-green-600 font-medium text-center p-1.5 border-t border-green-500/20 bg-green-500/5 rounded-b-md">All payments made!</p>
+                       <p className="text-sm text-green-700 dark:text-green-400 font-medium text-center p-2 border-t border-green-500/20 bg-green-500/10 rounded-b-md">All payments made!</p> 
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
               {filteredSchemes.length === 0 && (
-                <p className="text-center text-muted-foreground py-6 col-span-1 md:col-span-2">
+                <p className="text-center text-muted-foreground py-6 col-span-1 md:col-span-2 text-base"> 
                   {searchTerm ? "No matching schemes found." : "No recordable schemes available."}
                 </p>
               )}
@@ -513,20 +541,20 @@ export function RecordIndividualPaymentDialog({
           </div>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3 pt-3 border-t mt-auto flex-shrink-0">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4 border-t mt-auto flex-shrink-0"> 
               <FormField
                 control={form.control}
                 name="paymentDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Payment Date (for all selected)</FormLabel>
+                    <FormLabel className="text-base">Payment Date (for all selected)</FormLabel> 
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
                             type="button"
                             variant={'outline'}
-                            className={cn('w-full pl-3 text-left font-normal', !field.value && 'text-muted-foreground')}
+                            className={cn('w-full pl-3 text-left font-normal text-base', !field.value && 'text-muted-foreground')} 
                             disabled={isLoading}
                           >
                             {field.value ? format(field.value, 'dd MMM yyyy') : <span>Pick a date</span>}
@@ -550,30 +578,30 @@ export function RecordIndividualPaymentDialog({
               />
 
               {selectedSchemeIds.length > 0 && !isSubmissionDisabled && (
-                <div className="text-right font-semibold mt-2 pr-1">
+                <div className="text-right font-semibold text-base mt-2 pr-1"> 
                   Grand Total: {formatCurrency(totalAmountForSelectedSchemes)}
                 </div>
               )}
               {selectedSchemeIds.length === 0 && (
-                <div className="text-center text-muted-foreground py-2 flex items-center justify-center gap-2">
-                  <AlertCircle className="h-4 w-4" /> Please select one or more schemes.
+                <div className="text-center text-muted-foreground py-2 flex items-center justify-center gap-2 text-base"> 
+                  <AlertCircle className="h-5 w-5"/> Please select one or more schemes.
                 </div>
               )}
-              {selectedSchemeIds.length > 0 && isSubmissionDisabled && !isLoading && (
-                <div className="text-center text-destructive py-2 flex items-center justify-center gap-2 text-xs">
-                  <AlertCircle className="h-4 w-4" /> Ensure all selected schemes with months to pay also have a payment mode selected.
-                </div>
+               {selectedSchemeIds.length > 0 && isSubmissionDisabled && !isLoading && (
+                 <div className="text-center text-destructive py-2 flex items-center justify-center gap-2 text-sm"> 
+                    <AlertCircle className="h-4 w-4"/> Ensure all selected schemes with months to pay also have a payment mode selected.
+                 </div>
               )}
 
 
               <DialogFooter className="pt-3 flex-shrink-0">
                 <DialogClose asChild>
-                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading} size="lg"> 
                     Cancel
                   </Button>
                 </DialogClose>
-                <Button type="submit" disabled={isSubmissionDisabled}>
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                <Button type="submit" disabled={isSubmissionDisabled} size="lg"> 
+                  {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   Confirm & Record Payment(s)
                 </Button>
               </DialogFooter>
@@ -589,4 +617,3 @@ export function RecordIndividualPaymentDialog({
     </>
   );
 }
-
