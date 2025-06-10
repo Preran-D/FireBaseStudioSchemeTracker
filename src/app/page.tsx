@@ -14,6 +14,7 @@ import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, get
 import { ChartContainer, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart as RechartsBarChart, Tooltip as RechartsTooltip } from "recharts";
 import { parseISO, format, startOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
+import { motion } from 'framer-motion';
 
 interface RecentTransaction extends Payment {
   customerName: string;
@@ -113,18 +114,31 @@ export default function DashboardPage() {
         monthLabel: format(parseISO(month + '-01'), 'MMM yyyy'), // Use first day for formatting
         totalCollected,
       }))
-      .sort((a, b) => a.month.localeCompare(b.month)); // Sort by YYYY-MM
+      .sort((a, b) => a.month.localeCompare(b.month));
   }, [allSchemes]);
 
   const monthlyCollectionsChartConfig = {
     totalCollected: { label: "Collected", color: "hsl(var(--positive-value))" },
   };
 
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i: number) => ({ // Ensure type annotation is compatible or removed if causing issues
+      opacity: 1,
+      y: 0,
+      transition: { delay: i * 0.1, duration: 0.4 } // Adjusted delay/duration slightly
+    }),
+  };
+
   return (
     <div className="flex flex-col gap-8">
       {/* Top Section: Header and Actions */}
-      <div
+      <motion.div
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        custom={0}
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
         <div className="flex gap-3">
@@ -139,10 +153,10 @@ export default function DashboardPage() {
             </Link>
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Search Bar */}
-      <div>
+      <motion.div  variants={cardVariants} initial="hidden" animate="visible" custom={1}>
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardContent className="p-4 sm:p-5">
             <div className="relative">
@@ -157,10 +171,10 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
       {/* Total Schemes Display */}
-      <div>
+      <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={2}>
         <Card className="glassmorphism rounded-xl shadow-xl">
           <CardHeader className="pb-3 pt-5 px-5">
             <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -176,13 +190,19 @@ export default function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
       {/* Main Grid for Lists and Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Monthly Collections Chart */}
-        <div className="lg:col-span-2">
+        <motion.div
+          className="lg:col-span-2"
+          variants={cardVariants}
+          initial="hidden"
+          animate="visible"
+          custom={3}
+        >
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -215,10 +235,10 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
 
         {/* Monthly Collections List */}
-        <div>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={4}>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -250,12 +270,12 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Recently Completed Schemes */}
-        <div>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={5}>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -300,10 +320,10 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
 
         {/* Recent Transactions */}
-        <div>
+        <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={6}>
           <Card className="glassmorphism rounded-xl shadow-xl h-full">
             <CardHeader className="px-5 pt-5 pb-3">
               <CardTitle className="text-xl font-headline text-foreground flex items-center">
@@ -351,9 +371,8 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
 }
-
