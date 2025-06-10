@@ -49,24 +49,22 @@ const createScheme = (
     payments = payments.map(p => ({ ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const, modeOfPayment: ['Cash'] as PaymentMode[] }));
   }
 
-  // Create a temporary scheme object to pass to getSchemeStatus, 
-  // ensuring its own .status property doesn't interfere with the initial calculation.
   const tempSchemeForStatusCalc: Scheme = {
     ...baseScheme,
     payments,
-    status: 'Upcoming' // Provide a known, non-completed state for calculation purposes
+    status: 'Upcoming' 
   };
   tempSchemeForStatusCalc.payments.forEach(p => p.status = getPaymentStatus(p, tempSchemeForStatusCalc.startDate));
   const calculatedStatus = getSchemeStatus(tempSchemeForStatusCalc);
 
   let scheme: Scheme = {
     ...baseScheme,
-    payments: tempSchemeForStatusCalc.payments, // Use payments with their individual statuses updated
-    status: calculatedStatus, // Assign the purely calculated status
+    payments: tempSchemeForStatusCalc.payments, 
+    status: calculatedStatus, 
   };
   
   if (customerName.includes("Edward Scissorhands")) {
-    scheme.status = 'Completed'; // Override for this specific example user after general calculation
+    scheme.status = 'Completed'; 
     scheme.closureDate = formatISO(addMonths(parseISO(scheme.startDate), scheme.durationMonths)); 
   }
   
@@ -106,7 +104,6 @@ if (fionaSchemeIdx !== -1) {
 
 
 export const getMockSchemes = (): Scheme[] => JSON.parse(JSON.stringify(MOCK_SCHEMES.map(s => {
-    // Create a temporary scheme to ensure status is based on current payment statuses
     const tempScheme = JSON.parse(JSON.stringify(s));
     tempScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, tempScheme.startDate));
     const status = getSchemeStatus(tempScheme);
@@ -120,12 +117,7 @@ export const getMockSchemeById = (id: string): Scheme | undefined => {
   
   const clonedScheme: Scheme = JSON.parse(JSON.stringify(schemeFromGlobalArray));
 
-  // Ensure all payment statuses are up-to-date relative to the current date
   clonedScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, clonedScheme.startDate));
-  
-  // Recalculate the overall scheme status based on the (potentially updated) payment statuses
-  // This ensures that getSchemeStatus has the most accurate payment info.
-  // The getSchemeStatus function itself will respect an existing 'Completed' status if it's already set on clonedScheme.
   clonedScheme.status = getSchemeStatus(clonedScheme);
   
   const totals = calculateSchemeTotals(clonedScheme);
@@ -139,28 +131,25 @@ export const addMockScheme = (newSchemeData: Omit<Scheme, 'id' | 'payments' | 's
     customerPhone: newSchemeData.customerPhone,
     customerAddress: newSchemeData.customerAddress,
     customerGroupName: newSchemeData.customerGroupName,
-    startDate: newSchemeData.startDate, // Expecting ISO string
+    startDate: newSchemeData.startDate, 
     monthlyPaymentAmount: newSchemeData.monthlyPaymentAmount,
     durationMonths: 12,
   };
   
   const payments = generatePaymentsForScheme(baseScheme);
   
-  // Create a temporary scheme object to pass to getSchemeStatus, 
-  // ensuring its own .status property doesn't interfere with the initial calculation.
   const tempSchemeForStatusCalc: Scheme = {
     ...baseScheme,
     payments,
-    status: 'Upcoming' as SchemeStatus // Provide a known, non-completed state for calculation purposes
+    status: 'Upcoming' as SchemeStatus 
   };
   tempSchemeForStatusCalc.payments.forEach(p => p.status = getPaymentStatus(p, tempSchemeForStatusCalc.startDate));
-  const calculatedStatus = getSchemeStatus(tempSchemeForStatusCalc); // This calculatedStatus should be correct ('Active', 'Upcoming', etc.)
+  const calculatedStatus = getSchemeStatus(tempSchemeForStatusCalc); 
 
-  // Now create the final scheme object with the correctly calculated status
   let finalScheme: Scheme = { 
     ...baseScheme, 
-    payments: tempSchemeForStatusCalc.payments, // Use payments with their individual statuses updated
-    status: calculatedStatus // Use the purely calculated status
+    payments: tempSchemeForStatusCalc.payments, 
+    status: calculatedStatus 
   };
   
   const totals = calculateSchemeTotals(finalScheme);
@@ -182,10 +171,21 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
-  if (scheme.status === 'Completed') {
-    console.warn(`Attempted to update payment for already completed scheme: ${schemeId}`);
-    return getMockSchemeById(schemeId); 
+  // Do not allow payment updates if the scheme was completed and this would alter it,
+  // unless closureDate is cleared first by edit/delete logic.
+  // This basic check might be enhanced by the calling function's logic.
+  if (scheme.status === 'Completed' && scheme.closureDate) {
+     const paymentBeingUpdated = scheme.payments.find(p => p.id === paymentId);
+     // Allow update if it's the "system closure" payment being set or if it doesn't change the paid status
+     if (paymentBeingUpdated && paymentBeingUpdated.paymentDate === scheme.closureDate && paymentBeingUpdated.modeOfPayment?.includes('System Closure')) {
+        // this is likely the reconciliation payment being set, allow it
+     } else if(paymentDetails.amountPaid && paymentDetails.amountPaid < scheme.monthlyPaymentAmount) {
+        console.warn(`Attempted to update payment for completed scheme ${schemeId} in a way that would make it unpaid. This should be handled by reopening.`);
+        // Return current state or an error indicator if preferred. For now, return current.
+        return getMockSchemeById(schemeId);
+     }
   }
+
 
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
@@ -199,16 +199,21 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
     status: originalPayment.status 
   };
 
-  updatedPayment.status = getPaymentStatus(updatedPayment, scheme.startDate); // Recalculate this payment's status
+  updatedPayment.status = getPaymentStatus(updatedPayment, scheme.startDate); 
   scheme.payments[paymentIndex] = updatedPayment;
   
-  // Recalculate all payment statuses and overall scheme status
+  const wasCompleted = scheme.status === 'Completed' && scheme.closureDate;
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   scheme.status = getSchemeStatus(scheme); 
+
+  if(wasCompleted && scheme.status !== 'Completed'){
+      scheme.closureDate = undefined; // Scheme is no longer considered completed
+  }
+  
   const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
 
-  return getMockSchemeById(schemeId); // Return a fresh copy with latest calculations
+  return getMockSchemeById(schemeId); 
 };
 
 export const editMockPaymentDetails = (schemeId: string, paymentId: string, details: { amountPaid?: number; paymentDate?: string; modeOfPayment?: PaymentMode[] }): Scheme | undefined => {
@@ -216,10 +221,7 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
-  if (scheme.status === 'Completed') {
-    console.warn(`Attempted to edit payment for already completed scheme: ${schemeId}`);
-    return getMockSchemeById(schemeId);
-  }
+  const wasCompleted = scheme.status === 'Completed' && scheme.closureDate;
 
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
@@ -231,9 +233,13 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   
   scheme.payments[paymentIndex].status = getPaymentStatus(scheme.payments[paymentIndex], scheme.startDate);
 
-  // Recalculate all payment statuses and overall scheme status
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
   scheme.status = getSchemeStatus(scheme); 
+
+  if (wasCompleted && scheme.status !== 'Completed') {
+    scheme.closureDate = undefined; // If editing a payment makes a completed scheme no longer complete
+  }
+  
   const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
 
@@ -245,10 +251,7 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
-  if (scheme.status === 'Completed') {
-    console.warn(`Attempted to delete payment for already completed scheme: ${schemeId}`);
-    return getMockSchemeById(schemeId);
-  }
+  const wasCompleted = scheme.status === 'Completed' && scheme.closureDate;
 
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
@@ -257,9 +260,13 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   scheme.payments[paymentIndex].paymentDate = undefined;
   scheme.payments[paymentIndex].modeOfPayment = undefined;
   
-  // Recalculate all payment statuses and overall scheme status
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
   scheme.status = getSchemeStatus(scheme); 
+
+  if (wasCompleted && scheme.status !== 'Completed') {
+    scheme.closureDate = undefined; // If deleting a payment makes a completed scheme no longer complete
+  }
+  
   const totals = calculateSchemeTotals(scheme); 
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
   
@@ -267,9 +274,9 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
 };
 
 interface CloseSchemeOptions {
-  closureDate: string; // ISO Date string
+  closureDate: string; 
   type: 'full_reconciliation' | 'partial_closure';
-  modeOfPayment?: PaymentMode[]; // Required if type is 'full_reconciliation'
+  modeOfPayment?: PaymentMode[]; 
 }
 
 export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): Scheme | undefined => {
@@ -277,15 +284,19 @@ export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): 
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
+  
+  const effectiveModeOfPayment = (options.modeOfPayment && options.modeOfPayment.length > 0) 
+                                 ? options.modeOfPayment 
+                                 : ['System Closure'] as PaymentMode[];
+
   if (scheme.status === 'Completed' && scheme.closureDate === options.closureDate && options.type === 'full_reconciliation') {
-    // If already completed with same date and full reconciliation, check if mode of payment needs update
      let modeChanged = false;
      scheme.payments.forEach(p => {
-        if (p.paymentDate === options.closureDate) { // payments reconciled on this date
+        if (p.paymentDate === options.closureDate) { 
             const currentModes = p.modeOfPayment?.join(',');
-            const newModes = options.modeOfPayment?.join(',');
+            const newModes = effectiveModeOfPayment.join(',');
             if (currentModes !== newModes) {
-                p.modeOfPayment = options.modeOfPayment && options.modeOfPayment.length > 0 ? options.modeOfPayment : ['System Closure'];
+                p.modeOfPayment = effectiveModeOfPayment;
                 modeChanged = true;
             }
         }
@@ -295,7 +306,6 @@ export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): 
          MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
          return getMockSchemeById(schemeId);
      }
-    console.warn(`Scheme ${schemeId} is already completed with these settings.`);
     return getMockSchemeById(schemeId); 
   }
 
@@ -304,27 +314,24 @@ export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): 
 
   if (options.type === 'full_reconciliation') {
     scheme.payments.forEach(p => { 
-      if (getPaymentStatus(p, scheme.startDate) !== 'Paid') { // Check original status before forced update
+      const currentPaymentStatus = getPaymentStatus(p, scheme.startDate); // Get status before potential modification
+      if (currentPaymentStatus !== 'Paid') {
         p.status = 'Paid';
         p.amountPaid = p.amountExpected; 
         p.paymentDate = options.closureDate; 
-        p.modeOfPayment = options.modeOfPayment && options.modeOfPayment.length > 0 ? options.modeOfPayment : ['System Closure'];
-      } else if (p.paymentDate === options.closureDate && p.status === 'Paid' && options.modeOfPayment) {
+        p.modeOfPayment = effectiveModeOfPayment;
+      } else if (p.paymentDate === options.closureDate && currentPaymentStatus === 'Paid') {
         // If it was already paid on the closure date, update mode of payment if different
         const currentModes = p.modeOfPayment?.join(',');
-        const newModes = options.modeOfPayment?.join(',');
+        const newModes = effectiveModeOfPayment.join(',');
         if (currentModes !== newModes) {
-            p.modeOfPayment = options.modeOfPayment;
+            p.modeOfPayment = effectiveModeOfPayment;
         }
       }
     });
   }
-  // For 'partial_closure', individual payment statuses remain as they were.
   
-  // Ensure all payment statuses are consistent after any changes
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
-  // Scheme status is already set to 'Completed' above, so getSchemeStatus will honor it.
-  // scheme.status = getSchemeStatus(scheme); // This line is redundant now as it's set above.
   
   const totals = calculateSchemeTotals(scheme); 
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
@@ -349,7 +356,7 @@ export const recordNextDuePaymentsForCustomer = (
     .map((scheme, index) => ({ scheme, index }))
     .filter(({ scheme }) => scheme.customerName === customerName && scheme.status !== 'Completed' && (scheme.status === 'Active' || scheme.status === 'Overdue'));
     
-  customerSchemesIndices.forEach(({ scheme }) => { // Removed unused index
+  customerSchemesIndices.forEach(({ scheme }) => { 
       let nextRecordablePaymentIndex = -1;
       for (let i = 0; i < scheme.payments.length; i++) {
         const currentPayment = scheme.payments[i];
@@ -403,10 +410,10 @@ export const recordNextDuePaymentsForCustomerGroup = (
   const recordedPaymentsInfo: Array<{ schemeId: string; customerName: string; monthNumber: number; amount: number }> = [];
 
   const schemesInGroupIndices = MOCK_SCHEMES
-    .map((scheme, index) => ({ scheme, index })) // Keep index if needed for MOCK_SCHEMES direct modification, but prefer functional updates
+    .map((scheme, index) => ({ scheme, index })) 
     .filter(({ scheme }) => scheme.customerGroupName === groupName && scheme.status !== 'Completed' && (scheme.status === 'Active' || scheme.status === 'Overdue'));
 
-  schemesInGroupIndices.forEach(({ scheme }) => { // Removed unused index
+  schemesInGroupIndices.forEach(({ scheme }) => { 
       if (paymentDetails.schemeIdsToRecord && paymentDetails.schemeIdsToRecord.length > 0 && !paymentDetails.schemeIdsToRecord.includes(scheme.id)) {
         return; 
       }
@@ -453,7 +460,7 @@ export const recordNextDuePaymentsForCustomerGroup = (
 };
 
 export const getGroupDetails = (): GroupDetail[] => {
-  const currentSchemes = getMockSchemes(); // Use the getter to ensure fresh data
+  const currentSchemes = getMockSchemes(); 
   const groupsMap = new Map<string, { schemes: Scheme[]; customerNames: Set<string>; recordableSchemeCount: number }>();
 
   currentSchemes.forEach(scheme => {
@@ -490,7 +497,7 @@ export const getGroupDetails = (): GroupDetail[] => {
 
   return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
     groupName,
-    schemes: data.schemes, // schemes here are already processed by getMockSchemes
+    schemes: data.schemes, 
     customerNames: Array.from(data.customerNames).sort(),
     totalSchemesInGroup: data.schemes.length,
     recordableSchemeCount: data.recordableSchemeCount,
@@ -506,8 +513,6 @@ export const updateMockGroupName = (oldGroupName: string, newGroupName: string):
       changed = true;
     }
   });
-  // Note: This directly mutates MOCK_SCHEMES. Consider returning new array if immutability is key.
-  // For this app's scale, direct mutation followed by reload is okay.
   return changed;
 };
 
@@ -524,7 +529,6 @@ export const deleteMockGroup = (groupName: string): boolean => {
 
 export const getUniqueGroupNames = (): string[] => {
   const groupNames = new Set<string>();
-  // Iterate over a potentially fresh copy to avoid issues if MOCK_SCHEMES is stale
   const currentSchemes = getMockSchemes(); 
   currentSchemes.forEach(scheme => {
     if (scheme.customerGroupName) {
@@ -540,7 +544,6 @@ export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Sche
 
   MOCK_SCHEMES[schemeIndex].customerGroupName = newGroupName ? newGroupName.trim() : undefined;
   
-  // Return a fresh, recalculated copy
   return getMockSchemeById(schemeId);
 };
 
@@ -563,7 +566,7 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
       return;
     }
 
-    const scheme = getMockSchemeById(schemeId); // Get a fresh, calculated version
+    const scheme = getMockSchemeById(schemeId); 
     if (!scheme) {
       messages.push(`Row ${index + 2}: SchemeID "${schemeId.toUpperCase()}" not found. Skipping.`);
       errorCount++;
@@ -577,7 +580,7 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
         
         const updatedScheme = closeMockScheme(scheme.id, {
             closureDate: closureDateForUpdate,
-            type: 'full_reconciliation', // CSV import defaults to full reconciliation
+            type: 'full_reconciliation', 
             modeOfPayment: ['System Closure'] 
         });
         if (updatedScheme) {
@@ -592,7 +595,7 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
          messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
          if (row.ClosureDate) {
             const newClosureDateISO = parseISO(row.ClosureDate.trim()).toISOString();
-            const schemeToUpdate = MOCK_SCHEMES.find(s => s.id === schemeId); // get direct ref for update
+            const schemeToUpdate = MOCK_SCHEMES.find(s => s.id === schemeId); 
             if (schemeToUpdate && schemeToUpdate.closureDate !== newClosureDateISO) {
                 schemeToUpdate.closureDate = newClosureDateISO;
                 schemeToUpdate.payments.forEach(p => {
@@ -604,15 +607,20 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
             }
          }
     } else if (row.MarkAsClosed?.toUpperCase() === 'FALSE') {
-      messages.push(`Row ${index + 2}: Re-opening schemes (MarkAsClosed=FALSE) is not currently supported for SchemeID "${schemeId.toUpperCase()}". No action taken.`);
+      const reopenedScheme = reopenMockScheme(schemeId);
+      if (reopenedScheme) {
+        changed = true;
+        messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} has been Reopened.`);
+      } else {
+        messages.push(`Row ${index + 2}: Error reopening scheme "${schemeId.toUpperCase()}".`);
+        errorCount++;
+        return;
+      }
     } else {
        messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeId.toUpperCase()}" (MarkAsClosed was not TRUE or FALSE).`);
     }
 
     if (changed) {
-      // The closeMockScheme already updates MOCK_SCHEMES and its totals.
-      // If only closureDate was changed for an already completed scheme, we might need to ensure totals are fine,
-      // but closeMockScheme (if called) or direct update handles it.
       successCount++;
     }
   });
@@ -621,29 +629,71 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
 };
 
 export const updateMockCustomerDetails = (
-  customerNameToUpdate: string,
-  details: { customerPhone?: string; customerAddress?: string }
-): Scheme[] | undefined => {
-  let updatedSchemesForCustomer: Scheme[] = [];
-  let customerFound = false;
+  originalCustomerName: string,
+  newDetails: { customerName: string; customerPhone?: string; customerAddress?: string }
+): { success: boolean; message?: string; updatedSchemes?: Scheme[] } => {
+  
+  if (newDetails.customerName.trim() === "") {
+    return { success: false, message: "New customer name cannot be empty." };
+  }
 
-  MOCK_SCHEMES.forEach((scheme, index) => {
-    if (scheme.customerName === customerNameToUpdate) {
-      customerFound = true;
-      MOCK_SCHEMES[index].customerPhone = details.customerPhone !== undefined ? details.customerPhone : scheme.customerPhone;
-      MOCK_SCHEMES[index].customerAddress = details.customerAddress !== undefined ? details.customerAddress : scheme.customerAddress;
-      // No need to getMockSchemeById here as we only change non-calculated fields.
-      // The page displaying this will re-fetch if necessary.
+  // Check if the new customer name already exists (unless it's the same as the original)
+  const trimmedNewName = newDetails.customerName.trim();
+  if (trimmedNewName.toLowerCase() !== originalCustomerName.trim().toLowerCase()) {
+    const nameExists = MOCK_SCHEMES.some(
+      (s) => s.customerName.trim().toLowerCase() === trimmedNewName.toLowerCase()
+    );
+    if (nameExists) {
+      return { success: false, message: `Customer name "${trimmedNewName}" already exists.` };
+    }
+  }
+  
+  let customerFoundAndUpdated = false;
+  MOCK_SCHEMES.forEach((scheme) => {
+    if (scheme.customerName === originalCustomerName) {
+      scheme.customerName = trimmedNewName;
+      scheme.customerPhone = newDetails.customerPhone !== undefined ? newDetails.customerPhone : scheme.customerPhone;
+      scheme.customerAddress = newDetails.customerAddress !== undefined ? newDetails.customerAddress : scheme.customerAddress;
+      customerFoundAndUpdated = true;
     }
   });
 
-  if (customerFound) {
-    // After updating, filter to get all schemes for this customer to return
-    // This ensures we return copies with any recalculations if needed elsewhere, though not strictly for this function
-    updatedSchemesForCustomer = getMockSchemes().filter(s => s.customerName === customerNameToUpdate);
-    return updatedSchemesForCustomer;
+  if (customerFoundAndUpdated) {
+    const updatedSchemesForCustomer = getMockSchemes().filter(s => s.customerName === trimmedNewName);
+    return { success: true, updatedSchemes: updatedSchemesForCustomer };
   }
-  return undefined; // Customer not found
+  return { success: false, message: "Original customer name not found." }; 
 };
 
+export const reopenMockScheme = (schemeId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const formerClosureDate = scheme.closureDate;
+  scheme.closureDate = undefined;
+
+  if (formerClosureDate) {
+    scheme.payments.forEach(p => {
+      if (p.paymentDate === formerClosureDate && p.modeOfPayment?.includes('System Closure')) {
+        p.amountPaid = undefined;
+        p.paymentDate = undefined;
+        p.modeOfPayment = undefined;
+      }
+    });
+  }
+  
+  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  scheme.status = getSchemeStatus(scheme);
+  const totals = calculateSchemeTotals(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId);
+};
+
+export const deleteFullMockScheme = (schemeId: string): boolean => {
+  const initialLength = MOCK_SCHEMES.length;
+  MOCK_SCHEMES = MOCK_SCHEMES.filter(s => s.id !== schemeId);
+  return MOCK_SCHEMES.length < initialLength;
+};
 
