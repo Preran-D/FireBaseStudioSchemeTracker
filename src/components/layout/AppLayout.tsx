@@ -5,22 +5,10 @@ import type { PropsWithChildren } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { LayoutDashboard, ListChecks, Repeat, UsersRound, DatabaseZap } from 'lucide-react';
-
 import { AppLogo } from '@/components/shared/AppLogo';
 import { ThemeToggle } from './ThemeToggle';
-import {
-  // SideContextWrapper, // No longer used here, moved to RootLayout
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-  SidebarTrigger,
-  useSidebar, // This component will consume the context
-} from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -30,64 +18,54 @@ const navItems = [
   { href: '/data-management', label: 'Data Management', icon: DatabaseZap },
 ];
 
-// This component is now the main layout structure and uses useSidebar
-export default function AppLayout({ children }: PropsWithChildren) {
-  const { isOpen } = useSidebar(); // Consuming the context
+function TopNavigationBar() {
   const pathname = usePathname();
 
-  // MainHeader is defined here as it uses SidebarTrigger which uses useSidebar
-  function MainHeader() {
-    return (
-      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur-sm sm:px-6">
-        <SidebarTrigger />
-        <div className="flex-1">
-          {/* Placeholder for breadcrumbs or page title if needed */}
-        </div>
-        <div className="ml-auto">
+  return (
+    <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 py-2 shadow-sm backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8">
+        <Link href="/" className="flex items-center gap-2.5">
+          <AppLogo className="h-8 w-8 text-primary" />
+          <span className="font-headline text-xl font-semibold text-foreground hidden sm:inline-block">
+            Scheme Tracker
+          </span>
+        </Link>
+        <nav className="flex items-center gap-1 sm:gap-2">
+          {navItems.map((item) => (
+            <Button
+              key={item.label}
+              variant={pathname === item.href ? "secondary" : "ghost"}
+              size="sm"
+              asChild
+              className={cn(
+                "px-3 py-1.5 h-auto text-sm font-medium",
+                pathname === item.href 
+                  ? "bg-primary/10 text-primary" 
+                  : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              )}
+            >
+              <Link href={item.href} className="flex items-center gap-1.5">
+                <item.icon className="h-4 w-4" />
+                <span className="hidden md:inline-block">{item.label}</span>
+              </Link>
+            </Button>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center">
           <ThemeToggle />
         </div>
-      </header>
-    );
-  }
+      </div>
+    </header>
+  );
+}
 
+export default function AppLayout({ children }: PropsWithChildren) {
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
-      <Sidebar>
-        <SidebarHeader>
-          <Link href="/" className="flex items-center gap-2 overflow-hidden h-full">
-            <AppLogo className="h-7 w-7 text-primary flex-shrink-0" />
-            <span className={cn(
-              "font-headline text-xl font-semibold text-sidebar-foreground whitespace-nowrap transition-opacity duration-200",
-              isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-            )}>
-              Scheme Tracker
-            </span>
-          </Link>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.label}>
-                <SidebarMenuButton
-                  href={item.href}
-                  icon={<item.icon className="h-5 w-5" />}
-                  tooltipLabel={item.label}
-                  isActive={pathname === item.href}
-                >
-                  {item.label}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarContent>
-      </Sidebar>
-
-      <SidebarInset>
-        <MainHeader />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {children}
-        </main>
-      </SidebarInset>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <TopNavigationBar />
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto">
+        {children}
+      </main>
     </div>
   );
 }

@@ -9,9 +9,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number | undefined | null, currency: string = 'INR'): string {
+export function formatCurrency(amount: number | undefined | null, currencySymbol: string = '₹'): string {
   if (amount === undefined || amount === null || isNaN(amount)) return 'N/A';
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(amount);
+  // Using 'en-IN' locale implies Rupee, but explicitly providing symbol for robustness if needed.
+  // The Intl.NumberFormat will typically handle the symbol correctly based on currency code 'INR'.
+  return new Intl.NumberFormat('en-IN', { 
+    style: 'currency', 
+    currency: 'INR',
+    minimumFractionDigits: 0, // Optional: to remove paisa if not needed
+    maximumFractionDigits: 2, // Standard for currency
+  }).format(amount);
 }
 
 export function formatDate(dateString: string | undefined | null, dateFormat: string = 'dd MMM yyyy'): string {
