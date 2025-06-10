@@ -24,9 +24,9 @@ import { CalendarIcon, Loader2, Search, Plus, Minus, ExternalLink, AlertCircle, 
 import { cn, formatDate, formatCurrency, getPaymentStatus } from '@/lib/utils';
 import type { Scheme, Payment, PaymentMode, GroupDetail } from '@/types/scheme';
 import { formatISO, parseISO, format } from 'date-fns';
+import { motion } from 'framer-motion'; // Ensure framer-motion is imported
 import { SegmentedProgressBar } from '@/components/shared/SegmentedProgressBar';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
-import { motion } from 'framer-motion'; // Ensure this import is present
 
 const availablePaymentModes: PaymentMode[] = ['Card', 'Cash', 'UPI'];
 const paymentModeIcons: Record<PaymentMode, React.ElementType> = {
@@ -113,10 +113,10 @@ export function RecordIndividualPaymentDialog({
       
 
       if (initialSearchTerm) {
-        setSearchTerm(initialSearchTerm); // Set search term first
+        setSearchTerm(initialSearchTerm); 
         const lowerInitialSearchTerm = initialSearchTerm.toLowerCase();
         const exactMatchGroup = allGroups.find(g => g.groupName.toLowerCase() === lowerInitialSearchTerm);
-        setSuggestedGroup(exactMatchGroup || null); // Then set suggested group
+        setSuggestedGroup(exactMatchGroup || null); 
         if (exactMatchGroup) {
           setGroupNameSuggestions([]);
         } else {
@@ -138,7 +138,7 @@ export function RecordIndividualPaymentDialog({
     setSearchTerm(newSearchTerm);
 
     if (activeGroupSelection && newSearchTerm.toLowerCase() !== activeGroupSelection.toLowerCase()) {
-      setActiveGroupSelection(null); // Clear active group selection if search term changes away from it
+      setActiveGroupSelection(null); 
     }
 
     if (newSearchTerm.trim() === '') {
@@ -152,20 +152,19 @@ export function RecordIndividualPaymentDialog({
     setSuggestedGroup(exactMatchGroup || null);
 
     if (exactMatchGroup) {
-      setGroupNameSuggestions([]); // Clear partial suggestions if exact match found
+      setGroupNameSuggestions([]); 
     } else {
-      // Find partial matches
       const partialMatches = allGroups.filter(g =>
         g.groupName.toLowerCase().includes(lowerSearchTerm)
       );
-      setGroupNameSuggestions(partialMatches.slice(0, 5)); // Show top 5 partial matches
+      setGroupNameSuggestions(partialMatches.slice(0, 5)); 
     }
   };
   
   const handleSuggestionClick = (group: GroupDetail) => {
-    setSearchTerm(group.groupName); // Set search term to the full group name
-    setSuggestedGroup(group); // Set this as the active suggested group
-    setGroupNameSuggestions([]); // Clear other suggestions
+    setSearchTerm(group.groupName); 
+    setSuggestedGroup(group); 
+    setGroupNameSuggestions([]); 
   };
 
 
@@ -178,12 +177,10 @@ export function RecordIndividualPaymentDialog({
     let newMonths = { ...monthsToPayPerScheme };
     let newModes = { ...paymentModePerScheme };
 
-    if (activeGroupSelection === groupToToggle.groupName) { // Currently selected, so deselect
+    if (activeGroupSelection === groupToToggle.groupName) { 
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
-      // Optionally clear months/modes for deselected schemes
-      // groupSchemeIds.forEach(id => { delete newMonths[id]; delete newModes[id]; });
       setActiveGroupSelection(null);
-    } else { // Not selected, or a different group was selected, so select this one
+    } else { 
       const currentSelectedSet = new Set(selectedSchemeIds);
       groupSchemeIds.forEach(id => currentSelectedSet.add(id));
       newSelectedIds = Array.from(currentSelectedSet);
@@ -191,10 +188,10 @@ export function RecordIndividualPaymentDialog({
       groupSchemeIds.forEach(id => {
         const scheme = allRecordableSchemes.find(s => s.id === id);
         const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
-        if (!newMonths[id] || newMonths[id] === 0) { // Initialize only if not set or 0
+        if (!newMonths[id] || newMonths[id] === 0) { 
           newMonths[id] = maxMonths > 0 ? 1 : 0;
         }
-        if (!newModes[id] || newModes[id].length === 0) { // Initialize only if not set or empty
+        if (!newModes[id] || newModes[id].length === 0) { 
           newModes[id] = ['Cash'];
         }
       });
@@ -205,26 +202,23 @@ export function RecordIndividualPaymentDialog({
     setMonthsToPayPerScheme(newMonths);
     setPaymentModePerScheme(newModes);
     
-    setSearchTerm(''); // Clear search term after group action
+    setSearchTerm(''); 
     setSuggestedGroup(null);
     setGroupNameSuggestions([]);
   };
 
 
   const filteredSchemes = useMemo(() => {
-    // Start with selected items, maintaining their selection order
     const selectedItems = allRecordableSchemes
       .filter(s => selectedSchemeIds.includes(s.id))
-      .sort((a, b) => { // Maintain selection order
+      .sort((a, b) => { 
         const indexA = selectedSchemeIds.indexOf(a.id);
         const indexB = selectedSchemeIds.indexOf(b.id);
         return indexA - indexB;
       });
 
-    // Then get unselected items
     let unselectedItems = allRecordableSchemes.filter(s => !selectedSchemeIds.includes(s.id));
 
-    // If there's a search term AND no exact group match is currently suggested OR there are partial suggestions, filter unselectedItems
     if (searchTerm && (!suggestedGroup || groupNameSuggestions.length > 0)) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       unselectedItems = unselectedItems.filter(
@@ -234,14 +228,10 @@ export function RecordIndividualPaymentDialog({
           (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm))
       );
     }
-    // Else, if a group is suggested (exact match), we don't filter unselected further by searchTerm,
-    // as the focus is on the suggested group action or individual selections.
 
-    // Sort unselected items
     unselectedItems.sort((a, b) => {
       const nameCompare = a.customerName.localeCompare(b.customerName);
       if (nameCompare !== 0) return nameCompare;
-      // Could add secondary sort by scheme start date or ID if needed
       return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
     });
 
@@ -254,11 +244,10 @@ export function RecordIndividualPaymentDialog({
       checked ? [...prevIds, schemeId] : prevIds.filter((id) => id !== schemeId)
     );
 
-    // If checking a scheme, initialize its months and payment mode if not already set
     if (checked) {
       setMonthsToPayPerScheme((prevMonths) => {
         const newMonths = { ...prevMonths };
-        if (!newMonths[schemeId] || newMonths[schemeId] === 0) { // Only if not already set or is 0
+        if (!newMonths[schemeId] || newMonths[schemeId] === 0) { 
           const scheme = allRecordableSchemes.find(s => s.id === schemeId);
           const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
           newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
@@ -267,8 +256,8 @@ export function RecordIndividualPaymentDialog({
       });
       setPaymentModePerScheme((prevModes) => {
         const newModes = { ...prevModes };
-        if (!newModes[schemeId] || newModes[schemeId].length === 0) { // Only if not already set or is empty
-          newModes[schemeId] = ['Cash']; // Default mode
+        if (!newModes[schemeId] || newModes[schemeId].length === 0) { 
+          newModes[schemeId] = ['Cash']; 
         }
         return newModes;
       });
@@ -284,10 +273,8 @@ export function RecordIndividualPaymentDialog({
       let newMonthsCount = currentMonths + delta;
       const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
 
-      // Ensure months to pay is at least 1 if there are recordable months, otherwise 0
       if (newMonthsCount < 1 && maxMonths > 0) newMonthsCount = 1;
       if (newMonthsCount < 0 && maxMonths <= 0) newMonthsCount = 0; 
-      // Cap at max recordable months
       if (newMonthsCount > maxMonths) newMonthsCount = maxMonths;
 
       return { ...prevMonths, [schemeId]: newMonthsCount };
@@ -391,7 +378,6 @@ export function RecordIndividualPaymentDialog({
                 disabled={isLoading}
               />
             </div>
-            {/* Group Name Suggestions List */}
             {groupNameSuggestions.length > 0 && (
               <div className="mt-1 border rounded-md shadow-sm bg-popover max-h-40 overflow-y-auto z-10 relative">
                 <ul className="py-1">
@@ -407,7 +393,6 @@ export function RecordIndividualPaymentDialog({
                 </ul>
               </div>
             )}
-            {/* Button to Select/Deselect all from a suggested group */}
             {suggestedGroup && (
               <div className="flex items-center gap-2 p-2 border border-dashed rounded-md bg-muted/50">
                 <Info className="h-4 w-4 text-primary"/>
