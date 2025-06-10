@@ -1,21 +1,13 @@
 
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+// Removed Inter and Space_Grotesk imports
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import AppLayout from '@/components/layout/AppLayout';
 import { ThemeProvider } from '@/hooks/useTheme';
-import { SideContextWrapper } from '@/components/ui/sidebar'; // Import the provider
+import { SideContextWrapper } from '@/components/ui/sidebar';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-space-grotesk',
-});
+// Removed font loading for Inter and Space_Grotesk
 
 export const metadata: Metadata = {
   title: 'Scheme Tracker',
@@ -32,7 +24,8 @@ export default function RootLayout({
       <head>
         {/* Additional head elements if needed */}
       </head>
-      <body className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}>
+      {/* Removed font variables from body className, rely on font-body from Tailwind config */}
+      <body className="font-body antialiased">
         <ThemeProvider>
           <SideContextWrapper> {/* Wrap AppLayout with the Sidebar context provider */}
             <AppLayout>

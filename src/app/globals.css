@@ -3,9 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: var(--font-inter), sans-serif;
-}
+/* Removed explicit body font-family var(--font-inter) rule */
+/* Tailwind's font-body utility class will now apply the Apple system font stack */
 
 @layer base {
   :root {
