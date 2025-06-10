@@ -5,7 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, Settings, Bell, User, MoreVertical, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, Settings, Bell, User, MoreVertical, Sun, Moon, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,8 +32,14 @@ const utilityNavItems = [
 
 function TopNavigationBar() {
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const cycleTheme = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light'); // system goes back to light
+  };
 
   return (
     <header className="sticky top-0 z-50 py-3 px-4 md:px-6 supports-[backdrop-filter]:bg-transparent bg-transparent">
@@ -93,30 +99,20 @@ function TopNavigationBar() {
                 </Link>
               </Button>
             ))}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full hover:bg-muted/60 text-muted-foreground hover:text-foreground h-9 w-9"
-                >
-                  <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                  <span className="sr-only">Toggle theme</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="mt-1 glassmorphism border-border/30 shadow-xl">
-                <DropdownMenuItem onClick={() => setTheme("light")} className={cn(theme === 'light' && 'font-semibold bg-muted/50', "cursor-pointer")}>
-                  Light
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("dark")} className={cn(theme === 'dark' && 'font-semibold bg-muted/50', "cursor-pointer")}>
-                  Dark
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("system")} className={cn(theme === 'system' && 'font-semibold bg-muted/50', "cursor-pointer")}>
-                  System
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={cycleTheme}
+                className="rounded-full hover:bg-muted/60 text-muted-foreground hover:text-foreground h-9 w-9"
+                aria-label={`Toggle theme. Current theme: ${theme}. Displaying as: ${resolvedTheme}.`}
+            >
+              {resolvedTheme === 'dark' ? (
+                <Moon className="h-5 w-5" />
+              ) : (
+                <Sun className="h-5 w-5" />
+              )}
+              <span className="sr-only">Toggle theme (Currently: {theme}, Displaying as: {resolvedTheme})</span>
+            </Button>
           </div>
         </div>
 
@@ -163,22 +159,16 @@ function TopNavigationBar() {
               <DropdownMenuSeparator className="my-1.5 bg-border/30"/>
               {/* Theme Toggle for Mobile */}
               <DropdownMenuItem
-                onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setIsMobileMenuOpen(false); }}
+                onClick={() => { cycleTheme(); setIsMobileMenuOpen(false); }}
                 className="cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm text-foreground/80 hover:bg-muted/50"
               >
-                {theme === 'dark' || (theme==='system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? (
-                    <Sun className="h-5 w-5 text-muted-foreground" />
-                ) : (
+                {resolvedTheme === 'dark' ? (
                     <Moon className="h-5 w-5 text-muted-foreground" />
+                ) : (
+                    <Sun className="h-5 w-5 text-muted-foreground" />
                 )}
-                <span>Switch to {theme === 'dark' || (theme==='system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'Light' : 'Dark'} Mode</span>
-              </DropdownMenuItem>
-               <DropdownMenuItem
-                onClick={() => { setTheme('system'); setIsMobileMenuOpen(false); }}
-                className={cn("cursor-pointer flex items-center gap-3 px-3 py-2.5 text-sm text-foreground/80 hover:bg-muted/50", theme === 'system' && 'font-semibold bg-muted/30')}
-              >
-                <Settings className="h-5 w-5 text-muted-foreground" />
-                <span>System Default Theme</span>
+                <span>Toggle Theme</span>
+                <span className="ml-auto text-xs text-muted-foreground uppercase">({theme.charAt(0)})</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -229,3 +219,4 @@ export default function AppLayout({ children }: PropsWithChildren) {
     </div>
   );
 }
+

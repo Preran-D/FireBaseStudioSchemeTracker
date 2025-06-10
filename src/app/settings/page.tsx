@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Download, FileUp, FileSpreadsheet, Loader2, AlertTriangle, FileText, Activity, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap } from 'lucide-react';
 import { getMockSchemes, addMockScheme, importSchemeClosureUpdates } from '@/lib/mock-data';
-import type { Scheme, Payment } from '@/types/scheme';
+import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { arrayToCSV, downloadCSV, parseCSV } from '@/lib/csvUtils';
 import { formatDate, formatCurrency, getPaymentStatus, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
 import { isValid, parse, formatISO } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ImportMessage {
   type: 'success' | 'error' | 'info';
@@ -535,10 +536,12 @@ function DataManagementTabContent() {
   );
 }
 
+type DefaultPaymentModeType = "Cash" | "Card" | "UPI";
+
 function RecommendedSettingsTabContent() {
-  const [notificationEmails, setNotificationEmails] = useState(true);
   const [autoArchive, setAutoArchive] = useState(false);
-  const [defaultPaymentMode, setDefaultPaymentMode] = useState("Cash");
+  const [defaultPaymentMode, setDefaultPaymentMode] = useState<DefaultPaymentModeType>("Cash");
+  const paymentModeOptions: DefaultPaymentModeType[] = ["Cash", "Card", "UPI"];
 
   return (
     <div className="space-y-8 mt-6">
@@ -548,17 +551,6 @@ function RecommendedSettingsTabContent() {
           <CardDescription>Manage how you receive updates and alerts from the application.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-            <div>
-              <Label htmlFor="notification-emails" className="font-medium">Email Notifications</Label>
-              <p className="text-xs text-muted-foreground">Receive emails for overdue payments and scheme completions.</p>
-            </div>
-            <Switch
-              id="notification-emails"
-              checked={notificationEmails}
-              onCheckedChange={setNotificationEmails}
-            />
-          </div>
           <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
             <div>
                 <Label htmlFor="notification-sms" className="font-medium">SMS Alerts (Coming Soon)</Label>
@@ -574,7 +566,7 @@ function RecommendedSettingsTabContent() {
           <CardTitle className="font-headline">Data & Automation</CardTitle>
           <CardDescription>Configure settings related to data handling and automated tasks.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
             <div>
               <Label htmlFor="auto-archive" className="font-medium">Auto-Archive Completed Schemes</Label>
@@ -587,9 +579,22 @@ function RecommendedSettingsTabContent() {
             />
           </div>
            <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-            <Label htmlFor="default-payment-mode" className="font-medium block mb-2">Default Payment Mode for New Entries</Label>
-            <Input id="default-payment-mode" value={defaultPaymentMode} onChange={(e) => setDefaultPaymentMode(e.target.value)} placeholder="e.g., Cash, UPI" />
-            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+            <Label className="font-medium block mb-2">Default Payment Mode for New Entries</Label>
+            <RadioGroup
+              value={defaultPaymentMode}
+              onValueChange={(value: DefaultPaymentModeType) => setDefaultPaymentMode(value)}
+              className="flex flex-col space-y-2"
+            >
+              {paymentModeOptions.map((mode) => (
+                <div key={mode} className="flex items-center space-x-2">
+                  <RadioGroupItem value={mode} id={`pm-${mode}`} />
+                  <Label htmlFor={`pm-${mode}`} className="font-normal cursor-pointer">
+                    {mode}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                 <Info className="h-3 w-3"/>
                 This will pre-select the payment mode when recording new payments.
             </p>
@@ -638,3 +643,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
