@@ -257,7 +257,7 @@ export default function GroupDetailsPage() {
       return;
     }
     setIsSavingGroupName(true);
-    delay(500); 
+    await delay(500); 
     const success = updateMockGroupName(groupName, newGroupName.trim());
     if (success) {
       toast({
@@ -315,7 +315,7 @@ export default function GroupDetailsPage() {
   const confirmDeleteGroup = async () => {
     setIsLoading(true); // Show main loader while deleting
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
-    delay(500); 
+    await delay(500); 
     const success = deleteMockGroup(groupName);
     if (success) {
       toast({
