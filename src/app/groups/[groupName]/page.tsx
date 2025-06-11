@@ -1,24 +1,25 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, Badge } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, Badge, Pencil } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, deleteFullMockScheme } from '@/lib/mock-data';
+import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import React from 'react';
-import { motion } from 'framer-motion';
+import { delay, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel } from '@/lib/excelUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format as formatDateFns, parseISO, isWithinInterval, startOfDay, endOfDay, isValid as isValidDate } from 'date-fns';
@@ -47,6 +48,11 @@ export default function GroupDetailsPage() {
   const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
   const [isDeletingScheme, setIsDeletingScheme] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState(groupName);
+  const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+  const [isConfirmingDeleteGroup, setIsConfirmingDeleteGroup] = useState(false);
 
   const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined });
 
@@ -236,6 +242,46 @@ export default function GroupDetailsPage() {
     }
   };
 
+  const handleEditGroupName = () => {
+    setNewGroupName(groupName);
+    setIsEditingGroup(true);
+  };
+
+  const handleSaveGroupName = async () => {
+    if (!newGroupName || newGroupName.trim() === '' || newGroupName.trim() === groupName) {
+      toast({
+        title: "Invalid Group Name",
+        description: "New group name cannot be empty or the same as the current name.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSavingGroupName(true);
+    delay(500); 
+    const success = updateMockGroupName(groupName, newGroupName.trim());
+    if (success) {
+      toast({
+        title: "Group Renamed",
+        description: `Group "${groupName}" successfully renamed to "${newGroupName.trim()}".`,
+      });
+      // Redirect to the new group page
+      router.push(`/groups/${encodeURIComponent(newGroupName.trim())}`);
+    } else {
+      toast({
+        title: "Error Renaming Group",
+        description: "Could not rename the group. A group with that name might already exist or an error occurred.",
+        variant: "destructive",
+      });
+    }
+    setIsEditingGroup(false);
+    setIsSavingGroupName(false);
+  };
+
+  const handleDeleteGroup = () => {
+    setIsConfirmingDeleteGroup(true);
+  };
+
+
   const handleExportSchemes = () => {
     setIsExporting(true);
     const dataToExport: any[][] = [[
@@ -266,6 +312,27 @@ export default function GroupDetailsPage() {
     setIsExporting(false);
   };
   
+  const confirmDeleteGroup = async () => {
+    setIsLoading(true); // Show main loader while deleting
+    setIsConfirmingDeleteGroup(false); // Close dialog immediately
+    delay(500); 
+    const success = deleteMockGroup(groupName);
+    if (success) {
+      toast({
+        title: "Group Deleted",
+        description: `Group "${groupName}" has been deleted. Schemes are now ungrouped.`,
+      });
+      router.push('/groups'); // Navigate back to groups list
+    } else {
+      toast({
+        title: "Error Deleting Group",
+        description: `Could not delete group "${groupName}".`,
+        variant: "destructive",
+      });
+      setIsLoading(false); // Hide loader if deletion failed
+    }
+  };
+
   const clearDateFilter = () => {
     setDateRangeFilter({ from: undefined, to: undefined });
   };
@@ -294,7 +361,7 @@ export default function GroupDetailsPage() {
 
   return (
   
-    <div className="flex flex-col gap-8">
+    <><div className="flex flex-col gap-8">
       <motion.div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
         variants={cardVariants}
@@ -309,13 +376,22 @@ export default function GroupDetailsPage() {
           <h1 className="text-3xl font-headline font-bold text-foreground truncate max-w-sm sm:max-w-md md:max-w-lg">
             {groupName}
           </h1>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={handleEditGroupName} className="h-9 w-9">
+              <Pencil className="h-4 w-4" />
+              <span className="sr-only">Edit Group Name</span>
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleDeleteGroup} className="h-9 w-9 text-destructive hover:bg-destructive/10">
+              <Trash2 className="h-4 w-4" />
+              <span className="sr-only">Delete Group</span>
+            </Button>
+          </div>
         </div>
         <Button
           size="lg"
           asChild
           className="w-full sm:w-auto rounded-lg shadow-lg hover:shadow-xl transition-shadow"
-          disabled={allSchemesInGroup.filter(s => s.status === 'Active' || s.status === 'Overdue').length === 0}
-        >
+          disabled={groupSummaryStats.activeSchemesCount === 0}>
           <Link href={`/payments/record?group=${encodeURIComponent(groupName)}`}>
             <CreditCard className="mr-2.5 h-5 w-5" /> Record Payment for Group
           </Link>
@@ -356,14 +432,14 @@ export default function GroupDetailsPage() {
         <Card className="rounded-xl shadow-xl glassmorphism overflow-hidden">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                    <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({displayedSchemesCount})</CardTitle>
-                    <CardDescription>Detailed list of all schemes associated with this group.</CardDescription>
-                </div>
-                <Button onClick={handleExportSchemes} disabled={isExporting || displayedSchemesCount === 0} variant="outline" size="sm">
-                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    Export Excel
-                </Button>
+              <div>
+                <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({displayedSchemesCount})</CardTitle>
+                <CardDescription>Detailed list of all schemes associated with this group.</CardDescription>
+              </div>
+              <Button onClick={handleExportSchemes} disabled={isExporting || displayedSchemesCount === 0} variant="outline" size="sm">
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                Export Excel
+              </Button>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 items-end">
               <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
@@ -373,78 +449,75 @@ export default function GroupDetailsPage() {
                   placeholder="Customer name or ID..."
                   value={schemeSearchTerm}
                   onChange={(e) => setSchemeSearchTerm(e.target.value)}
-                  className="h-10 text-sm"
-                />
+                  className="h-10 text-sm" />
               </div>
               <div className="md:col-span-1 lg:col-span-1">
-                  <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">Start Date From</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="dateFrom"
-                        variant={'outline'}
-                        className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.from && 'text-muted-foreground')}
-                      >
-                        <LucideCalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRangeFilter.from ? formatDateFns(dateRangeFilter.from, 'dd MMM yyyy') : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateRangeFilter.from}
-                        onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, from: date }))}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">Start Date From</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="dateFrom"
+                      variant={'outline'}
+                      className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.from && 'text-muted-foreground')}
+                    >
+                      <LucideCalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRangeFilter.from ? formatDateFns(dateRangeFilter.from, 'dd MMM yyyy') : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateRangeFilter.from}
+                      onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, from: date }))}
+                      initialFocus />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="md:col-span-1 lg:col-span-1">
-                 <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">Start Date To</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        id="dateTo"
-                        variant={'outline'}
-                        className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.to && 'text-muted-foreground')}
-                        disabled={!dateRangeFilter.from}
-                      >
-                        <LucideCalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRangeFilter.to ? formatDateFns(dateRangeFilter.to, 'dd MMM yyyy') : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateRangeFilter.to}
-                        onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, to: date }))}
-                        disabled={(date) => dateRangeFilter.from ? date < dateRangeFilter.from : false}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">Start Date To</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="dateTo"
+                      variant={'outline'}
+                      className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.to && 'text-muted-foreground')}
+                      disabled={!dateRangeFilter.from}
+                    >
+                      <LucideCalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRangeFilter.to ? formatDateFns(dateRangeFilter.to, 'dd MMM yyyy') : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateRangeFilter.to}
+                      onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, to: date }))}
+                      disabled={(date) => dateRangeFilter.from ? date < dateRangeFilter.from : false}
+                      initialFocus />
+                  </PopoverContent>
+                </Popover>
               </div>
-              
+
               <div className="flex gap-2 items-end">
                 {(dateRangeFilter.from || dateRangeFilter.to) && (
-                    <Button variant="ghost" onClick={clearDateFilter} size="sm" className="h-10">
-                        <FilterX className="mr-2 h-4 w-4" /> Clear Dates
-                    </Button>
+                  <Button variant="ghost" onClick={clearDateFilter} size="sm" className="h-10">
+                    <FilterX className="mr-2 h-4 w-4" /> Clear Dates
+                  </Button>
                 )}
                 <div className="flex-grow">
-                    <label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">Sort Customers By</label>
-                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)} >
+                  <label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">Sort Customers By</label>
+                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
                     <SelectTrigger id="sortBy" className="h-10 text-sm">
-                        <SelectValue placeholder="Sort by" />
+                      <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="customerNameAsc">Customer Name (A-Z)</SelectItem>
-                        <SelectItem value="customerNameDesc">Customer Name (Z-A)</SelectItem>
-                        <SelectItem value="oldestFirst">Oldest Scheme First</SelectItem>
-                        <SelectItem value="newestFirst">Newest Scheme First</SelectItem>
-                        <SelectItem value="statusPriority">Scheme Status Priority</SelectItem>
+                      <SelectItem value="customerNameAsc">Customer Name (A-Z)</SelectItem>
+                      <SelectItem value="customerNameDesc">Customer Name (Z-A)</SelectItem>
+                      <SelectItem value="oldestFirst">Oldest Scheme First</SelectItem>
+                      <SelectItem value="newestFirst">Newest Scheme First</SelectItem>
+                      <SelectItem value="statusPriority">Scheme Status Priority</SelectItem>
                     </SelectContent>
-                    </Select>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -478,10 +551,10 @@ export default function GroupDetailsPage() {
                           transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
                         >
                           <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 py-3">
-                                {customerGroup.customerName} (<span className="font-normal text-sm">
-                                        {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
-                                </span>)
-                            </TableCell>
+                            {customerGroup.customerName} (<span className="font-normal text-sm">
+                              {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
+                            </span>)
+                          </TableCell>
                           <TableCell colSpan={6} className="text-base py-3"></TableCell>
                         </motion.tr>
 
@@ -531,8 +604,7 @@ export default function GroupDetailsPage() {
       <SchemeHistoryPanel
         isOpen={isSchemePeekPanelOpen}
         onClose={() => setIsSchemePeekPanelOpen(false)}
-        scheme={schemeForPeekPanel}
-      />
+        scheme={schemeForPeekPanel} />
 
       {schemeToDelete && (
         <AlertDialog open={!!schemeToDelete} onOpenChange={() => setSchemeToDelete(null)}>
@@ -555,6 +627,38 @@ export default function GroupDetailsPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
-    </div>
+    </div><Dialog open={isEditingGroup} onOpenChange={setIsEditingGroup}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Group Name</DialogTitle>
+            <DialogDescription>
+              Enter a new name for the group "{groupName}". This will update the group name for all schemes within this group.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="newGroupName" className="text-right">
+                New Name
+              </label>
+              <Input
+                id="newGroupName"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                className="col-span-3"
+                disabled={isSavingGroupName} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditingGroup(false)} disabled={isSavingGroupName}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveGroupName} disabled={isSavingGroupName || !newGroupName || newGroupName.trim() === '' || newGroupName.trim() === groupName}>
+              {isSavingGroupName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog></>
+
   );
 }

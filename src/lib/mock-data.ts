@@ -510,28 +510,6 @@ export const getGroupDetails = (): GroupDetail[] => {
   })).sort((a,b) => a.groupName.localeCompare(b.groupName));
 };
 
-export const updateMockGroupName = (oldGroupName: string, newGroupName: string): boolean => {
-  if (!newGroupName || newGroupName.trim() === "") return false;
-  let changed = false;
-  MOCK_SCHEMES.forEach(scheme => {
-    if (scheme.customerGroupName === oldGroupName) {
-      scheme.customerGroupName = newGroupName.trim();
-      changed = true;
-    }
-  });
-  return changed;
-};
-
-export const deleteMockGroup = (groupName: string): boolean => {
-  let changed = false;
-  MOCK_SCHEMES.forEach(scheme => {
-    if (scheme.customerGroupName === groupName) {
-      scheme.customerGroupName = undefined;
-      changed = true;
-    }
-  });
-  return changed;
-};
 
 export const getUniqueGroupNames = (): string[] => {
   const groupNames = new Set<string>();
@@ -705,4 +683,27 @@ export const deleteFullMockScheme = (schemeId: string): boolean => {
   const initialLength = MOCK_SCHEMES.length;
   MOCK_SCHEMES = MOCK_SCHEMES.filter(s => s.id !== schemeId);
   return MOCK_SCHEMES.length < initialLength;
+};
+
+export const updateMockGroupName = (oldGroupName: string, newGroupName: string): boolean => {
+  if (!newGroupName || newGroupName.trim() === "") return false;
+  let changed = false;
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerGroupName === oldGroupName) {
+      scheme.customerGroupName = newGroupName.trim();
+      changed = true;
+    }
+  });
+  return changed;
+};
+
+export const deleteMockGroup = (groupName: string): boolean => {
+  let changed = false;
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerGroupName === groupName) {
+      scheme.customerGroupName = undefined;
+      changed = true;
+    }
+  });
+  return changed;
 };
