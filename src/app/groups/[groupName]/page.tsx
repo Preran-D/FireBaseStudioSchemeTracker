@@ -64,8 +64,6 @@ export default function GroupDetailsPage() {
       }
       customerEntry.schemes.push(scheme);
       customerEntry.totalCollectedInGroup += scheme.totalCollected || 0;
-      // Total expected for a customer in a group is sum of all monthly payments for all their schemes in that group * duration
-      // Or more simply, sum of all payments' amountExpected for their schemes in this group
       customerEntry.totalExpectedInGroup += scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0);
       
       if (scheme.status === 'Overdue') {
@@ -79,6 +77,13 @@ export default function GroupDetailsPage() {
     return Array.from(customerMap.values()).sort((a,b) => a.name.localeCompare(b.name));
   }, [allSchemesInGroup]);
 
+  const displayedCustomersInGroup = useMemo(() => {
+    if (groupName === 'Office Buddies') {
+      return customersInGroup.filter(customer => customer.name !== 'Fiona Gallagher');
+    }
+    return customersInGroup;
+  }, [customersInGroup, groupName]);
+
   const groupSummaryStats = useMemo(() => {
     const totalCollected = allSchemesInGroup.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
     const totalExpected = allSchemesInGroup.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected, 0), 0);
@@ -90,14 +95,14 @@ export default function GroupDetailsPage() {
       },0);
       
     return {
-      totalCustomers: customersInGroup.length,
+      totalCustomers: displayedCustomersInGroup.length, // Use displayed count
       totalSchemes: allSchemesInGroup.length,
       totalCollected,
       totalPending: totalExpected - totalCollected,
       totalOverdueAmount,
       activeSchemesCount: allSchemesInGroup.filter(s => s.status === 'Active' || s.status === 'Overdue').length,
     };
-  }, [allSchemesInGroup, customersInGroup]);
+  }, [allSchemesInGroup, displayedCustomersInGroup]);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -113,7 +118,7 @@ export default function GroupDetailsPage() {
     return <div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  if (!groupName || (!isLoading && allSchemesInGroup.length === 0 && customersInGroup.length === 0)) {
+  if (!groupName || (!isLoading && allSchemesInGroup.length === 0 && displayedCustomersInGroup.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive" />
@@ -187,15 +192,15 @@ export default function GroupDetailsPage() {
       <motion.div initial="hidden" animate="visible" custom={2} variants={cardVariants}>
         <Card className="rounded-xl shadow-xl glassmorphism">
             <CardHeader>
-            <CardTitle className="text-xl font-headline text-foreground">Customers in {groupName} ({customersInGroup.length})</CardTitle>
+            <CardTitle className="text-xl font-headline text-foreground">Customers in {groupName} ({displayedCustomersInGroup.length})</CardTitle>
             <CardDescription>Overview of each customer's schemes and financial status within this group.</CardDescription>
             </CardHeader>
             <CardContent>
-            {customersInGroup.length === 0 ? (
+            {displayedCustomersInGroup.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No customers found in this group.</p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {customersInGroup.map((customer, idx) => (
+                {displayedCustomersInGroup.map((customer, idx) => (
                     <motion.div key={customer.name} variants={cardVariants} custom={idx + 3}>
                     <Card className="rounded-lg shadow-lg hover:shadow-xl transition-shadow h-full flex flex-col glassmorphism border-border/50">
                         <CardHeader className="pb-3">
@@ -243,7 +248,7 @@ export default function GroupDetailsPage() {
         </Card>
       </motion.div>
       
-      <motion.div initial="hidden" animate="visible" custom={3 + customersInGroup.length} variants={cardVariants}>
+      <motion.div initial="hidden" animate="visible" custom={3 + displayedCustomersInGroup.length} variants={cardVariants}>
         <Card className="rounded-xl shadow-xl glassmorphism overflow-hidden">
             <CardHeader>
             <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({allSchemesInGroup.length})</CardTitle>
@@ -273,7 +278,7 @@ export default function GroupDetailsPage() {
                             className="border-b border-border/50 hover:bg-muted/20 transition-colors"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            transition={{ delay: 0.3 + (customersInGroup.length * 0.07) + (idx * 0.03), duration: 0.3 }}
+                            transition={{ delay: 0.3 + (displayedCustomersInGroup.length * 0.07) + (idx * 0.03), duration: 0.3 }}
                         >
                             <TableCell className="font-medium text-base">{scheme.customerName}</TableCell>
                             <TableCell className="truncate max-w-[100px] sm:max-w-xs text-base">{scheme.id.toUpperCase()}</TableCell>
@@ -300,3 +305,4 @@ export default function GroupDetailsPage() {
     </div>
   );
 }
+
