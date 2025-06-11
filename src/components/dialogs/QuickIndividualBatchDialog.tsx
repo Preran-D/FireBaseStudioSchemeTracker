@@ -1,9 +1,3 @@
-
-'use client';
-
-// This component is being replaced by RecordIndividualPaymentDialog.tsx
-// Keeping it empty to mark for deletion and avoid import errors during transition.
-// This file can be safely deleted once RecordIndividualPaymentDialog is fully integrated and confirmed working.
+// This component was replaced and is no longer in use.
+// This file can be safely deleted.
 export {};
-export type QuickIndividualBatchSubmitDetails = any; // Placeholder
-
