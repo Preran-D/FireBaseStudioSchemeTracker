@@ -7,32 +7,39 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, CheckSquare, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { Input } from '@/components/ui/input'; // Added Input import
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare } from 'lucide-react';
 import type { Scheme } from '@/types/scheme';
-import { getMockSchemes } from '@/lib/mock-data';
+import { getMockSchemes, deleteFullMockScheme } from '@/lib/mock-data'; // Added deleteFullMockScheme
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // Added AlertDialog
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from "@/hooks/use-toast"; // Added useToast
 
 export default function GroupDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast(); // Added toast
   const groupName = params.groupName ? decodeURIComponent(params.groupName as string) : '';
 
   const [allSchemesInGroup, setAllSchemesInGroup] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
   const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
-  const [sortBy, setSortBy] = useState<'customerName' | 'startDateYear'>('customerName');
+  const [schemeSearchTerm, setSchemeSearchTerm] = useState(''); // State for scheme search
+  const [sortBy, setSortBy] = useState<'customerName' | 'startDateYear'>('customerName'); // Keep sortBy for groups for now
 
-  useEffect(() => {
+  // State for delete confirmation
+  const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
+  const [isDeletingScheme, setIsDeletingScheme] = useState(false);
+
+  const loadGroupSchemes = () => {
     if (groupName) {
       setIsLoading(true);
       const allSchemes = getMockSchemes();
-      // Schemes are sorted here: by customer name, then by start date.
       const schemesForThisGroup = allSchemes
         .filter(s => s.customerGroupName === groupName)
         .sort((a, b) => { 
@@ -45,9 +52,22 @@ export default function GroupDetailsPage() {
     } else {
       setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    loadGroupSchemes();
   }, [groupName]);
 
   const groupedSchemes = useMemo(() => {
+    const filteredForSearch = allSchemesInGroup.filter(scheme => {
+      if (!schemeSearchTerm) return true;
+      const searchTermLower = schemeSearchTerm.toLowerCase();
+      return (
+        scheme.customerName.toLowerCase().includes(searchTermLower) ||
+        scheme.id.toLowerCase().includes(searchTermLower)
+      );
+    });
+
     const groups: {
       customerName: string;
       schemes: Scheme[];
@@ -56,44 +76,39 @@ export default function GroupDetailsPage() {
     }[] = [];
     const customerMap = new Map<string, Scheme[]>();
 
-    // The problematic sorting inside forEach was removed.
-    // allSchemesInGroup is already sorted by customerName and then startDate from useEffect.
-    allSchemesInGroup.forEach(scheme => {
+    filteredForSearch.forEach(scheme => {
       if (!customerMap.has(scheme.customerName)) {
         customerMap.set(scheme.customerName, []);
       }
       customerMap.get(scheme.customerName)!.push(scheme);
     });
 
-    // Schemes within each customer group are already sorted by start date due to initial sort of allSchemesInGroup.
-    // If a more explicit re-sort is needed per customer group here, it would be:
-    // customerMap.forEach(schemes => schemes.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
-
     customerMap.forEach((schemes, customerName) => {
-      const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
-      groups.push({
-        customerName,
-        schemes,
-        totalSchemes: schemes.length,
-        totalCollected,
-      });
+      if (schemes.length > 0) { // Only add customer group if it has schemes after search filter
+        const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+        groups.push({
+          customerName,
+          schemes,
+          totalSchemes: schemes.length,
+          totalCollected,
+        });
+      }
     });
-
-    // This sorts the customer groups themselves based on the sortBy state.
+    
+    // Sort the customer groups themselves
     groups.sort((a, b) => {
       if (sortBy === 'customerName') {
         return a.customerName.localeCompare(b.customerName);
       } else if (sortBy === 'startDateYear') {
-        // Ensure schemes array is not empty and has a valid startDate for sorting
         const yearA = a.schemes.length > 0 ? new Date(a.schemes[0].startDate).getFullYear() : 0;
         const yearB = b.schemes.length > 0 ? new Date(b.schemes[0].startDate).getFullYear() : 0;
-        if (yearA === 0 || yearB === 0) return 0; // Handle cases where startDate might be missing or schemes empty
+        if (yearA === 0 || yearB === 0) return 0; 
         return yearA - yearB;
       }
       return 0;
     });
     return groups;
-  }, [allSchemesInGroup, sortBy]);
+  }, [allSchemesInGroup, schemeSearchTerm, sortBy]);
 
   const groupSummaryStats = useMemo(() => {
     if (allSchemesInGroup.length === 0) {
@@ -140,11 +155,37 @@ export default function GroupDetailsPage() {
     setIsSchemePeekPanelOpen(true);
   };
 
+  const handleDeleteScheme = (scheme: Scheme) => {
+    setSchemeToDelete(scheme);
+  };
+
+  const confirmDeleteScheme = () => {
+    if (schemeToDelete) {
+      setIsDeletingScheme(true);
+      const success = deleteFullMockScheme(schemeToDelete.id);
+      if (success) {
+        toast({
+          title: "Scheme Deleted",
+          description: `Scheme ID ${schemeToDelete.id.toUpperCase()} for ${schemeToDelete.customerName} has been deleted.`,
+        });
+        loadGroupSchemes(); // Reload schemes for the group
+      } else {
+        toast({
+          title: "Error Deleting Scheme",
+          description: `Could not delete scheme ID ${schemeToDelete.id.toUpperCase()}.`,
+          variant: "destructive",
+        });
+      }
+      setSchemeToDelete(null);
+      setIsDeletingScheme(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  if (!groupName || (!isLoading && allSchemesInGroup.length === 0)) {
+  if (!groupName || (!isLoading && allSchemesInGroup.length === 0 && !schemeSearchTerm)) { // Adjusted condition
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive" />
@@ -158,6 +199,8 @@ export default function GroupDetailsPage() {
       </div>
     );
   }
+
+  const displayedSchemesCount = groupedSchemes.reduce((acc, group) => acc + group.schemes.length, 0);
 
   return (
     <div className="flex flex-col gap-8">
@@ -221,12 +264,22 @@ export default function GroupDetailsPage() {
       <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={2}>
         <Card className="rounded-xl shadow-xl glassmorphism overflow-hidden">
             <CardHeader>
-            <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({allSchemesInGroup.length})</CardTitle>
+            <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({displayedSchemesCount})</CardTitle>
             <CardDescription>Detailed list of all schemes associated with this group, sorted by customer then start date.</CardDescription>
+            <div className="mt-4">
+                <Input
+                  placeholder="Search schemes by customer name or ID..."
+                  value={schemeSearchTerm}
+                  onChange={(e) => setSchemeSearchTerm(e.target.value)}
+                  className="max-w-full sm:max-w-md h-10 text-sm"
+                />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
             {groupedSchemes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">No schemes found in this group.</p>
+                <p className="text-muted-foreground text-center py-8">
+                    {schemeSearchTerm ? 'No schemes match your search.' : 'No schemes found in this group.'}
+                </p>
             ) : (
                 <div className="overflow-x-auto">
                     <Table>
@@ -247,7 +300,7 @@ export default function GroupDetailsPage() {
                             <motion.tr
                                 key={`${customerGroup.customerName}-header`}
                                 className="border-b border-border/50 transition-colors bg-muted/10 dark:bg-muted/5"
-                                initial={{ opacity: 1 }} // No need to animate header opacity if it's always visible
+                                initial={{ opacity: 1 }} 
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
                             >
@@ -267,10 +320,10 @@ export default function GroupDetailsPage() {
                                     animate={{ opacity: 1 }}
                                     transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05) + (schemeIndex * 0.03), duration: 0.3 }}
                                 >                                    
-                                <TableCell className="truncate max-w-[100px] sm:max-w-xs text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 pl-8">
-                                <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
+                                <TableCell className="sticky left-0 bg-card/80 dark:bg-card/80 z-10 pl-8">
+                                    <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary text-base block">
                                         {scheme.id.toUpperCase()}
-                                </Link>
+                                    </Link>
                                 </TableCell>
                                 <TableCell className="text-base">{formatDate(scheme.startDate)}</TableCell>
                                 <TableCell className="text-right text-base">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
@@ -301,6 +354,29 @@ export default function GroupDetailsPage() {
         onClose={() => setIsSchemePeekPanelOpen(false)}
         scheme={schemeForPeekPanel}
       />
+
+      {/* Delete Confirmation Dialog */}
+      {schemeToDelete && (
+        <AlertDialog open={!!schemeToDelete} onOpenChange={() => setSchemeToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete the scheme for {schemeToDelete.customerName} (ID: {schemeToDelete.id.toUpperCase()})? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setSchemeToDelete(null)} disabled={isDeletingScheme}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
+                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete Scheme
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
