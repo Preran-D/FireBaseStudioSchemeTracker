@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle, ListChecks } from 'lucide-react';
+import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle, ListChecks, ArrowUpDown } from 'lucide-react';
 import type { Scheme, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus, getPaymentStatus } from '@/lib/utils';
@@ -17,11 +17,28 @@ import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { BulkAssignGroupDialog } from '@/components/dialogs/BulkAssignGroupDialog';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { parseISO } from 'date-fns';
+
+const statusPriorityMap: Record<SchemeStatus, number> = {
+  'Overdue': 0,
+  'Active': 1,
+  'Upcoming': 2,
+  'Completed': 3,
+  'Closed': 4,
+};
+
+type SortByType = 
+  | 'customerNameAsc' 
+  | 'customerNameDesc' 
+  | 'startDateAsc' 
+  | 'startDateDesc' 
+  | 'statusPriority';
 
 export default function SchemesPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<SchemeStatus | 'all'>('all');
+  const [sortBy, setSortBy] = useState<SortByType>('customerNameAsc');
   const { toast } = useToast();
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
@@ -48,7 +65,7 @@ export default function SchemesPage() {
   }, [loadSchemesAndGroups]);
 
   const filteredSchemes = useMemo(() => {
-    return allSchemes
+    let schemes = allSchemes
       .filter(scheme =>
         statusFilter === 'all' || scheme.status === statusFilter
       )
@@ -57,7 +74,26 @@ export default function SchemesPage() {
         (scheme.customerGroupName && scheme.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         scheme.id.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [allSchemes, searchTerm, statusFilter]);
+
+    schemes.sort((a, b) => {
+      switch (sortBy) {
+        case 'customerNameAsc':
+          return a.customerName.localeCompare(b.customerName);
+        case 'customerNameDesc':
+          return b.customerName.localeCompare(a.customerName);
+        case 'startDateAsc': // Oldest first
+          return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime();
+        case 'startDateDesc': // Newest first
+          return parseISO(b.startDate).getTime() - parseISO(a.startDate).getTime();
+        case 'statusPriority':
+          return (statusPriorityMap[a.status] ?? 4) - (statusPriorityMap[b.status] ?? 4);
+        default:
+          return 0;
+      }
+    });
+    return schemes;
+
+  }, [allSchemes, searchTerm, statusFilter, sortBy]);
 
   const schemeStatusOptions: { value: SchemeStatus | 'all'; label: string }[] = [
     { value: 'all', label: 'All Statuses' },
@@ -65,11 +101,20 @@ export default function SchemesPage() {
     { value: 'Overdue', label: 'Overdue' },
     { value: 'Completed', label: 'Completed' },
     { value: 'Upcoming', label: 'Upcoming' },
+    { value: 'Closed', label: 'Closed' },
+  ];
+
+  const sortOptions: { value: SortByType; label: string }[] = [
+    { value: 'customerNameAsc', label: 'Customer Name (A-Z)' },
+    { value: 'customerNameDesc', label: 'Customer Name (Z-A)' },
+    { value: 'startDateDesc', label: 'Start Date (Newest First)' },
+    { value: 'startDateAsc', label: 'Start Date (Oldest First)' },
+    { value: 'statusPriority', label: 'Status Priority' },
   ];
 
   const handleToggleBulkAssignMode = () => {
     setIsBulkAssignMode(prev => !prev);
-    setSelectedSchemeIds([]); // Clear selections when toggling mode
+    setSelectedSchemeIds([]); 
   };
 
   const handleSelectAllSchemes = (checked: boolean) => {
@@ -184,14 +229,14 @@ export default function SchemesPage() {
         >
           <Card className="rounded-xl shadow-xl overflow-hidden glassmorphism">
             <CardHeader className="p-6">
-              <CardTitle className="text-2xl font-headline text-foreground">Scheme Overview</CardTitle>
-              <CardDescription>Manage and track all customer schemes. Filter by name, group, or status.</CardDescription>
-              <div className="mt-6 flex flex-col sm:flex-row gap-4">
+              <CardTitle className="text-2xl font-headline text-foreground">Scheme Overview ({filteredSchemes.length})</CardTitle>
+              <CardDescription>Manage and track all customer schemes. Filter and sort the list as needed.</CardDescription>
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <Input
-                  placeholder="Filter by customer, group name or scheme ID..."
+                  placeholder="Filter by customer, group or ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md rounded-lg text-base h-11"
+                  className="rounded-lg text-base h-11"
                 />
                 <Select
                   value={statusFilter}
@@ -200,12 +245,28 @@ export default function SchemesPage() {
                     setSelectedSchemeIds([]); 
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-[200px] rounded-lg text-base h-11">
+                  <SelectTrigger className="rounded-lg text-base h-11">
                     <Filter className="mr-2 h-5 w-5 text-muted-foreground" />
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
                     {schemeStatusOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value} className="text-base py-2">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={sortBy}
+                  onValueChange={(value) => setSortBy(value as SortByType)}
+                >
+                  <SelectTrigger className="rounded-lg text-base h-11">
+                    <ArrowUpDown className="mr-2 h-5 w-5 text-muted-foreground" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    {sortOptions.map(option => (
                       <SelectItem key={option.value} value={option.value} className="text-base py-2">
                         {option.label}
                       </SelectItem>
@@ -232,6 +293,7 @@ export default function SchemesPage() {
                           </TableHead>
                         )}
                         <TableHead className={`text-base font-semibold ${isBulkAssignMode ? "pl-0" : ""}`}>Customer Name</TableHead>
+                        <TableHead className="text-base font-semibold">Scheme ID</TableHead>
                         <TableHead className="text-base font-semibold">Group Name</TableHead>
                         <TableHead className="text-base font-semibold">Start Date</TableHead>
                         <TableHead className="text-base font-semibold">Monthly Amount</TableHead>
@@ -264,6 +326,7 @@ export default function SchemesPage() {
                               {scheme.customerName}
                             </Link>
                           </TableCell>
+                          <TableCell className="text-base text-muted-foreground">{scheme.id.toUpperCase()}</TableCell>
                           <TableCell className="text-base text-muted-foreground">{scheme.customerGroupName || 'N/A'}</TableCell>
                           <TableCell className="text-base text-muted-foreground">{formatDate(scheme.startDate)}</TableCell>
                           <TableCell className="text-base font-semibold">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
@@ -304,5 +367,4 @@ export default function SchemesPage() {
     </>
   );
 }
-
     

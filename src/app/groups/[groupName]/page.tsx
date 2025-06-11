@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -294,6 +293,7 @@ export default function GroupDetailsPage() {
   const displayedSchemesCount = groupedSchemes.reduce((acc, group) => acc + group.schemes.length, 0);
 
   return (
+  
     <div className="flex flex-col gap-8">
       <motion.div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -478,13 +478,10 @@ export default function GroupDetailsPage() {
                           transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
                         >
                           <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 py-3">
-                            <div className="flex items-center gap-2">
-                                {customerGroup.customerName} 
-                                <Badge variant="secondary" className="font-normal text-xs">
-                                    {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
-                                </Badge>
-                            </div>
-                          </TableCell>
+                                {customerGroup.customerName} (<span className="font-normal text-sm">
+                                        {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
+                                </span>)
+                            </TableCell>
                           <TableCell colSpan={6} className="text-base py-3"></TableCell>
                         </motion.tr>
 
@@ -561,4 +558,3 @@ export default function GroupDetailsPage() {
     </div>
   );
 }
-
