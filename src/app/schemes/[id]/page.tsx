@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Edit, DollarSign, Loader2, PieChart, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History } from 'lucide-react';
+import { Edit, DollarSign, Loader2, PieChart, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -94,11 +94,10 @@ export default function SchemeDetailsPage() {
         setInlinePaymentModes(['Cash']);
         inlinePaymentForm.reset({ paymentDate: new Date() });
 
-        // Fetch and set other schemes by the same customer
         const allSystemSchemes = getMockSchemes();
         const schemesForThisCustomer = allSystemSchemes
           .filter(s => s.customerName === fetchedScheme.customerName)
-          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime()); // Sort by start date
+          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
         setOtherCustomerSchemes(schemesForThisCustomer);
 
       } else {
@@ -112,7 +111,7 @@ export default function SchemeDetailsPage() {
 
   useEffect(() => {
     loadSchemeData();
-  }, [loadSchemeData, schemeIdFromUrl]); // Add schemeIdFromUrl dependency to reload if URL changes
+  }, [loadSchemeData, schemeIdFromUrl]);
 
   const openManualCloseDialog = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Closed') return;
@@ -135,10 +134,8 @@ export default function SchemeDetailsPage() {
 
     const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
     if (closedSchemeResult) {
-      setScheme(closedSchemeResult);
-      // Update the scheme in otherCustomerSchemes list as well
-      setOtherCustomerSchemes(prev => prev.map(s => s.id === closedSchemeResult.id ? closedSchemeResult : s));
       toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
+      loadSchemeData(closedSchemeResult.id); // Reload all data for current and other schemes
     } else {
       toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
     }
@@ -151,12 +148,11 @@ export default function SchemeDetailsPage() {
     setIsUpdatingGroup(true);
     const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
     if (updatedSchemeFromMock) {
-      setScheme(updatedSchemeFromMock);
-      setOtherCustomerSchemes(prev => prev.map(s => s.id === updatedSchemeFromMock.id ? updatedSchemeFromMock : s));
       toast({
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
       });
+      loadSchemeData(updatedSchemeFromMock.id); // Reload all data
     } else {
       toast({ title: "Error", description: "Failed to update scheme group.", variant: "destructive" });
     }
@@ -176,7 +172,7 @@ export default function SchemeDetailsPage() {
         title: 'Customer Details Updated',
         description: `Details for ${newDetails.customerName} have been updated. All associated schemes reflect this change.`,
       });
-      loadSchemeData(scheme?.id); // Reload all data if customer name might have changed
+      loadSchemeData(scheme?.id); 
     } else {
       toast({
         title: 'Error',
@@ -317,6 +313,26 @@ export default function SchemeDetailsPage() {
         </Button>
       </div>
 
+      {/* Customer Details Card */}
+      <Card className="glassmorphism">
+        <CardHeader className="flex flex-row justify-between items-start">
+            <div>
+                <CardTitle className="font-headline text-3xl mb-1.5 text-foreground flex items-center">
+                    <UserCircle className="mr-3 h-8 w-8 text-primary"/>
+                    {scheme.customerName}
+                </CardTitle>
+                <CardDescription className="space-y-0.5 text-sm ml-11">
+                    {scheme.customerPhone && <span className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground"/> {scheme.customerPhone}</span>}
+                    {scheme.customerAddress && <span className="flex items-center gap-2"><Home className="h-4 w-4 text-muted-foreground"/> {scheme.customerAddress}</span>}
+                    {!scheme.customerPhone && !scheme.customerAddress && <span>No contact details available.</span>}
+                </CardDescription>
+            </div>
+            <Button onClick={() => setIsEditCustomerDetailsDialogOpen(true)} variant="outline" size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit Details
+            </Button>
+        </CardHeader>
+      </Card>
+
       {/* Other Schemes by Customer Section */}
       {otherCustomerSchemes.length > 1 && (
         <Card className="glassmorphism">
@@ -367,18 +383,13 @@ export default function SchemeDetailsPage() {
       <Card className="glassmorphism overflow-hidden">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <CardTitle className="font-headline text-3xl mb-1.5 text-foreground">{scheme.customerName}</CardTitle>
-            <CardDescription className="space-y-0.5 text-sm">
-              <span>ID: <span className="font-medium text-foreground/90">{scheme.id.toUpperCase()}</span></span><br/>
-              {scheme.customerPhone && <span>Phone: <span className="font-medium text-foreground/90">{scheme.customerPhone}</span></span>}<br/>
-              {scheme.customerAddress && <span>Address: <span className="font-medium text-foreground/90">{scheme.customerAddress}</span></span>}<br/>
-              {scheme.customerGroupName && (<span>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline font-medium">{scheme.customerGroupName}</Link><br/></span>)}
+            <CardTitle className="font-headline text-2xl mb-1 text-foreground">Scheme Details: {scheme.id.toUpperCase()}</CardTitle>
+            <CardDescription className="text-sm">
+              {scheme.customerGroupName && (<span>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline font-medium">{scheme.customerGroupName}</Link></span>)}
+              {!scheme.customerGroupName && (<span>Not assigned to any group.</span>)}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
-             <Button onClick={() => setIsEditCustomerDetailsDialogOpen(true)} variant="outline" size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit Details
-            </Button>
              <Button onClick={handleAddNewSchemeForCustomer} variant="outline" size="sm" disabled={isInlinePaymentProcessing}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Scheme for {scheme.customerName.split(' ')[0]}
             </Button>
@@ -424,6 +435,13 @@ export default function SchemeDetailsPage() {
               <p className="text-muted-foreground">Total Remaining</p>
               <p className="font-semibold text-base text-orange-600 dark:text-orange-500">{formatCurrency(scheme.totalRemaining)}</p>
             </div>
+            {scheme.status === 'Completed' && !scheme.closureDate && (
+              <div className="col-span-2">
+                <Badge variant="default" className="bg-positive-value/80 text-positive-value-foreground hover:bg-positive-value/70">
+                  All Payments Made
+                </Badge>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -492,7 +510,7 @@ export default function SchemeDetailsPage() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    {maxInlineMonthsToPay === 0 && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
+                    {maxInlineMonthsToPay === 0 && scheme.status !== 'Closed' && scheme.status !== 'Completed' && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
                   </div>
 
                   <div>
@@ -563,7 +581,7 @@ export default function SchemeDetailsPage() {
                     <p className="text-muted-foreground">
                         {scheme.status === 'Closed' ? `This scheme was manually closed on ${formatDate(scheme.closureDate!)}.` : 'All payments for this scheme have been completed.'}
                     </p>
-                     {scheme.status === 'Completed' && !scheme.closureDate && ( // Condition to show if completed but not yet closed
+                     {scheme.status === 'Completed' && !scheme.closureDate && ( 
                          <p className="text-xs text-muted-foreground mt-1">You can still manually close it via Scheme Actions.</p>
                      )}
                 </CardContent>
