@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX } from 'lucide-react';
-import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, BarChartHorizontalBig } from 'lucide-react';
+import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes, deleteFullMockScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
@@ -24,6 +24,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format as formatDateFns, parseISO, isWithinInterval, startOfDay, endOfDay, isValid as isValidDate } from 'date-fns';
 
+const statusPriorityMap: Record<SchemeStatus, number> = {
+  'Overdue': 0,
+  'Active': 1,
+  'Upcoming': 2,
+  'Completed': 3,
+  'Closed': 4,
+};
 
 export default function GroupDetailsPage() {
   const params = useParams();
@@ -36,7 +43,7 @@ export default function GroupDetailsPage() {
   const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
   const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
   const [schemeSearchTerm, setSchemeSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'oldestFirst' | 'newestFirst'>('customerNameAsc');
+  const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'oldestFirst' | 'newestFirst' | 'statusPriority'>('customerNameAsc');
 
   const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
   const [isDeletingScheme, setIsDeletingScheme] = useState(false);
@@ -47,10 +54,10 @@ export default function GroupDetailsPage() {
   const loadGroupSchemes = () => {
     if (groupName) {
       setIsLoading(true);
-      const allSchemes = getMockSchemes();
+      const allSchemes = getMockSchemes(); // This function now returns schemes with status and totals calculated
       const schemesForThisGroup = allSchemes
         .filter(s => s.customerGroupName === groupName)
-        .sort((a, b) => {
+        .sort((a, b) => { // Default sort for initial load
           const nameCompare = a.customerName.localeCompare(b.customerName);
           if (nameCompare !== 0) return nameCompare;
           return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
@@ -103,8 +110,9 @@ export default function GroupDetailsPage() {
       customerName: string;
       schemes: Scheme[];
       totalSchemes: number;
-      totalCollected: number;
-      firstSchemeStartDate?: string; // For sorting groups
+      totalCollected: number; // Represents total paid for this customer in this group
+      firstSchemeStartDate?: string;
+      representativeStatusPriority: number;
     }[] = [];
     const customerMap = new Map<string, Scheme[]>();
 
@@ -117,14 +125,27 @@ export default function GroupDetailsPage() {
 
     customerMap.forEach((schemes, customerName) => {
       if (schemes.length > 0) {
-        schemes.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()); // Sort schemes within each customer
-        const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+        // Schemes for each customer are already sorted by start date from allSchemesInGroup initial sort.
+        // If further sorting of schemes *within* each customer group is needed, do it here.
+        // schemes.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+        const totalCollectedForCustomer = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+        
+        let representativeStatusPriority = 4; // Default to lowest priority (Closed)
+        schemes.forEach(s => {
+            const currentSchemePriority = statusPriorityMap[s.status];
+            if (currentSchemePriority < representativeStatusPriority) {
+                representativeStatusPriority = currentSchemePriority;
+            }
+        });
+
         groups.push({
           customerName,
           schemes,
           totalSchemes: schemes.length,
-          totalCollected,
-          firstSchemeStartDate: schemes[0]?.startDate,
+          totalCollected: totalCollectedForCustomer,
+          firstSchemeStartDate: schemes[0]?.startDate, // Assuming schemes are sorted by date if this is used for 'oldestFirst'/'newestFirst'
+          representativeStatusPriority,
         });
       }
     });
@@ -141,6 +162,8 @@ export default function GroupDetailsPage() {
         case 'newestFirst':
           if (!a.firstSchemeStartDate || !b.firstSchemeStartDate) return 0;
           return new Date(b.firstSchemeStartDate).getTime() - new Date(a.firstSchemeStartDate).getTime();
+        case 'statusPriority':
+          return (a.representativeStatusPriority ?? 4) - (b.representativeStatusPriority ?? 4);
         default:
           return 0;
       }
@@ -153,14 +176,14 @@ export default function GroupDetailsPage() {
       return {
         totalCustomers: 0,
         totalSchemes: 0,
-        totalCollected: 0,
+        totalPaid: 0,
         totalPending: 0,
         totalOverdueAmount: 0,
         activeSchemesCount: 0,
       };
     }
     const uniqueCustomerNames = new Set(allSchemesInGroup.map(s => s.customerName));
-    const totalCollected = allSchemesInGroup.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+    const totalPaid = allSchemesInGroup.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
     const totalExpected = allSchemesInGroup.reduce((sum, s) => sum + s.payments.reduce((pSum, p) => pSum + p.amountExpected, 0), 0);
     const totalOverdueAmount = allSchemesInGroup
       .filter(s => s.status === 'Overdue')
@@ -172,8 +195,8 @@ export default function GroupDetailsPage() {
     return {
       totalCustomers: uniqueCustomerNames.size,
       totalSchemes: allSchemesInGroup.length,
-      totalCollected,
-      totalPending: totalExpected - totalCollected,
+      totalPaid,
+      totalPending: totalExpected - totalPaid,
       totalOverdueAmount,
       activeSchemesCount: allSchemesInGroup.filter(s => s.status === 'Active' || s.status === 'Overdue').length,
     };
@@ -206,7 +229,7 @@ export default function GroupDetailsPage() {
           title: "Scheme Deleted",
           description: `Scheme ID ${schemeToDelete.id.toUpperCase()} for ${schemeToDelete.customerName} has been deleted.`,
         });
-        loadGroupSchemes();
+        loadGroupSchemes(); // Reload schemes for the group
       } else {
         toast({
           title: "Error Deleting Scheme",
@@ -222,18 +245,18 @@ export default function GroupDetailsPage() {
   const handleExportSchemes = () => {
     setIsExporting(true);
     const dataToExport: any[][] = [[
-      'Customer Name', 'Scheme ID', 'Start Date', 'Monthly Amount', 'Total Collected', 'Payments Made', 'Total Duration', 'Status'
+      'Customer Name', 'Scheme ID', 'Start Date', 'Monthly Amount', 'Total Paid', 'Payments Made', 'Total Duration', 'Status'
     ]];
 
     groupedSchemes.forEach(customerGroup => {
       customerGroup.schemes.forEach(scheme => {
-        const schemeTotals = calculateSchemeTotals(scheme);
+        const schemeTotals = calculateSchemeTotals(scheme); // Recalculate just in case, though it should be on scheme obj
         dataToExport.push([
           scheme.customerName,
           scheme.id.toUpperCase(),
           formatDate(scheme.startDate),
           scheme.monthlyPaymentAmount,
-          schemeTotals.totalCollected,
+          schemeTotals.totalCollected, // This represents total paid
           `${schemeTotals.paymentsMadeCount || 0}`,
           `${scheme.durationMonths}`,
           getSchemeStatus(scheme)
@@ -314,7 +337,7 @@ export default function GroupDetailsPage() {
               { icon: Users, label: "Customers", value: groupSummaryStats.totalCustomers, color: "text-primary" },
               { icon: ListChecks, label: "Total Schemes", value: groupSummaryStats.totalSchemes, color: "text-primary" },
               { icon: CheckSquare, label: "Active Schemes", value: groupSummaryStats.activeSchemesCount, color: "text-green-600 dark:text-green-500" },
-              { icon: DollarSign, label: "Collected", value: formatCurrency(groupSummaryStats.totalCollected), color: "text-green-600 dark:text-green-500" },
+              { icon: DollarSign, label: "Total Paid", value: formatCurrency(groupSummaryStats.totalPaid), color: "text-green-600 dark:text-green-500" },
               { icon: DollarSign, label: "Pending", value: formatCurrency(groupSummaryStats.totalPending), color: "text-orange-600 dark:text-orange-500" },
               { icon: AlertTriangle, label: "Overdue Amount", value: formatCurrency(groupSummaryStats.totalOverdueAmount), color: "text-red-600 dark:text-red-500" },
             ].map((stat, idx) => (
@@ -424,6 +447,7 @@ export default function GroupDetailsPage() {
                         <SelectItem value="customerNameDesc">Customer Name (Z-A)</SelectItem>
                         <SelectItem value="oldestFirst">Oldest Scheme First</SelectItem>
                         <SelectItem value="newestFirst">Newest Scheme First</SelectItem>
+                        <SelectItem value="statusPriority">Scheme Status Priority</SelectItem>
                     </SelectContent>
                     </Select>
                 </div>
@@ -443,7 +467,7 @@ export default function GroupDetailsPage() {
                       <TableHead className="text-base font-semibold sticky left-0 bg-muted/50 dark:bg-muted/20 z-20 min-w-[200px]">Customer / Scheme ID</TableHead>
                       <TableHead className="text-base font-semibold">Start Date</TableHead>
                       <TableHead className="text-base font-semibold text-right">Monthly Amt.</TableHead>
-                      <TableHead className="text-base font-semibold text-right">Total Collected</TableHead>
+                      <TableHead className="text-base font-semibold text-right">Total Paid</TableHead>
                       <TableHead className="text-base font-semibold text-center min-w-[100px]">Payments</TableHead>
                       <TableHead className="text-base font-semibold min-w-[100px]">Status</TableHead>
                       <TableHead className="text-base font-semibold text-center min-w-[120px]">Actions</TableHead>
@@ -459,13 +483,18 @@ export default function GroupDetailsPage() {
                           transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
                         >
                           <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 py-3">
-                            {customerGroup.customerName} ({customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''})
+                            <div className="flex items-center gap-2">
+                                {customerGroup.customerName} 
+                                <Badge variant="secondary" className="font-normal text-xs">
+                                    {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
+                                </Badge>
+                            </div>
                           </TableCell>
                           <TableCell colSpan={6} className="text-base py-3"></TableCell>
                         </motion.tr>
 
                         {customerGroup.schemes.map((scheme, schemeIndex) => {
-                          const schemeTotals = calculateSchemeTotals(scheme);
+                          const schemeTotals = calculateSchemeTotals(scheme); // Ensure totals are fresh for each scheme
                           return (
                             <motion.tr
                               key={scheme.id}
