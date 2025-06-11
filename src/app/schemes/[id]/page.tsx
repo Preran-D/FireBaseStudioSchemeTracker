@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Edit, DollarSign, Loader2, PieChart, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone } from 'lucide-react';
+import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -384,7 +384,9 @@ export default function SchemeDetailsPage() {
       <Card className={cn(
         "glassmorphism overflow-hidden",
         scheme.status === 'Active' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
-        scheme.status === 'Completed' && "ring-2 ring-offset-2 ring-offset-background ring-orange-500 dark:ring-orange-400",
+        scheme.status === 'Completed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
+        scheme.status === 'Overdue' && "ring-2 ring-offset-2 ring-offset-background ring-orange-500 dark:ring-orange-400",
+        scheme.status === 'Upcoming' && "ring-2 ring-offset-2 ring-offset-background ring-yellow-500 dark:ring-yellow-400",
         scheme.status === 'Closed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--destructive))]"
       )}>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
