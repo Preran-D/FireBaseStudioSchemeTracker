@@ -58,29 +58,25 @@ export function SchemeCompletionArc({
 
   const isCompleted = paymentsMadeCount >= durationMonths;
 
-  let progressStrokeColor = "url(#progressGradient)"; 
-  let completedTextBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Default green
+  let progressStrokeColor = "hsl(var(--positive-value))"; // Default to green (for Active, Overdue, Upcoming, Completed)
+  let textBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Default green for completed badge
+  let textBadgeLabel = "Completed";
 
   if (status === 'Closed') {
-    progressStrokeColor = 'hsl(var(--destructive))';
+    progressStrokeColor = 'hsl(var(--destructive))'; // Red for Closed arc
+    textBadgeBgColor = "bg-[hsl(var(--destructive))] text-destructive-foreground"; // Red for Closed badge
+    textBadgeLabel = "Closed";
   } else if (isCompleted) {
-    progressStrokeColor = 'url(#completedOrangeGradient)';
-    completedTextBadgeBgColor = "bg-orange-500 text-white"; // Orange for completed badge
+    progressStrokeColor = 'hsl(var(--positive-value))'; // Green for Completed arc
+    textBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Green for Completed badge
+    textBadgeLabel = "Completed";
   }
+
 
   return (
     <div className={cn("relative flex flex-col items-center justify-center", className)} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`Scheme progress: ${paymentsMadeCount} of ${durationMonths} payments made. Status: ${status || (isCompleted ? 'Completed' : 'In Progress')}`}>
-        <defs>
-          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 0.8 }} />
-            <stop offset="100%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 1 }} />
-          </linearGradient>
-           <linearGradient id="completedOrangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'hsl(24, 95%, 60%)', stopOpacity: 0.7 }} /> {/* Lighter orange */}
-            <stop offset="100%" style={{ stopColor: 'hsl(24, 95%, 50%)', stopOpacity: 1 }} /> {/* Darker orange (approx orange-500) */}
-          </linearGradient>
-        </defs>
+        {/* Removed unused SVG defs for gradients as we are using solid HSL colors now */}
         <path
           d={backgroundArcPath}
           fill="none"
@@ -106,14 +102,9 @@ export function SchemeCompletionArc({
         <span className="text-sm text-muted-foreground">
           of {durationMonths} Paid
         </span>
-        {isCompleted && status !== 'Closed' && durationMonths > 0 && (
-           <span className={cn("text-xs font-semibold mt-1 px-2 py-0.5 rounded-full", completedTextBadgeBgColor)}>
-             Completed
-           </span>
-        )}
-        {status === 'Closed' && (
-           <span className="text-xs font-semibold mt-1 px-2 py-0.5 rounded-full bg-[hsl(var(--destructive))] text-destructive-foreground">
-             Closed
+        {(isCompleted || status === 'Closed') && durationMonths > 0 && (
+           <span className={cn("text-xs font-semibold mt-1 px-2 py-0.5 rounded-full", textBadgeBgColor)}>
+             {textBadgeLabel}
            </span>
         )}
       </div>
