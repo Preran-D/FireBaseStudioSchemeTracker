@@ -17,8 +17,8 @@ export function SchemeStatusBadge({ status }: SchemeStatusBadgeProps) {
       className = 'bg-green-500/20 text-green-700 border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20';
       break;
     case 'Completed': // All payments made, but not yet manually 'Closed'
-      variant = 'secondary';
-      className = 'bg-blue-500/20 text-blue-700 border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20';
+      variant = 'secondary'; // Keep variant as secondary for structure, but override colors
+      className = 'bg-orange-500/20 text-orange-700 border-orange-500/30 dark:bg-orange-400/10 dark:text-orange-400 dark:border-orange-400/20';
       break;
     case 'Closed': // Manually closed by user
       variant = 'default'; // Using default styling like primary, but distinct from Active
@@ -42,4 +42,3 @@ export function SchemeStatusBadge({ status }: SchemeStatusBadgeProps) {
     </Badge>
   );
 }
-
