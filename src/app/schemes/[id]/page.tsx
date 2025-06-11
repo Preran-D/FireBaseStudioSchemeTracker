@@ -136,7 +136,7 @@ export default function SchemeDetailsPage() {
     const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
     if (closedSchemeResult) {
       toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
-      loadSchemeData(closedSchemeResult.id); // Reload all data for current and other schemes
+      loadSchemeData(closedSchemeResult.id); 
     } else {
       toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
     }
@@ -153,7 +153,7 @@ export default function SchemeDetailsPage() {
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
       });
-      loadSchemeData(updatedSchemeFromMock.id); // Reload all data
+      loadSchemeData(updatedSchemeFromMock.id); 
     } else {
       toast({ title: "Error", description: "Failed to update scheme group.", variant: "destructive" });
     }
@@ -381,7 +381,12 @@ export default function SchemeDetailsPage() {
       )}
 
       {/* Main Scheme Overview & Progress Card */}
-      <Card className="glassmorphism overflow-hidden">
+      <Card className={cn(
+        "glassmorphism overflow-hidden",
+        scheme.status === 'Active' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
+        scheme.status === 'Completed' && "ring-2 ring-offset-2 ring-offset-background ring-orange-500 dark:ring-orange-400",
+        scheme.status === 'Closed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--destructive))]"
+      )}>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <CardTitle className="font-headline text-2xl mb-1 text-foreground">Scheme Details: {scheme.id.toUpperCase()}</CardTitle>
@@ -407,6 +412,7 @@ export default function SchemeDetailsPage() {
              <SchemeCompletionArc 
                 paymentsMadeCount={scheme.paymentsMadeCount || 0} 
                 durationMonths={scheme.durationMonths}
+                status={scheme.status}
                 size={200}
                 strokeWidth={20}
              />
@@ -438,11 +444,16 @@ export default function SchemeDetailsPage() {
             </div>
             {scheme.status === 'Completed' && !scheme.closureDate && (
               <div className="col-span-2">
-                <Badge variant="default" className="bg-positive-value/80 text-positive-value-foreground hover:bg-positive-value/70">
+                <Badge variant="default" className="bg-positive-value/80 text-primary-foreground hover:bg-positive-value/70">
                   All Payments Made
                 </Badge>
               </div>
             )}
+             {scheme.status === 'Completed' && scheme.closureDate && ( 
+                <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">This fully paid scheme was manually closed on {formatDate(scheme.closureDate)}.</p>
+                </div>
+             )}
           </div>
         </CardContent>
       </Card>
@@ -651,6 +662,9 @@ export default function SchemeDetailsPage() {
                             />
                         </PopoverContent>
                     </Popover>
+                     {!manualClosureDate && (
+                        <p className="text-xs text-destructive mt-1">Please select a closure date.</p>
+                    )}
                 </div>
                  <AlertDialogDescription className="text-xs pt-2">
                     This action will mark the scheme as 'Closed' on the selected date. 
