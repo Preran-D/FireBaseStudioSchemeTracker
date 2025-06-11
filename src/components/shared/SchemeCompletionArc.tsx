@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils';
 interface SchemeCompletionArcProps {
   paymentsMadeCount: number;
   durationMonths: number;
-  status?: SchemeStatus; // Added status prop
-  size?: number; // Overall size of the SVG
-  strokeWidth?: number; // Thickness of the arc
+  status?: SchemeStatus;
+  size?: number; 
+  strokeWidth?: number; 
   className?: string;
 }
 
@@ -22,12 +22,11 @@ const polarToCartesian = (centerX: number, centerY: number, radius: number, angl
 };
 
 const describeArcPath = (x: number, y: number, radius: number, startAngle: number, endAngle: number): string => {
-  // Ensure endAngle doesn't draw a full circle in a way that makes it disappear
   if (endAngle >= startAngle + 359.99) {
     endAngle = startAngle + 359.99;
   }
 
-  const start = polarToCartesian(x, y, radius, endAngle); // Path is drawn clockwise, so endAngle is the "start" point
+  const start = polarToCartesian(x, y, radius, endAngle); 
   const end = polarToCartesian(x, y, radius, startAngle);
 
   const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
@@ -43,7 +42,7 @@ const describeArcPath = (x: number, y: number, radius: number, startAngle: numbe
 export function SchemeCompletionArc({
   paymentsMadeCount,
   durationMonths,
-  status, // Consuming the status prop
+  status,
   size = 160,
   strokeWidth = 16,
   className,
@@ -52,18 +51,21 @@ export function SchemeCompletionArc({
   const radius = (size - strokeWidth) / 2;
 
   const progressPercentage = durationMonths > 0 ? (paymentsMadeCount / durationMonths) : 0;
-  const endAngle = progressPercentage * 360; // Progress arc goes from 0 to endAngle
+  const endAngle = progressPercentage * 360; 
 
-  const backgroundArcPath = describeArcPath(center, center, radius, 0, 359.99); // Nearly full circle for background
+  const backgroundArcPath = describeArcPath(center, center, radius, 0, 359.99); 
   const progressArcPath = describeArcPath(center, center, radius, 0, endAngle);
 
   const isCompleted = paymentsMadeCount >= durationMonths;
 
-  let progressStrokeColor = "url(#progressGradient)"; // Default to primary gradient
+  let progressStrokeColor = "url(#progressGradient)"; 
+  let completedTextBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Default green
+
   if (status === 'Closed') {
     progressStrokeColor = 'hsl(var(--destructive))';
   } else if (isCompleted) {
-    progressStrokeColor = 'url(#completedGradient)';
+    progressStrokeColor = 'url(#completedOrangeGradient)';
+    completedTextBadgeBgColor = "bg-orange-500 text-white"; // Orange for completed badge
   }
 
   return (
@@ -74,9 +76,9 @@ export function SchemeCompletionArc({
             <stop offset="0%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 0.8 }} />
             <stop offset="100%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 1 }} />
           </linearGradient>
-           <linearGradient id="completedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'hsl(var(--positive-value))', stopOpacity: 0.7 }} />
-            <stop offset="100%" style={{ stopColor: 'hsl(var(--positive-value))', stopOpacity: 1 }} />
+           <linearGradient id="completedOrangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: 'hsl(24, 95%, 60%)', stopOpacity: 0.7 }} /> {/* Lighter orange */}
+            <stop offset="100%" style={{ stopColor: 'hsl(24, 95%, 50%)', stopOpacity: 1 }} /> {/* Darker orange (approx orange-500) */}
           </linearGradient>
         </defs>
         <path
@@ -90,7 +92,7 @@ export function SchemeCompletionArc({
           <path
             d={progressArcPath}
             fill="none"
-            stroke={progressStrokeColor} // Use the determined color
+            stroke={progressStrokeColor}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             style={{ transition: 'stroke-dasharray 0.5s ease-out, stroke 0.5s ease-out' }}
@@ -105,7 +107,7 @@ export function SchemeCompletionArc({
           of {durationMonths} Paid
         </span>
         {isCompleted && status !== 'Closed' && durationMonths > 0 && (
-           <span className="text-xs font-semibold mt-1 px-2 py-0.5 rounded-full bg-[hsl(var(--positive-value))] text-primary-foreground">
+           <span className={cn("text-xs font-semibold mt-1 px-2 py-0.5 rounded-full", completedTextBadgeBgColor)}>
              Completed
            </span>
         )}
