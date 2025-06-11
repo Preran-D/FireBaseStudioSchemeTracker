@@ -1,11 +1,13 @@
 
 'use client';
 
+import type { SchemeStatus } from '@/types/scheme';
 import { cn } from '@/lib/utils';
 
 interface SchemeCompletionArcProps {
   paymentsMadeCount: number;
   durationMonths: number;
+  status?: SchemeStatus; // Added status prop
   size?: number; // Overall size of the SVG
   strokeWidth?: number; // Thickness of the arc
   className?: string;
@@ -41,6 +43,7 @@ const describeArcPath = (x: number, y: number, radius: number, startAngle: numbe
 export function SchemeCompletionArc({
   paymentsMadeCount,
   durationMonths,
+  status, // Consuming the status prop
   size = 160,
   strokeWidth = 16,
   className,
@@ -56,23 +59,30 @@ export function SchemeCompletionArc({
 
   const isCompleted = paymentsMadeCount >= durationMonths;
 
+  let progressStrokeColor = "url(#progressGradient)"; // Default to primary gradient
+  if (status === 'Closed') {
+    progressStrokeColor = 'hsl(var(--destructive))';
+  } else if (isCompleted) {
+    progressStrokeColor = 'url(#completedGradient)';
+  }
+
   return (
     <div className={cn("relative flex flex-col items-center justify-center", className)} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`Scheme progress: ${paymentsMadeCount} of ${durationMonths} payments made.`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`Scheme progress: ${paymentsMadeCount} of ${durationMonths} payments made. Status: ${status || (isCompleted ? 'Completed' : 'In Progress')}`}>
         <defs>
           <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 0.8 }} />
             <stop offset="100%" style={{ stopColor: 'hsl(var(--primary))', stopOpacity: 1 }} />
           </linearGradient>
            <linearGradient id="completedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style={{ stopColor: 'hsl(var(--positive-value))', stopOpacity: 0.7 }} /> {/* Greenish */}
+            <stop offset="0%" style={{ stopColor: 'hsl(var(--positive-value))', stopOpacity: 0.7 }} />
             <stop offset="100%" style={{ stopColor: 'hsl(var(--positive-value))', stopOpacity: 1 }} />
           </linearGradient>
         </defs>
         <path
           d={backgroundArcPath}
           fill="none"
-          stroke="hsl(var(--muted))" // Background track color from theme
+          stroke="hsl(var(--muted))" 
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
@@ -80,10 +90,10 @@ export function SchemeCompletionArc({
           <path
             d={progressArcPath}
             fill="none"
-            stroke={isCompleted ? "url(#completedGradient)" : "url(#progressGradient)"}
+            stroke={progressStrokeColor} // Use the determined color
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            style={{ transition: 'stroke-dasharray 0.5s ease-out' }} // For potential animation later
+            style={{ transition: 'stroke-dasharray 0.5s ease-out, stroke 0.5s ease-out' }}
           />
         )}
       </svg>
@@ -94,9 +104,14 @@ export function SchemeCompletionArc({
         <span className="text-sm text-muted-foreground">
           of {durationMonths} Paid
         </span>
-        {isCompleted && durationMonths > 0 && (
+        {isCompleted && status !== 'Closed' && durationMonths > 0 && (
            <span className="text-xs font-semibold mt-1 px-2 py-0.5 rounded-full bg-[hsl(var(--positive-value))] text-primary-foreground">
              Completed
+           </span>
+        )}
+        {status === 'Closed' && (
+           <span className="text-xs font-semibold mt-1 px-2 py-0.5 rounded-full bg-[hsl(var(--destructive))] text-destructive-foreground">
+             Closed
            </span>
         )}
       </div>

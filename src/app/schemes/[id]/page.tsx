@@ -26,6 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel as HookFormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Badge } from "@/components/ui/badge";
 import * as z from 'zod';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
