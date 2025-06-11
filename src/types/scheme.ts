@@ -40,5 +40,5 @@ export interface GroupDetail {
   customerNames: string[];
   totalSchemesInGroup: number;
   recordableSchemeCount: number; // Number of schemes in this group with a next payment due
+  hasOverdueSchemeInGroup: boolean; // Indicates if any scheme in the group is overdue
 }
-
