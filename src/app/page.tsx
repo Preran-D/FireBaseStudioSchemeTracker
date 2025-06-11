@@ -126,14 +126,8 @@ export default function DashboardPage() {
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
         <div className="flex gap-3">
-          <Button size="lg" variant="default" asChild className="rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-            <Link href="/payments/record">
-              <CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)
-            </Link>
-          </Button>
-          <Button size="lg" variant="outline" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow">
-            <Link href="/schemes/new">
-              <UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
+ <Button size="lg" variant="default" asChild className="rounded-lg shadow-lg hover:shadow-xl transition-shadow"><Link href="/payments/record"><CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)</Link></Button>
+ <Button size="lg" variant="outline" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow"><Link href="/schemes/new"><UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
             </Link>
           </Button>
         </div>

@@ -5,15 +5,16 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, CheckSquare, History, FileText } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, CheckSquare, History } from 'lucide-react';
 import type { Scheme } from '@/types/scheme';
 import { getMockSchemes } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
+import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel'; // Added import
 
 export default function GroupDetailsPage() {
   const params = useParams();
@@ -22,8 +23,8 @@ export default function GroupDetailsPage() {
 
   const [allSchemesInGroup, setAllSchemesInGroup] = useState<Scheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false); // Added state for history panel
-  const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null); // Added state for history panel
+  const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
+  const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
 
   useEffect(() => {
     if (groupName) {
@@ -31,7 +32,7 @@ export default function GroupDetailsPage() {
       const allSchemes = getMockSchemes();
       const schemesForThisGroup = allSchemes
         .filter(s => s.customerGroupName === groupName)
-        .sort((a, b) => { // Sort by Customer Name, then Start Date
+        .sort((a, b) => { 
           const nameCompare = a.customerName.localeCompare(b.customerName);
           if (nameCompare !== 0) return nameCompare;
           return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
@@ -42,6 +43,34 @@ export default function GroupDetailsPage() {
       setIsLoading(false);
     }
   }, [groupName]);
+
+  const groupedSchemes = useMemo(() => {
+    const groups: {
+ customerName: string;
+ schemes: Scheme[];
+ totalSchemes: number;
+ totalCollected: number;
+    }[] = [];
+    const customerMap = new Map<string, Scheme[]>();
+
+    allSchemesInGroup.forEach(scheme => {
+ if (!customerMap.has(scheme.customerName)) {
+        customerMap.set(scheme.customerName, []);
+      }
+ customerMap.get(scheme.customerName)!.push(scheme);
+    });
+
+    customerMap.forEach((schemes, customerName) => {
+ const totalCollected = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
+      groups.push({
+        customerName,
+ schemes,
+ totalSchemes: schemes.length,
+ totalCollected,
+      });
+    });
+ return groups.sort((a, b) => a.customerName.localeCompare(b.customerName));
+  }, [allSchemesInGroup]);
 
   const groupSummaryStats = useMemo(() => {
     if (allSchemesInGroup.length === 0) {
@@ -79,7 +108,7 @@ export default function GroupDetailsPage() {
     visible: (i: number) => ({
       opacity: 1,
       y: 0,
-      transition: { delay: i * 0.1, duration: 0.4 } // Adjusted delay timing
+      transition: { delay: i * 0.1, duration: 0.4 }
     }),
   };
 
@@ -155,7 +184,7 @@ export default function GroupDetailsPage() {
                         className="flex flex-col items-center justify-center p-4 rounded-lg border bg-card/50 dark:bg-card/30 shadow-md hover:shadow-lg transition-shadow"
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.1 + (1 * 0.1) + (idx * 0.05), duration: 0.3 }} // Adjusted delay
+                        transition={{ delay: 0.1 + (1 * 0.1) + (idx * 0.05), duration: 0.3 }}
                     >
                         <stat.icon className={`h-7 w-7 mb-2 ${stat.color}`} />
                         <span className={`font-bold text-2xl ${stat.color}`}>{stat.value}</span>
@@ -166,8 +195,6 @@ export default function GroupDetailsPage() {
         </Card>
       </motion.div>
       
-      {/* Removed Customers in Group Card Section */}
-
       <motion.div variants={cardVariants} initial="hidden" animate="visible" custom={2}>
         <Card className="rounded-xl shadow-xl glassmorphism overflow-hidden">
             <CardHeader>
@@ -175,55 +202,73 @@ export default function GroupDetailsPage() {
             <CardDescription>Detailed list of all schemes associated with this group, sorted by customer then start date.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-            {allSchemesInGroup.length === 0 ? (
+            {groupedSchemes.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No schemes found in this group.</p>
             ) : (
                 <div className="overflow-x-auto">
                     <Table>
-                    <TableHeader>
-                        <TableRow className="bg-muted/50 dark:bg-muted/20">
-                        <TableHead className="text-base font-semibold">Customer Name</TableHead>
-                        <TableHead className="text-base font-semibold">Scheme ID</TableHead>
-                        <TableHead className="text-base font-semibold">Start Date</TableHead>
-                        <TableHead className="text-base font-semibold text-right">Monthly Amt.</TableHead>
-                        <TableHead className="text-base font-semibold text-right">Total Collected</TableHead> {/* Added */}
-                        <TableHead className="text-base font-semibold text-center">Payments</TableHead>
-                        <TableHead className="text-base font-semibold">Status</TableHead>
-                        <TableHead className="text-base font-semibold text-center">History</TableHead> {/* Added */}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {allSchemesInGroup.map((scheme, idx) => (
-                        <motion.tr 
-                            key={scheme.id} 
-                            className="border-b border-border/50 hover:bg-muted/20 transition-colors"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.1 + (2 * 0.1) + (idx * 0.03), duration: 0.3 }} // Adjusted delay
-                        >
-                            <TableCell className="font-medium text-base">{scheme.customerName}</TableCell>
-                            <TableCell className="truncate max-w-[100px] sm:max-w-xs text-base">
-                                <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
-                                    {scheme.id.toUpperCase()}
-                                </Link>
-                            </TableCell>
-                            <TableCell className="text-base">{formatDate(scheme.startDate)}</TableCell>
-                            <TableCell className="text-right text-base">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
-                            <TableCell className="text-right text-base text-green-600 dark:text-green-500">{formatCurrency(scheme.totalCollected)}</TableCell> {/* Added */}
-                            <TableCell className="text-center text-base">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
-                            <TableCell><SchemeStatusBadge status={scheme.status} /></TableCell>
-                            <TableCell className="text-center">
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => handleShowSchemePeek(scheme)}
-                                    className="h-9 w-9"
-                                >
-                                    <History className="h-4 w-4 text-primary" />
-                                    <span className="sr-only">View History for {scheme.id}</span>
-                                </Button>
-                            </TableCell>
-                        </motion.tr>
+                        <TableHeader>
+                            <TableRow className="bg-muted/50 dark:bg-muted/20">
+                                <TableHead className="text-base font-semibold sticky left-0 bg-muted/50 dark:bg-muted/20 z-20 min-w-[200px]">Customer / Scheme ID</TableHead>
+                                <TableHead className="text-base font-semibold">Start Date</TableHead>
+                                <TableHead className="text-base font-semibold text-right">Monthly Amt.</TableHead>
+                                <TableHead className="text-base font-semibold text-right">Total Collected</TableHead>
+                                <TableHead className="text-base font-semibold text-center min-w-[100px]">Payments</TableHead>
+                                <TableHead className="text-base font-semibold min-w-[100px]">Status</TableHead>
+                                <TableHead className="text-base font-semibold text-center min-w-[80px]">History</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {groupedSchemes.map((customerGroup, groupIndex) => (
+ <React.Fragment key={customerGroup.customerName}>
+ <motion.tr
+                                key={customerGroup.customerName}
+                                className="border-b border-border/50 transition-colors bg-muted/10 dark:bg-muted/5"
+                                initial={{ opacity: 1 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
+ >
+ <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10">
+                                        {customerGroup.customerName} ({customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''})
+                                    </TableCell>
+ <TableCell className="text-base"></TableCell>
+ <TableCell className="text-base text-right"></TableCell>
+ <TableCell className="text-base text-right"></TableCell>
+ <TableCell className="text-base text-center"></TableCell>
+ <TableCell className="text-base"></TableCell>
+ <TableCell className="text-base"></TableCell>
+ </motion.tr>
+
+ {customerGroup.schemes.map((scheme, schemeIndex) => {
+                                const schemeTotals = calculateSchemeTotals(scheme);
+ return (
+ <motion.tr
+ key={scheme.id}
+ className="border-b border-border/30 hover:bg-muted/20 transition-colors"
+ initial={{ opacity: 0 }}
+ animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05) + (schemeIndex * 0.03), duration: 0.3 }}
+ >                                    
+ <TableCell className="truncate max-w-[100px] sm:max-w-xs text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 pl-8">
+ <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
+                                        {scheme.id.toUpperCase()}
+ </Link>
+ </TableCell>
+ <TableCell className="text-base">{formatDate(scheme.startDate)}</TableCell>
+ <TableCell className="text-right text-base">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
+ <TableCell className="text-right text-base text-green-600 dark:text-green-500">{formatCurrency(schemeTotals.totalCollected)}</TableCell>
+ <TableCell className="text-center text-base">{schemeTotals.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
+ <TableCell><SchemeStatusBadge status={getSchemeStatus(scheme)} /></TableCell>
+ <TableCell className="text-center">
+ <Button variant="ghost" size="icon" onClick={() => handleShowSchemePeek(scheme)} className="h-9 w-9">
+ <History className="h-4 w-4 text-primary" />
+ <span className="sr-only">View History for {scheme.id}</span>
+ </Button>
+ </TableCell>
+ </motion.tr>
+                                );
+                            })}
+ </React.Fragment>
                         ))}
                     </TableBody>
                     </Table>
