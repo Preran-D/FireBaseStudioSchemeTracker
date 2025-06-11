@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, BarChartHorizontalBig } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, Badge } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes, deleteFullMockScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
@@ -54,10 +54,10 @@ export default function GroupDetailsPage() {
   const loadGroupSchemes = () => {
     if (groupName) {
       setIsLoading(true);
-      const allSchemes = getMockSchemes(); // This function now returns schemes with status and totals calculated
+      const allSchemes = getMockSchemes();
       const schemesForThisGroup = allSchemes
         .filter(s => s.customerGroupName === groupName)
-        .sort((a, b) => { // Default sort for initial load
+        .sort((a, b) => {
           const nameCompare = a.customerName.localeCompare(b.customerName);
           if (nameCompare !== 0) return nameCompare;
           return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
@@ -105,12 +105,11 @@ export default function GroupDetailsPage() {
         });
     }
 
-
     const groups: {
       customerName: string;
       schemes: Scheme[];
       totalSchemes: number;
-      totalCollected: number; // Represents total paid for this customer in this group
+      totalCollected: number;
       firstSchemeStartDate?: string;
       representativeStatusPriority: number;
     }[] = [];
@@ -125,13 +124,9 @@ export default function GroupDetailsPage() {
 
     customerMap.forEach((schemes, customerName) => {
       if (schemes.length > 0) {
-        // Schemes for each customer are already sorted by start date from allSchemesInGroup initial sort.
-        // If further sorting of schemes *within* each customer group is needed, do it here.
-        // schemes.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-
         const totalCollectedForCustomer = schemes.reduce((sum, s) => sum + (s.totalCollected || 0), 0);
         
-        let representativeStatusPriority = 4; // Default to lowest priority (Closed)
+        let representativeStatusPriority = 4; 
         schemes.forEach(s => {
             const currentSchemePriority = statusPriorityMap[s.status];
             if (currentSchemePriority < representativeStatusPriority) {
@@ -144,7 +139,7 @@ export default function GroupDetailsPage() {
           schemes,
           totalSchemes: schemes.length,
           totalCollected: totalCollectedForCustomer,
-          firstSchemeStartDate: schemes[0]?.startDate, // Assuming schemes are sorted by date if this is used for 'oldestFirst'/'newestFirst'
+          firstSchemeStartDate: schemes[0]?.startDate,
           representativeStatusPriority,
         });
       }
@@ -229,7 +224,7 @@ export default function GroupDetailsPage() {
           title: "Scheme Deleted",
           description: `Scheme ID ${schemeToDelete.id.toUpperCase()} for ${schemeToDelete.customerName} has been deleted.`,
         });
-        loadGroupSchemes(); // Reload schemes for the group
+        loadGroupSchemes(); 
       } else {
         toast({
           title: "Error Deleting Scheme",
@@ -250,13 +245,13 @@ export default function GroupDetailsPage() {
 
     groupedSchemes.forEach(customerGroup => {
       customerGroup.schemes.forEach(scheme => {
-        const schemeTotals = calculateSchemeTotals(scheme); // Recalculate just in case, though it should be on scheme obj
+        const schemeTotals = calculateSchemeTotals(scheme);
         dataToExport.push([
           scheme.customerName,
           scheme.id.toUpperCase(),
           formatDate(scheme.startDate),
           scheme.monthlyPaymentAmount,
-          schemeTotals.totalCollected, // This represents total paid
+          schemeTotals.totalCollected,
           `${schemeTotals.paymentsMadeCount || 0}`,
           `${scheme.durationMonths}`,
           getSchemeStatus(scheme)
@@ -494,7 +489,7 @@ export default function GroupDetailsPage() {
                         </motion.tr>
 
                         {customerGroup.schemes.map((scheme, schemeIndex) => {
-                          const schemeTotals = calculateSchemeTotals(scheme); // Ensure totals are fresh for each scheme
+                          const schemeTotals = calculateSchemeTotals(scheme);
                           return (
                             <motion.tr
                               key={scheme.id}
@@ -566,3 +561,4 @@ export default function GroupDetailsPage() {
     </div>
   );
 }
+
