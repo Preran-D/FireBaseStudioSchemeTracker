@@ -163,7 +163,7 @@ export const exportCustomerReportsToPdf = (customers: CustomerReportDataForPdf[]
     doc.text(`Overdue: ${customer.schemesSummary.overdueSchemes}`, summaryX, currentY);
     currentY += 5;
     summaryX = 14;
-    doc.text(`Total Collected: ${formatCurrency(customer.schemesSummary.totalCollected)}`, summaryX, currentY);
+    doc.text(`Total Collected: ${"Rs." + customer.schemesSummary.totalCollected + "/-"}`, summaryX, currentY);
     currentY += 10; // Space before detailed schemes table
 
     // Detailed Schemes Table
@@ -175,10 +175,10 @@ export const exportCustomerReportsToPdf = (customers: CustomerReportDataForPdf[]
         return [
           scheme.id.toUpperCase(),
           formatDate(scheme.startDate),
-          formatCurrency(scheme.monthlyPaymentAmount),
+          "Rs." + scheme.monthlyPaymentAmount + "/-",
           status,
           `${totals.paymentsMadeCount || 0}/${scheme.durationMonths}`,
-          formatCurrency(totals.totalCollected),
+          "Rs." + totals.totalCollected + "/-",
         ];
       });
 
@@ -191,7 +191,7 @@ export const exportCustomerReportsToPdf = (customers: CustomerReportDataForPdf[]
         theme: 'grid',
         headStyles: { fillColor: [74, 85, 104] }, // Example: Slate color
         didDrawPage: (data) => { // Update currentY after table is drawn
-            currentY = data.cursor?.y || currentY;
+          currentY = data.cursor?.y || currentY;
         }
       });
       currentY += 5; // Add some padding after the table

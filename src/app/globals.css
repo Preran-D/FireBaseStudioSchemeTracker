@@ -105,10 +105,13 @@
 
 @layer base {
   * {
-    @apply border-border;
+    /* If not using Tailwind, replace @apply with the actual border color */
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    /* If not using Tailwind, replace @apply with background and text color */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }

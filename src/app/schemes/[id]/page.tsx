@@ -391,7 +391,7 @@ export default function SchemeDetailsPage() {
           </CardHeader>
           <CardContent>
             <ScrollArea className="w-full whitespace-nowrap">
-              <div className="flex space-x-4 pb-4">
+              <div className="flex space-x-4 p-2">
                 {otherCustomerSchemes.map((otherScheme) => {
                   const isCurrentScheme = otherScheme.id === scheme.id;
                   return (
