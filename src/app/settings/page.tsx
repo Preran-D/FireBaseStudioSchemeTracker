@@ -1026,7 +1026,7 @@ function DataManagementTabContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead padding="checkbox" className="w-12">
+                    <TableHead className="w-12">
                       <Checkbox
                         checked={isAllCompletedSelected}
                         onCheckedChange={handleSelectAllClosedSchemes}
@@ -1043,7 +1043,7 @@ function DataManagementTabContent() {
                 <TableBody>
                   {completedSchemes.map((scheme) => (
                     <TableRow key={scheme.id} data-state={selectedClosedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
-                      <TableCell padding="checkbox">
+                      <TableCell>
                         <Checkbox
                           checked={selectedClosedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectClosedScheme(scheme.id, !!checked)}
@@ -1137,7 +1137,7 @@ function DataManagementTabContent() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead padding="checkbox" className="w-12">
+                    <TableHead className="w-12">
                       <Checkbox
                         checked={isAllArchivedSelected}
                         onCheckedChange={handleSelectAllArchivedSchemes}
@@ -1154,7 +1154,7 @@ function DataManagementTabContent() {
                 <TableBody>
                   {archivedSchemesList.map((scheme) => (
                     <TableRow key={scheme.id} data-state={selectedArchivedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
-                      <TableCell padding="checkbox">
+                      <TableCell>
                         <Checkbox
                           checked={selectedArchivedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectArchivedScheme(scheme.id, !!checked)}
@@ -1394,3 +1394,7 @@ export default function SettingsPage() {
 }
 
     
+
+function exportToExcel(arg0: { name: string; data: any[][]; }[], arg1: string) {
+  throw new Error('Function not implemented.');
+}
