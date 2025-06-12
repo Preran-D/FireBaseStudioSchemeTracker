@@ -18,9 +18,9 @@ import React from 'react';
 import { delay, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
 import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export function
-import { ExportPdfDialog } from '@/components/dialogs/ExportPdfDialog'; // Import the new dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ExportPdfDialog from '@/components/dialogs/ExportPdfDialog';
 
 const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,

@@ -10,8 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, FileText as FileTextIcon, Search, Download } from 'lucide-react'; // Using FileTextIcon alias for clarity
 import { exportCustomerReportsToPdf } from '@/lib/pdfUtils'; // Import the new PDF export function
-import { ExportPdfDialog } from '@/components/dialogs/ExportPdfDialog'; // Import the new dialog
 import { useToast } from '@/hooks/use-toast'; // Import useToast
+import ExportPdfDialog from '@/components/dialogs/ExportPdfDialog';
 
 // Define a structure for customer-centric data
 export interface CustomerReportData {
