@@ -1,9 +1,24 @@
 
 import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus } from '@/types/scheme';
-import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId } from '@/lib/utils';
+import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus } from '@/lib/utils'; // Removed generateId from utils
 import { subMonths, addMonths, formatISO, parseISO, startOfDay } from 'date-fns';
 
+let nextNumericSchemeId = 1;
+const generateUniqueNumericId = (): number => {
+  // This is a simple sequential ID for mock data.
+  // In a real app, IDs would come from a database.
+  // To make it somewhat unique even if schemes are deleted, find max current ID.
+  if (MOCK_SCHEMES && MOCK_SCHEMES.length > 0) {
+    const maxId = MOCK_SCHEMES.reduce((max, s) => (s.id > max ? s.id : max), 0);
+    nextNumericSchemeId = maxId + 1;
+  } else {
+    nextNumericSchemeId = 1; // Start from 1 if no schemes
+  }
+  return nextNumericSchemeId++;
+};
+
 const createScheme = (
+  id: number, // Expect numeric ID
   customerName: string, 
   startDate: Date, 
   monthlyPaymentAmount: number,
@@ -12,7 +27,7 @@ const createScheme = (
   customerAddress?: string
 ): Scheme => {
   const baseScheme: Omit<Scheme, 'payments' | 'status' | 'closureDate'> = {
-    id: generateId(),
+    id: id, // Use provided numeric ID
     customerName,
     customerPhone,
     customerAddress,
@@ -76,22 +91,27 @@ const createScheme = (
 };
 
 export let MOCK_SCHEMES: Scheme[] = [
-  createScheme('Alice Wonderland', subMonths(new Date(), 4), 1000, "Smith Family", "9876543210", "123 Wonderland Lane, Fantasy City"),
-  createScheme('Active Customer', subMonths(new Date(), 4), 1000, "Smith Family", "8765432109", "456 Active Rd, Live Town"),
-  createScheme('Active Customer', subMonths(new Date(), 1), 500, "Smith Family", "8765432109", "456 Active Rd, Live Town"), 
-  createScheme('Bob The Builder', subMonths(new Date(), 2), 800, "Smith Family", "7654321098", "789 Construction Ave, Buildville"),
-  createScheme('Charlie Brown', addMonths(new Date(), 1), 1500, "Office Buddies", "6543210987", "1 Peanuts St, Cartoonville"),
-  createScheme('Diana Prince', subMonths(new Date(), 5), 500, "Smith Family", "5432109876", "Themyscira Island, Paradise"), 
-  createScheme('Edward Scissorhands', subMonths(new Date(), 13), 2000, "Solo Ventures", "4321098765", "Gothic Mansion, Suburbia"), 
-  createScheme('Fiona Gallagher', subMonths(new Date(), 11), 750, "Office Buddies", "3210987654", "South Side, Chicago"), 
-  createScheme('George Jetson', subMonths(new Date(), 3), 1200, undefined, "2109876543", "Orbit City, Skypad Apartments"),
-  createScheme('Hannah Montana', subMonths(new Date(), 1), 600, undefined, "1098765432", "Malibu, CA"), 
-  createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family", "0987654321", "Central City Apt"), 
+  // Assign initial numeric IDs sequentially for simplicity during mock data setup
+  createScheme(1, 'Alice Wonderland', subMonths(new Date(), 4), 1000, "Smith Family", "9876543210", "123 Wonderland Lane, Fantasy City"),
+  createScheme(2, 'Active Customer', subMonths(new Date(), 4), 1000, "Smith Family", "8765432109", "456 Active Rd, Live Town"),
+  createScheme(3, 'Active Customer', subMonths(new Date(), 1), 500, "Smith Family", "8765432109", "456 Active Rd, Live Town"),
+  createScheme(4, 'Bob The Builder', subMonths(new Date(), 2), 800, "Smith Family", "7654321098", "789 Construction Ave, Buildville"),
+  createScheme(5, 'Charlie Brown', addMonths(new Date(), 1), 1500, "Office Buddies", "6543210987", "1 Peanuts St, Cartoonville"),
+  createScheme(6, 'Diana Prince', subMonths(new Date(), 5), 500, "Smith Family", "5432109876", "Themyscira Island, Paradise"),
+  createScheme(7, 'Edward Scissorhands', subMonths(new Date(), 13), 2000, "Solo Ventures", "4321098765", "Gothic Mansion, Suburbia"),
+  createScheme(8, 'Fiona Gallagher', subMonths(new Date(), 11), 750, "Office Buddies", "3210987654", "South Side, Chicago"),
+  createScheme(9, 'George Jetson', subMonths(new Date(), 3), 1200, undefined, "2109876543", "Orbit City, Skypad Apartments"),
+  createScheme(10, 'Hannah Montana', subMonths(new Date(), 1), 600, undefined, "1098765432", "Malibu, CA"),
+  createScheme(11, 'Iris West', subMonths(new Date(), 6), 900, "Smith Family", "0987654321", "Central City Apt"),
 ];
+// Initialize nextNumericSchemeId after MOCK_SCHEMES is populated
+// This should be done after MOCK_SCHEMES is fully defined.
+// For now, generateUniqueNumericId() will handle finding max ID dynamically if MOCK_SCHEMES is populated.
+
 
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
 if (fionaSchemeIdx !== -1) {
-  // Ensure Fiona's scheme is fully paid to become 'Completed'
+  // Ensure Fiona's scheme is fully paid to become 'Fully Paid'
   MOCK_SCHEMES[fionaSchemeIdx].payments = MOCK_SCHEMES[fionaSchemeIdx].payments.map((p, index) => {
     // Pay all 12 installments for Fiona
     if (index < MOCK_SCHEMES[fionaSchemeIdx].durationMonths) {
@@ -99,87 +119,137 @@ if (fionaSchemeIdx !== -1) {
     }
     return p;
   });
-  // Ensure closureDate is NOT set for Fiona, so it's purely 'Completed'
+  // Ensure closureDate is NOT set for Fiona, so it's purely 'Fully Paid'
   MOCK_SCHEMES[fionaSchemeIdx].closureDate = undefined;
 
   MOCK_SCHEMES[fionaSchemeIdx].payments.forEach(p => p.status = getPaymentStatus(p, MOCK_SCHEMES[fionaSchemeIdx].startDate));
-  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]); // This should correctly set to 'Completed'
+  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]); // This should correctly set to 'Fully Paid'
   const totals = calculateSchemeTotals(MOCK_SCHEMES[fionaSchemeIdx]);
   MOCK_SCHEMES[fionaSchemeIdx] = { ...MOCK_SCHEMES[fionaSchemeIdx], ...totals };
 }
 
 
-export const getMockSchemes = (options?: { includeArchived?: boolean }): Scheme[] => {
+export const getMockSchemes = (options?: { includeArchived?: boolean; includeDeleted?: boolean }): Scheme[] => {
   const includeArchived = options?.includeArchived || false;
+  const includeDeleted = options?.includeDeleted || false;
   let schemesToProcess = MOCK_SCHEMES;
 
   if (!includeArchived) {
-    schemesToProcess = MOCK_SCHEMES.filter(s => s.status !== 'Archived');
+    // Filter out schemes marked with the new isArchived flag
+    schemesToProcess = schemesToProcess.filter(s => !s.isArchived);
+  }
+  // Keep the old filter for s.status === 'Archived' for now for backward compatibility during transition,
+  // but ideally, it should be removed once everything uses isArchived.
+  // For now, if !includeArchived, we also remove those still marked by status.
+  if (!includeArchived) {
+     schemesToProcess = schemesToProcess.filter(s => s.status !== 'Archived');
+  }
+
+  if (!includeDeleted) {
+    schemesToProcess = schemesToProcess.filter(s => !s.deletedDate);
   }
 
   return JSON.parse(JSON.stringify(schemesToProcess.map(s => {
     const tempScheme = JSON.parse(JSON.stringify(s));
     // Ensure payments exist before trying to iterate
+    // Also, filter out soft-deleted payments before processing
     if (tempScheme.payments && Array.isArray(tempScheme.payments)) {
+      tempScheme.payments = tempScheme.payments.filter((p: Payment) => !p.deletedDate);
       tempScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, tempScheme.startDate));
     } else {
       tempScheme.payments = []; // Initialize if undefined or not an array
     }
 
-    // If scheme is already 'Archived', preserve it. Otherwise, calculate.
-    const status = tempScheme.status === 'Archived' ? 'Archived' : getSchemeStatus(tempScheme);
+    // Recalculate status based on payments, unless it's manually set to 'Closed' or other terminal statuses.
+    // The isArchived flag is separate and doesn't affect the scheme's inherent status (like 'Fully Paid', 'Closed').
+    const status = getSchemeStatus(tempScheme); // getSchemeStatus should rely on payments and closureDate primarily.
     const totals = calculateSchemeTotals(tempScheme);
-    // Ensure the status in the returned object is the potentially preserved 'Archived' status
-    return { ...tempScheme, ...totals, status };
+    return { ...tempScheme, ...totals, status, isArchived: s.isArchived, archivedDate: s.archivedDate }; // Persist archive flags
   })));
 };
 
-export const getArchivedMockSchemes = (): Scheme[] => {
-  // Uses getMockSchemes internal processing to ensure consistent scheme object structure
-  // and that the 'Archived' status is correctly preserved.
-  const allSchemesIncludingArchived = getMockSchemes({ includeArchived: true });
-  return allSchemesIncludingArchived.filter(s => s.status === 'Archived');
+// Returns schemes explicitly marked with isArchived = true and not soft-deleted
+export const getArchivedSchemes = (): Scheme[] => {
+  const allSchemes = getMockSchemes({ includeArchived: true, includeDeleted: true }); // Get all schemes
+  return allSchemes.filter(s => s.isArchived === true && !s.deletedDate);
 };
 
-
-export const archiveMockScheme = (schemeId: string): Scheme | undefined => {
+// Renaming old archiveMockScheme to archiveScheme and use new logic
+export const archiveScheme = (schemeId: number, archiveDate?: string): Scheme | undefined => { // schemeId is number
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
 
-  if (scheme.status === 'Closed') {
-    scheme.status = 'Archived';
-    scheme.archivedDate = formatISO(new Date());
-    MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
-    return getMockSchemeById(schemeId); // Return a fresh copy with calculated fields
+  // Allow archiving of 'Fully Paid' or 'Closed' schemes that are not already archived and not soft-deleted
+  if ((scheme.status === 'Fully Paid' || scheme.status === 'Closed') && !scheme.isArchived && !scheme.deletedDate) {
+    scheme.isArchived = true;
+    scheme.archivedDate = archiveDate || formatISO(new Date());
+    // Note: scheme.status remains its original status ('Fully Paid' or 'Closed')
+    MOCK_SCHEMES[schemeIndex] = { ...scheme };
+    return getMockSchemeById(schemeId, { includeArchived: true, includeDeleted: true });
   }
+  console.warn(`Scheme ${schemeId} not eligible for archiving. Status: ${scheme.status}, Archived: ${scheme.isArchived}, Deleted: ${scheme.deletedDate}`);
   return undefined;
 };
 
-export const unarchiveMockScheme = (schemeId: string): Scheme | undefined => {
+// Renaming old unarchiveMockScheme to unarchiveScheme and use new logic
+export const unarchiveScheme = (schemeId: number): Scheme | undefined => { // schemeId is number
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
   const scheme = MOCK_SCHEMES[schemeIndex];
-  if (scheme.status === 'Archived') {
+  if (scheme.isArchived) {
+    scheme.isArchived = false;
     scheme.archivedDate = undefined;
-    // Revert to 'Closed'. getSchemeStatus will be called by getMockSchemeById
-    // and should correctly evaluate it based on its payments if it wasn't truly 'Closed' before archiving.
-    // Forcing it to 'Closed' here is a safe bet if it was archived from 'Closed'.
-    // If getSchemeStatus is robust, it might correctly set it to 'Completed' if all payments are made.
-    scheme.status = 'Closed';
-    MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
-    return getMockSchemeById(schemeId); // Return a fresh copy
+    // Scheme status remains what it was. getSchemeStatus will re-evaluate if needed when scheme is fetched.
+    MOCK_SCHEMES[schemeIndex] = { ...scheme };
+    // Recalculate scheme status and totals upon unarchiving
+    const freshScheme = getMockSchemeById(schemeId); // This will re-calculate everything
+    if(freshScheme) MOCK_SCHEMES[schemeIndex] = JSON.parse(JSON.stringify(freshScheme)); // Update main array with recalculated
+    return freshScheme;
   }
   return undefined;
 };
 
-export const getMockSchemeById = (id: string): Scheme | undefined => {
+export const updateSchemeArchiveDate = (schemeId: number, newArchiveDate: string): Scheme | undefined => { // schemeId is number
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  if (scheme.isArchived) {
+    try {
+        const parsedDate = parseISO(newArchiveDate);
+        if (!isValidDate(parsedDate)) {
+            console.warn(`Invalid date provided for updateSchemeArchiveDate: ${newArchiveDate}`);
+            return undefined;
+        }
+        scheme.archivedDate = formatISO(parsedDate);
+        MOCK_SCHEMES[schemeIndex] = { ...scheme };
+        return getMockSchemeById(schemeId, { includeArchived: true, includeDeleted: true });
+    } catch (error) {
+        console.error(`Error parsing date in updateSchemeArchiveDate: ${error}`);
+        return undefined;
+    }
+  }
+  return undefined; // Scheme not archived
+};
+
+export const getMockSchemeById = (id: number, options?: { includeDeleted?: boolean; includeArchived?: boolean }): Scheme | undefined => {
+  const includeDeleted = options?.includeDeleted || false;
+  const includeArchived = options?.includeArchived || false;
   const schemeFromGlobalArray = MOCK_SCHEMES.find(s => s.id === id);
+
   if (!schemeFromGlobalArray) return undefined;
+  if (!includeDeleted && schemeFromGlobalArray.deletedDate) return undefined;
+  if (!includeArchived && schemeFromGlobalArray.isArchived) return undefined; // New check for isArchived
   
   const clonedScheme: Scheme = JSON.parse(JSON.stringify(schemeFromGlobalArray));
+
+  // Filter out soft-deleted payments before further processing
+  if (clonedScheme.payments && Array.isArray(clonedScheme.payments)) {
+    clonedScheme.payments = clonedScheme.payments.filter((p: Payment) => !p.deletedDate);
+  }
 
   clonedScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, clonedScheme.startDate));
   clonedScheme.status = getSchemeStatus(clonedScheme);
@@ -189,8 +259,9 @@ export const getMockSchemeById = (id: string): Scheme | undefined => {
 };
 
 export const addMockScheme = (newSchemeData: Omit<Scheme, 'id' | 'payments' | 'status' | 'durationMonths' | 'closureDate'> & { customerGroupName?: string } ): Scheme => {
+  const newId = generateUniqueNumericId(); // Use the new numeric ID generator
   const baseScheme: Omit<Scheme, 'payments' | 'status' | 'closureDate'> = {
-    id: generateId(),
+    id: newId, // Assign numeric ID
     customerName: newSchemeData.customerName,
     customerPhone: newSchemeData.customerPhone,
     customerAddress: newSchemeData.customerAddress,
@@ -230,7 +301,7 @@ interface UpdatePaymentPayload {
   modeOfPayment?: PaymentMode[];
 }
 
-export const updateMockSchemePayment = (schemeId: string, paymentId: string, paymentDetails: UpdatePaymentPayload): Scheme | undefined => {
+export const updateMockSchemePayment = (schemeId: number, paymentId: string, paymentDetails: UpdatePaymentPayload): Scheme | undefined => {
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -269,7 +340,7 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
 
   // If it was closed and now no longer meets "Closed" criteria (which means all payments are NOT paid)
   // then remove closureDate. This should be handled by getSchemeStatus not returning 'Closed' if not all paid.
-  if(wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed'){
+  if(wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid'){
       scheme.closureDate = undefined; 
   }
   
@@ -279,7 +350,7 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
   return getMockSchemeById(schemeId); 
 };
 
-export const editMockPaymentDetails = (schemeId: string, paymentId: string, details: { amountPaid?: number; paymentDate?: string; modeOfPayment?: PaymentMode[] }): Scheme | undefined => {
+export const editMockPaymentDetails = (schemeId: number, paymentId: string, details: { amountPaid?: number; paymentDate?: string; modeOfPayment?: PaymentMode[] }): Scheme | undefined => {
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -310,7 +381,7 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
   scheme.status = getSchemeStatus(scheme); 
 
-  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed') {
+  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') {
     scheme.closureDate = undefined; 
   }
   
@@ -320,7 +391,7 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   return getMockSchemeById(schemeId);
 }
 
-export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+export const deleteMockPayment = (schemeId: number, paymentId: string): Scheme | undefined => {
  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -341,22 +412,76 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
+  // Soft delete the payment
+  scheme.payments[paymentIndex].deletedDate = formatISO(new Date());
+  // Clear payment details that indicate it was made, but keep amountExpected for historical context if needed
   scheme.payments[paymentIndex].amountPaid = undefined;
   scheme.payments[paymentIndex].paymentDate = undefined;
+  // scheme.payments[paymentIndex].modeOfPayment = undefined; // Keep mode for potential restoration context? Or clear? Let's clear.
   scheme.payments[paymentIndex].modeOfPayment = undefined;
-  
-  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
-  scheme.status = getSchemeStatus(scheme); 
 
-  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed') {
-    scheme.closureDate = undefined; 
+
+  // Recalculate scheme status and totals
+  // Ensure that getPaymentStatus and calculateSchemeTotals in utils.ts correctly handle deletedDate on payments
+  const tempSchemeForRecalc: Scheme = JSON.parse(JSON.stringify(scheme));
+  if (tempSchemeForRecalc.payments && Array.isArray(tempSchemeForRecalc.payments)) {
+    tempSchemeForRecalc.payments = tempSchemeForRecalc.payments.filter(p => !p.deletedDate);
   }
+  tempSchemeForRecalc.payments.forEach(p => p.status = getPaymentStatus(p, tempSchemeForRecalc.startDate));
+  scheme.status = getSchemeStatus(tempSchemeForRecalc);
   
-  const totals = calculateSchemeTotals(scheme); 
+  const totals = calculateSchemeTotals(tempSchemeForRecalc); // Pass the version with deleted payments filtered out
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, payments: scheme.payments, status: scheme.status, ...totals }; // Ensure original payments array (with soft delete) is saved
+
+  return getMockSchemeById(schemeId); // This will also filter deleted payments for the returned object by default
+};
+
+export const permanentlyDeleteMockPayment = (schemeId: number, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const initialPaymentCount = scheme.payments.length;
+  scheme.payments = scheme.payments.filter(p => p.id !== paymentId);
+
+  if (scheme.payments.length < initialPaymentCount) {
+    // Recalculate scheme status and totals
+    const tempSchemeForRecalc: Scheme = JSON.parse(JSON.stringify(scheme));
+     if (tempSchemeForRecalc.payments && Array.isArray(tempSchemeForRecalc.payments)) {
+      tempSchemeForRecalc.payments = tempSchemeForRecalc.payments.filter(p => !p.deletedDate); // ensure this is still respected
+    }
+    tempSchemeForRecalc.payments.forEach(p => p.status = getPaymentStatus(p, tempSchemeForRecalc.startDate));
+    scheme.status = getSchemeStatus(tempSchemeForRecalc);
+    const totals = calculateSchemeTotals(tempSchemeForRecalc);
+    MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+    return getMockSchemeById(schemeId);
+  }
+  return undefined; // Payment not found or not deleted
+};
+
+export const restoreMockPayment = (schemeId: number, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
+  if (paymentIndex === -1 || !scheme.payments[paymentIndex].deletedDate) return undefined; // Not found or not soft-deleted
+
+  scheme.payments[paymentIndex].deletedDate = undefined;
+  // Payment status will be re-evaluated by getPaymentStatus when scheme is loaded/processed
+  // Recalculate scheme status and totals
+  const tempSchemeForRecalc: Scheme = JSON.parse(JSON.stringify(scheme));
+  if (tempSchemeForRecalc.payments && Array.isArray(tempSchemeForRecalc.payments)) {
+    tempSchemeForRecalc.payments = tempSchemeForRecalc.payments.filter(p => !p.deletedDate);
+  }
+  tempSchemeForRecalc.payments.forEach(p => p.status = getPaymentStatus(p, tempSchemeForRecalc.startDate));
+  scheme.status = getSchemeStatus(tempSchemeForRecalc);
+  const totals = calculateSchemeTotals(tempSchemeForRecalc);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
   
   return getMockSchemeById(schemeId);
 };
+
 
 interface CloseSchemeOptions {
   closureDate: string; 
@@ -364,7 +489,7 @@ interface CloseSchemeOptions {
   modeOfPayment?: PaymentMode[]; 
 }
 
-export const closeMockScheme = (schemeId: string, options: CloseSchemeOptions): Scheme | undefined => {
+export const closeMockScheme = (schemeId: number, options: CloseSchemeOptions): Scheme | undefined => {
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -422,7 +547,8 @@ export const recordNextDuePaymentsForCustomer = (
 
   const customerSchemesIndices = MOCK_SCHEMES
     .map((scheme, index) => ({ scheme, index }))
-    .filter(({ scheme }) => scheme.customerName === customerName && scheme.status !== 'Closed' && scheme.status !== 'Completed'); // Filter out Closed and Completed
+    // Ensure scheme.id is compared as number if schemeId in filter is number; assuming customerName is primary key here for filtering.
+    .filter(({ scheme }) => scheme.customerName === customerName && !scheme.deletedDate && !scheme.isArchived && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid');
     
   customerSchemesIndices.forEach(({ scheme }) => { 
       let nextRecordablePaymentIndex = -1;
@@ -479,10 +605,10 @@ export const recordNextDuePaymentsForCustomerGroup = (
 
   const schemesInGroupIndices = MOCK_SCHEMES
     .map((scheme, index) => ({ scheme, index })) 
-    .filter(({ scheme }) => scheme.customerGroupName === groupName && scheme.status !== 'Closed' && scheme.status !== 'Completed'); // Filter out Closed and Completed
+    .filter(({ scheme }) => scheme.customerGroupName === groupName && !scheme.deletedDate && !scheme.isArchived && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid');
 
   schemesInGroupIndices.forEach(({ scheme }) => { 
-      if (paymentDetails.schemeIdsToRecord && paymentDetails.schemeIdsToRecord.length > 0 && !paymentDetails.schemeIdsToRecord.includes(scheme.id)) {
+      if (paymentDetails.schemeIdsToRecord && paymentDetails.schemeIdsToRecord.length > 0 && !paymentDetails.schemeIdsToRecord.includes(scheme.id.toString())) { // scheme.id is number, schemeIdsToRecord likely string[]
         return; 
       }
 
@@ -538,8 +664,8 @@ export const getGroupDetails = (): GroupDetail[] => {
       groupEntry.customerNames.add(scheme.customerName);
 
       let hasRecordablePaymentForThisScheme = false;
-      // Only count recordable if not Closed and not Completed
-      if (scheme.status !== 'Closed' && scheme.status !== 'Completed' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
+      // Only count recordable if not Closed and not Fully Paid
+      if (scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         for (let i = 0; i < scheme.payments.length; i++) {
           const payment = scheme.payments[i];
           if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -606,16 +732,22 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
   const messages: string[] = [];
 
   data.forEach((row, index) => {
-    const schemeId = row.SchemeID?.trim();
-    if (!schemeId) {
+  const schemeIdStr = row.SchemeID?.trim();
+    if (!schemeIdStr) {
       messages.push(`Row ${index + 2}: Missing SchemeID. Skipping.`);
       errorCount++;
       return;
     }
+    const schemeIdNum = parseInt(schemeIdStr, 10);
+    if (isNaN(schemeIdNum)) {
+      messages.push(`Row ${index + 2}: Invalid SchemeID format "${schemeIdStr}". Must be a number. Skipping.`);
+      errorCount++;
+      return;
+    }
 
-    const scheme = getMockSchemeById(schemeId); 
+    const scheme = getMockSchemeById(schemeIdNum);
     if (!scheme) {
-      messages.push(`Row ${index + 2}: SchemeID "${schemeId.toUpperCase()}" not found. Skipping.`);
+      messages.push(`Row ${index + 2}: SchemeID "${schemeIdNum}" not found. Skipping.`);
       errorCount++;
       return;
     }
@@ -632,17 +764,17 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
         });
         if (updatedScheme && updatedScheme.status === 'Closed') {
             changed = true;
-            messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)} (Full Reconciliation).`);
+            messages.push(`Row ${index + 2}: Scheme "${schemeIdNum}" for ${scheme.customerName} marked as Closed on ${formatDate(updatedScheme.closureDate!)} (Full Reconciliation).`);
         } else {
-            messages.push(`Row ${index + 2}: Error closing scheme "${schemeId.toUpperCase()}". It might already be closed or an issue occurred.`);
+            messages.push(`Row ${index + 2}: Error closing scheme "${schemeIdNum}". It might already be closed or an issue occurred.`);
             errorCount++; 
             return; 
         }
     } else if (row.MarkAsClosed?.toUpperCase() === 'TRUE' && scheme.status === 'Closed') {
-         messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
+         messages.push(`Row ${index + 2}: Scheme "${schemeIdNum}" for ${scheme.customerName} was already closed. Closure date updated if provided and different.`);
          if (row.ClosureDate) {
             const newClosureDateISO = parseISO(row.ClosureDate.trim()).toISOString();
-            const schemeToUpdate = MOCK_SCHEMES.find(s => s.id === schemeId); 
+            const schemeToUpdate = MOCK_SCHEMES.find(s => s.id === schemeIdNum);
             if (schemeToUpdate && schemeToUpdate.closureDate !== newClosureDateISO) {
                 schemeToUpdate.closureDate = newClosureDateISO;
                 // If system closure payments were made, update their date too
@@ -655,17 +787,17 @@ export const importSchemeClosureUpdates = (data: SchemeClosureImportRow[]): { su
             }
          }
     } else if (row.MarkAsClosed?.toUpperCase() === 'FALSE' && scheme.status === 'Closed') {
-      const reopenedScheme = reopenMockScheme(schemeId);
+      const reopenedScheme = reopenMockScheme(schemeIdNum);
       if (reopenedScheme && reopenedScheme.status !== 'Closed') {
         changed = true;
-        messages.push(`Row ${index + 2}: Scheme "${schemeId.toUpperCase()}" for ${scheme.customerName} has been Reopened.`);
+        messages.push(`Row ${index + 2}: Scheme "${schemeIdNum}" for ${scheme.customerName} has been Reopened.`);
       } else {
-        messages.push(`Row ${index + 2}: Error reopening scheme "${schemeId.toUpperCase()}". It might not have been closed or an issue occurred.`);
+        messages.push(`Row ${index + 2}: Error reopening scheme "${schemeIdNum}". It might not have been closed or an issue occurred.`);
         errorCount++;
         return;
       }
     } else {
-       messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeId.toUpperCase()}" (MarkAsClosed was not TRUE or FALSE, or scheme status did not permit action).`);
+       messages.push(`Row ${index + 2}: No action taken for SchemeID "${schemeIdNum}" (MarkAsClosed was not TRUE or FALSE, or scheme status did not permit action).`);
     }
 
     if (changed) {
@@ -712,7 +844,7 @@ export const updateMockCustomerDetails = (
   return { success: false, message: "Original customer name not found." }; 
 };
 
-export const reopenMockScheme = (schemeId: string): Scheme | undefined => {
+export const reopenMockScheme = (schemeId: number): Scheme | undefined => {
   const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
   if (schemeIndex === -1) return undefined;
 
@@ -742,15 +874,77 @@ export const reopenMockScheme = (schemeId: string): Scheme | undefined => {
   return getMockSchemeById(schemeId); 
 };
 
-export const deleteFullMockScheme = (schemeId: string): boolean => {
+// Soft delete a scheme
+export const deleteMockScheme = (schemeId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  MOCK_SCHEMES[schemeIndex].deletedDate = formatISO(new Date());
+  // Optionally, update status to something like 'Deleted' or handle in getSchemeStatus
+  // For now, just marking deletedDate is enough as getMockSchemes will filter it.
+  return getMockSchemeById(schemeId, { includeDeleted: true }); // Return the modified scheme
+};
+
+// Permanently delete a scheme
+export const permanentlyDeleteMockScheme = (schemeId: string): boolean => {
   const initialLength = MOCK_SCHEMES.length;
   MOCK_SCHEMES = MOCK_SCHEMES.filter(s => s.id !== schemeId);
   return MOCK_SCHEMES.length < initialLength;
 };
 
+// Restore a soft-deleted scheme
+export const restoreMockScheme = (schemeId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1 || !MOCK_SCHEMES[schemeIndex].deletedDate) return undefined;
+
+  MOCK_SCHEMES[schemeIndex].deletedDate = undefined;
+  // Re-calculate status and totals as it's being restored
+  const restoredScheme = MOCK_SCHEMES[schemeIndex];
+  restoredScheme.payments.forEach(p => p.status = getPaymentStatus(p, restoredScheme.startDate));
+  restoredScheme.status = getSchemeStatus(restoredScheme);
+  const totals = calculateSchemeTotals(restoredScheme);
+  MOCK_SCHEMES[schemeIndex] = { ...restoredScheme, ...totals };
+
+  return getMockSchemeById(schemeId);
+};
+
+
 // Note for getSchemeStatus in utils.ts:
 // It should ideally check: if (scheme.status === 'Archived') return 'Archived'; at the beginning.
 // This was partially handled in getMockSchemes by preserving 'Archived' status before calling getSchemeStatus.
+
+export const getSoftDeletedSchemes = (): Scheme[] => {
+  const allSchemesIncludingDeleted = getMockSchemes({ includeArchived: true, includeDeleted: true });
+  return allSchemesIncludingDeleted.filter(scheme => !!scheme.deletedDate);
+};
+
+export interface SoftDeletedPaymentInfo {
+  schemeInfo: Pick<Scheme, 'id' | 'customerName' | 'deletedDate'>; // Include scheme's deletedDate
+  payment: Payment;
+}
+
+export const getSoftDeletedPayments = (): SoftDeletedPaymentInfo[] => {
+  const softDeletedPayments: SoftDeletedPaymentInfo[] = [];
+  // Iterate over the raw MOCK_SCHEMES to find all payments, even in deleted schemes
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.payments && Array.isArray(scheme.payments)) {
+      scheme.payments.forEach(payment => {
+        if (payment.deletedDate) {
+          softDeletedPayments.push({
+            schemeInfo: {
+              id: scheme.id,
+              customerName: scheme.customerName,
+              deletedDate: scheme.deletedDate, // Pass along if the parent scheme is also soft-deleted
+            },
+            payment: JSON.parse(JSON.stringify(payment)), // Return a copy
+          });
+        }
+      });
+    }
+  });
+  return softDeletedPayments.sort((a,b) => parseISO(b.payment.deletedDate!).getTime() - parseISO(a.payment.deletedDate!).getTime());
+};
+
 
 export const updateMockGroupName = (oldGroupName: string, newGroupName: string): boolean => {
   if (!newGroupName || newGroupName.trim() === "") return false;

@@ -125,7 +125,7 @@ export default function TransactionsPage() {
       currentFilteredTransactions = currentFilteredTransactions.filter(transaction =>
         transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (transaction.customerGroupName && transaction.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        transaction.schemeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transaction.schemeId.toString().toLowerCase().includes(searchTerm.toLowerCase()) || // schemeId is number
         (transaction.modeOfPayment && transaction.modeOfPayment.some(mode => mode.toLowerCase().includes(searchTerm.toLowerCase())))
       );
     }
@@ -248,7 +248,7 @@ export default function TransactionsPage() {
             <TableCell>
               <Button variant="link" asChild className="p-0 h-auto">
                   <Link href={`/schemes/${transaction.schemeId}`} className="truncate max-w-[100px] sm:max-w-xs block">
-                    {transaction.schemeId.toUpperCase()}
+                    {transaction.schemeId}
                   </Link>
               </Button>
             </TableCell>
@@ -443,7 +443,7 @@ export default function TransactionsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="font-headline">Edit Payment for {selectedPaymentForEdit.customerName} (Month {selectedPaymentForEdit.monthNumber})</DialogTitle>
-               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId.toUpperCase()}</CardDescription>
+               <CardDescription>Scheme ID: {selectedPaymentForEdit.schemeId}</CardDescription>
             </DialogHeader>
             <RecordPaymentForm
               payment={selectedPaymentForEdit}
@@ -461,15 +461,15 @@ export default function TransactionsPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Delete Payment</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete the payment record for {paymentToDelete.customerName} (Month {paymentToDelete.monthNumber}, Amount: {formatCurrency(paymentToDelete.amountPaid)})?
-                This action will mark the payment as unpaid and cannot be undone easily.
+                Are you sure you want to move the payment record for {paymentToDelete.customerName} (Month {paymentToDelete.monthNumber}, Amount: {formatCurrency(paymentToDelete.amountPaid)}) to the Recycle Bin?
+                It can be restored or permanently deleted later.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setPaymentToDelete(null)} disabled={isDeletingPayment}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeletePaymentConfirm} disabled={isDeletingPayment} className="bg-destructive hover:bg-destructive/90">
                 {isDeletingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Payment
+                Move to Recycle Bin
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

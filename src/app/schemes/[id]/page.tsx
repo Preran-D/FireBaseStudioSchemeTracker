@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2 } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme } from '@/lib/mock-data';
+import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteMockScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
@@ -50,7 +50,8 @@ export default function SchemeDetailsPage() {
   const router = useRouter();
   const urlParams = useParams();
   const { toast } = useToast();
-  const schemeIdFromUrl = urlParams.id as string;
+  const schemeIdFromUrlString = urlParams.id as string;
+  const numericSchemeIdFromUrl = parseInt(schemeIdFromUrlString, 10);
 
   const [scheme, setScheme] = useState<Scheme | null>(null);
   const [otherCustomerSchemes, setOtherCustomerSchemes] = useState<Scheme[]>([]);
@@ -85,14 +86,38 @@ export default function SchemeDetailsPage() {
     mode: 'onTouched',
   });
 
-  const loadSchemeData = useCallback((currentSchemeIdToLoad?: string) => {
-    const idToLoad = currentSchemeIdToLoad || schemeIdFromUrl;
-    if (idToLoad) {
-      setIsLoading(true);
-      const fetchedScheme = getMockSchemeById(idToLoad);
+  const loadSchemeData = useCallback((idToLoadParam?: string | number) => {
+    let schemeIdToFetch: number;
+
+    if (idToLoadParam !== undefined) {
+      if (typeof idToLoadParam === 'string') {
+        schemeIdToFetch = parseInt(idToLoadParam, 10);
+      } else {
+        schemeIdToFetch = idToLoadParam; // It's already a number
+      }
+    } else {
+      // Fallback to the parsed ID from URL if no param is given to loadSchemeData
+      // This case might occur if an effect calls loadSchemeData() without args,
+      // though the main useEffect now passes numericSchemeIdFromUrl.
+      schemeIdToFetch = numericSchemeIdFromUrl;
+    }
+
+    if (isNaN(schemeIdToFetch)) {
+      setIsLoading(false);
+      setScheme(null);
+      setOtherCustomerSchemes([]);
+      if (idToLoadParam !== undefined) { // Only toast if an explicit (bad) ID was passed
+        toast({ title: "Invalid Scheme ID", description: `Cannot load scheme data for ID: "${idToLoadParam}".`, variant: "destructive" });
+      }
+      return;
+    }
+
+    // Proceed if schemeIdToFetch is a valid number
+    setIsLoading(true);
+    const fetchedScheme = getMockSchemeById(schemeIdToFetch); // getMockSchemeById now expects number
       
-      if (fetchedScheme) {
-        setScheme(fetchedScheme);
+    if (fetchedScheme) {
+      setScheme(fetchedScheme);
         const initialMonths = (fetchedScheme.durationMonths - (fetchedScheme.paymentsMadeCount || 0)) > 0 ? 1 : 0;
         setInlineMonthsToPay(initialMonths);
         setInlinePaymentModes(['Cash']);
@@ -111,11 +136,19 @@ export default function SchemeDetailsPage() {
       setExistingGroupNames(getUniqueGroupNames());
       setIsLoading(false);
     }
-  }, [schemeIdFromUrl, inlinePaymentForm]);
+  }, [schemeIdFromUrlString, inlinePaymentForm]); // Keep original string for dependency in case it's used by other hooks not being modified now.
 
   useEffect(() => {
-    loadSchemeData();
-  }, [loadSchemeData, schemeIdFromUrl]);
+    if (!isNaN(numericSchemeIdFromUrl)) {
+      loadSchemeData(numericSchemeIdFromUrl); // Pass the parsed number
+    } else {
+      setIsLoading(false);
+      setScheme(null);
+      // It's good practice to inform the user or redirect.
+      toast({ title: "Invalid Scheme ID", description: "The scheme ID provided in the URL is not a valid number.", variant: "destructive" });
+      // router.push('/schemes'); // Optional: redirect to a safe page
+    }
+  }, [loadSchemeData, numericSchemeIdFromUrl]); // Depend on the parsed numeric ID for re-running this effect.
 
   const openManualCloseDialog = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Closed') return;
@@ -136,10 +169,10 @@ export default function SchemeDetailsPage() {
       type: 'partial_closure' as 'partial_closure', 
     };
 
-    const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
+    const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions); // .id is number
     if (closedSchemeResult) {
-      toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
-      loadSchemeData(closedSchemeResult.id); 
+      toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id}) has been marked as 'Closed'.` });
+      loadSchemeData(closedSchemeResult.id); // Pass number
     } else {
       toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
     }
@@ -148,15 +181,15 @@ export default function SchemeDetailsPage() {
     setSchemeForManualCloseDialog(null);
   };
 
-  const handleAssignGroupSubmit = (updatedSchemeId: string, groupName?: string) => {
+  const handleAssignGroupSubmit = (updatedSchemeId: number, groupName?: string) => { // updatedSchemeId is number
     setIsUpdatingGroup(true);
-    const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
+    const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName); // updateSchemeGroup expects number
     if (updatedSchemeFromMock) {
       toast({
         title: "Group Updated",
         description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
       });
-      loadSchemeData(updatedSchemeFromMock.id); 
+      loadSchemeData(updatedSchemeFromMock.id); // Pass number
     } else {
       toast({ title: "Error", description: "Failed to update scheme group.", variant: "destructive" });
     }
@@ -176,7 +209,7 @@ export default function SchemeDetailsPage() {
         title: 'Customer Details Updated',
         description: `Details for ${newDetails.customerName} have been updated. All associated schemes reflect this change.`,
       });
-      loadSchemeData(scheme?.id); 
+      if (scheme?.id) loadSchemeData(scheme.id); // Pass number
     } else {
       toast({
         title: 'Error',
@@ -271,7 +304,7 @@ export default function SchemeDetailsPage() {
     
     if (successCount > 0) {
       toast({ title: "Payments Recorded", description: `${successCount} payment installment(s) recorded for ${scheme.customerName}.` });
-      loadSchemeData(scheme.id); 
+      if (scheme.id) loadSchemeData(scheme.id); // Pass number
     } else if (errorCount > 0) {
       toast({ title: "Error Recording Payments", description: `Could not record ${errorCount} payment installments.`, variant: "destructive" });
     }
@@ -281,7 +314,7 @@ export default function SchemeDetailsPage() {
 
   const canRecordPayment = useMemo(() => {
     if (!scheme) return false;
-    return scheme.status !== 'Closed' && scheme.status !== 'Completed' && maxInlineMonthsToPay > 0;
+    return scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && maxInlineMonthsToPay > 0;
   }, [scheme, maxInlineMonthsToPay]);
 
   const handleOpenDeleteSchemeDialog = () => {
@@ -291,14 +324,14 @@ export default function SchemeDetailsPage() {
   const handleConfirmDeleteScheme = async () => {
     if (!scheme) return;
     setIsDeletingScheme(true);
-    const success = deleteFullMockScheme(scheme.id);
-    if (success) {
+    const updatedScheme = deleteMockScheme(scheme.id); // Soft delete, scheme.id is number
+    if (updatedScheme && updatedScheme.deletedDate) {
       toast({
-        title: "Scheme Deleted",
-        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been deleted.`,
+        title: "Scheme Soft Deleted",
+        description: `Scheme ID ${scheme.id} for ${scheme.customerName} has been moved to the Recycle Bin.`,
       });
       // Navigate away
-      const allSchemes = getMockSchemes(); // Get fresh list after deletion
+      const allSchemes = getMockSchemes(); // Get fresh list (will exclude soft-deleted by default)
       const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName);
 
       if (remainingSchemesForCustomer.length > 0) {
@@ -317,7 +350,7 @@ export default function SchemeDetailsPage() {
     } else {
       toast({
         title: "Error Deleting Scheme",
-        description: `Could not delete scheme ID ${scheme.id.toUpperCase()}.`,
+        description: `Could not delete scheme ID ${scheme.id}.`,
         variant: "destructive",
       });
       setIsDeletingScheme(false);
@@ -405,7 +438,7 @@ export default function SchemeDetailsPage() {
                       >
                         <CardHeader className="pb-2 pt-3 px-3">
                           <CardTitle className="text-lg font-bold tracking-tight text-primary truncate">
-                            SCHEME-{otherScheme.id.toUpperCase().substring(0,4)}
+                            SCHEME-{otherScheme.id}
                           </CardTitle>
                           <CardDescription className="text-xs">{formatDate(otherScheme.startDate, 'MMM yyyy')}</CardDescription>
                         </CardHeader>
@@ -433,14 +466,14 @@ export default function SchemeDetailsPage() {
       <Card className={cn(
         "glassmorphism overflow-hidden",
         scheme.status === 'Active' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
-        scheme.status === 'Completed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
+        scheme.status === 'Fully Paid' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
         scheme.status === 'Overdue' && "ring-2 ring-offset-2 ring-offset-background ring-orange-500 dark:ring-orange-400",
         scheme.status === 'Upcoming' && "ring-2 ring-offset-2 ring-offset-background ring-yellow-500 dark:ring-yellow-400",
         scheme.status === 'Closed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--destructive))]"
       )}>
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <CardTitle className="font-headline text-2xl mb-1 text-foreground">Scheme Details: {scheme.id.toUpperCase()}</CardTitle>
+            <CardTitle className="font-headline text-2xl mb-1 text-foreground">Scheme Details: {scheme.id}</CardTitle>
             <CardDescription className="text-sm">
               {scheme.customerGroupName && (<span>Group: <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="text-primary hover:underline font-medium">{scheme.customerGroupName}</Link></span>)}
               {!scheme.customerGroupName && (<span>Not assigned to any group.</span>)}
@@ -498,14 +531,14 @@ export default function SchemeDetailsPage() {
               <p className="text-muted-foreground">Total Remaining</p>
               <p className="font-semibold text-base text-orange-600 dark:text-orange-500">{formatCurrency(scheme.totalRemaining)}</p>
             </div>
-            {scheme.status === 'Completed' && !scheme.closureDate && (
+            {scheme.status === 'Fully Paid' && !scheme.closureDate && (
               <div className="col-span-2">
                 <Badge variant="default" className="bg-positive-value/80 text-primary-foreground hover:bg-positive-value/70">
                   All Payments Made
                 </Badge>
               </div>
             )}
-             {scheme.status === 'Completed' && scheme.closureDate && ( 
+             {scheme.status === 'Fully Paid' && scheme.closureDate && (
                 <div className="col-span-2">
                     <p className="text-xs text-muted-foreground">This fully paid scheme was manually closed on {formatDate(scheme.closureDate)}.</p>
                 </div>
@@ -578,7 +611,7 @@ export default function SchemeDetailsPage() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    {maxInlineMonthsToPay === 0 && scheme.status !== 'Closed' && scheme.status !== 'Completed' && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
+                    {maxInlineMonthsToPay === 0 && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
                   </div>
 
                   <div>
@@ -629,7 +662,7 @@ export default function SchemeDetailsPage() {
           </Card>
         )}
 
-        {(!canRecordPayment && scheme.status !== 'Closed' && scheme.status !== 'Completed') && (
+        {(!canRecordPayment && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') && (
            <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
             <CardContent className="text-center py-10">
                 <Info className="h-10 w-10 text-primary mx-auto mb-3" />
@@ -639,7 +672,7 @@ export default function SchemeDetailsPage() {
            </Card>
         )}
 
-        {(scheme.status === 'Closed' || scheme.status === 'Completed') && (
+        {(scheme.status === 'Closed' || scheme.status === 'Fully Paid') && (
              <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
                 <CardContent className="text-center py-10">
                     <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
@@ -649,7 +682,7 @@ export default function SchemeDetailsPage() {
                     <p className="text-muted-foreground">
                         {scheme.status === 'Closed' ? `This scheme was manually closed on ${formatDate(scheme.closureDate!)}.` : 'All payments for this scheme have been completed.'}
                     </p>
-                     {scheme.status === 'Completed' && !scheme.closureDate && ( 
+                     {scheme.status === 'Fully Paid' && !scheme.closureDate && (
                          <p className="text-xs text-muted-foreground mt-1">You can still manually close it via Scheme Actions.</p>
                      )}
                 </CardContent>
@@ -686,7 +719,7 @@ export default function SchemeDetailsPage() {
                 Delete Scheme
             </Button>
              <p className="text-xs text-muted-foreground px-1">
-                Permanently delete this scheme and all its associated payment records. This action cannot be undone.
+                Move this scheme and its payment records to the Recycle Bin.
             </p>
           </CardContent>
         </Card>
@@ -704,7 +737,7 @@ export default function SchemeDetailsPage() {
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Manually Close Scheme: {schemeForManualCloseDialog.customerName}</AlertDialogTitle>
-              <AlertDialogDescription>Scheme ID: {schemeForManualCloseDialog.id.toUpperCase()}</AlertDialogDescription>
+              <AlertDialogDescription>Scheme ID: {schemeForManualCloseDialog.id}</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4 py-2">
                 <div>
@@ -788,7 +821,7 @@ export default function SchemeDetailsPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Scheme Deletion</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to permanently delete scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span>? All associated payment records will also be removed. This action cannot be undone.
+                Are you sure you want to move scheme <span className="font-semibold text-foreground">{scheme.id}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span> to the Recycle Bin? It can be restored or permanently deleted later.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -797,7 +830,7 @@ export default function SchemeDetailsPage() {
               </AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
                 {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm Delete
+                Move to Recycle Bin
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

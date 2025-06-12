@@ -76,12 +76,12 @@ export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'sta
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
-  // If the scheme is already marked as 'Archived', its status should remain 'Archived'.
-  if (scheme.status === 'Archived') {
-    return 'Archived';
-  }
+  // The 'isArchived' flag is now the source of truth for the archived state.
+  // This function should determine the scheme's status based on its payments and closure date,
+  // irrespective of its archived state. UI components will use 'isArchived' for display purposes.
 
   // Ensure all individual payment statuses are up-to-date for accurate calculation
+  // (This assumes scheme.payments is already filtered for non-deleted payments)
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
   // If a scheme has a closureDate, it is considered 'Closed' by manual action.
@@ -91,7 +91,7 @@ export function getSchemeStatus(scheme: Scheme): SchemeStatus {
   
   const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
   if (allPaymentsPaid) {
-    return 'Completed'; // All payments made, but not yet manually 'Closed'.
+    return 'Fully Paid'; // All payments made, but not yet manually 'Closed'.
   }
 
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));

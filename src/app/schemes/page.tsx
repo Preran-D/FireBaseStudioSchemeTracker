@@ -23,7 +23,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
   'Active': 1,
   'Upcoming': 2,
-  'Completed': 3,
+  'Fully Paid': 3,
   'Closed': 4,
 };
 
@@ -44,7 +44,7 @@ export default function SchemesPage() {
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
   
   const [isBulkAssignMode, setIsBulkAssignMode] = useState(false);
-  const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
+  const [selectedSchemeIds, setSelectedSchemeIds] = useState<number[]>([]); // Store numbers
   const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   const [isProcessingBulkAssign, setIsProcessingBulkAssign] = useState(false);
 
@@ -72,7 +72,7 @@ export default function SchemesPage() {
       .filter(scheme =>
         scheme.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (scheme.customerGroupName && scheme.customerGroupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        scheme.id.toLowerCase().includes(searchTerm.toLowerCase())
+        scheme.id.toString().toLowerCase().includes(searchTerm.toLowerCase()) // Convert number to string for search
       );
 
     schemes.sort((a, b) => {
@@ -99,7 +99,7 @@ export default function SchemesPage() {
     { value: 'all', label: 'All Statuses' },
     { value: 'Active', label: 'Active' },
     { value: 'Overdue', label: 'Overdue' },
-    { value: 'Completed', label: 'Completed' },
+    { value: 'Fully Paid', label: 'Fully Paid' },
     { value: 'Upcoming', label: 'Upcoming' },
     { value: 'Closed', label: 'Closed' },
   ];
@@ -125,7 +125,7 @@ export default function SchemesPage() {
     }
   };
 
-  const handleSchemeSelection = (schemeId: string, checked: boolean) => {
+  const handleSchemeSelection = (schemeId: number, checked: boolean) => { // schemeId is number
     if (checked) {
       setSelectedSchemeIds(prev => [...prev, schemeId]);
     } else {
@@ -142,8 +142,8 @@ export default function SchemesPage() {
     let updatedCount = 0;
     let errorCount = 0;
 
-    selectedSchemeIds.forEach(schemeId => {
-      const updated = updateSchemeGroup(schemeId, groupName);
+    selectedSchemeIds.forEach(schemeId => { // schemeId is now a number
+      const updated = updateSchemeGroup(schemeId, groupName); // updateSchemeGroup expects number
       if (updated) {
         updatedCount++;
       } else {
@@ -316,7 +316,7 @@ export default function SchemesPage() {
                               <Checkbox
                                 className="h-5 w-5 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                                 checked={selectedSchemeIds.includes(scheme.id)}
-                                onCheckedChange={(checked) => handleSchemeSelection(scheme.id, !!checked)}
+                                onCheckedChange={(checked) => handleSchemeSelection(scheme.id, !!checked)} // Pass number
                                 aria-label={`Select scheme ${scheme.id}`}
                               />
                             </TableCell>
@@ -326,7 +326,7 @@ export default function SchemesPage() {
                               {scheme.customerName}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-base text-muted-foreground">{scheme.id.toUpperCase()}</TableCell>
+                          <TableCell className="text-base text-muted-foreground">{scheme.id}</TableCell>
                           <TableCell className="text-base text-muted-foreground">{scheme.customerGroupName || 'N/A'}</TableCell>
                           <TableCell className="text-base text-muted-foreground">{formatDate(scheme.startDate)}</TableCell>
                           <TableCell className="text-base font-semibold">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>

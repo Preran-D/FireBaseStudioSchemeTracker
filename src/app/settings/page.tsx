@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme } from '@/lib/mock-data';
-import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
-import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
-// import { exportToExcel } from '@/lib/excelUtils'; // This was removed in a previous task
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, permanentlyDeleteMockScheme, archiveScheme, unarchiveScheme, updateSchemeArchiveDate, getArchivedSchemes, getSoftDeletedSchemes, restoreMockScheme, getSoftDeletedPayments, SoftDeletedPaymentInfo, restoreMockPayment, permanentlyDeleteMockPayment as permanentlyDeleteMockPaymentFromBin } from '@/lib/mock-data';
+import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme';
+import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils';
+// import { exportToExcel } from '@/lib/excelUtils';
 import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -49,8 +49,8 @@ function DataManagementTabContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State for Closed Scheme Management
-  const [completedSchemes, setCompletedSchemes] = useState<Scheme[]>([]);
-  const [selectedClosedSchemeIds, setSelectedClosedSchemeIds] = useState<string[]>([]);
+  const [schemesForArchival, setSchemesForArchival] = useState<Scheme[]>([]);
+  const [selectedClosedSchemeIds, setSelectedClosedSchemeIds] = useState<number[]>([]);
   const [isReopeningClosedSchemes, setIsReopeningClosedSchemes] = useState(false);
   const [isDeletingClosedSchemes, setIsDeletingClosedSchemes] = useState(false);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
@@ -58,34 +58,75 @@ function DataManagementTabContent() {
 
   // State for Archived Scheme Management
   const [archivedSchemesList, setArchivedSchemesList] = useState<Scheme[]>([]);
-  const [selectedArchivedSchemeIds, setSelectedArchivedSchemeIds] = useState<string[]>([]);
+  const [selectedArchivedSchemeIds, setSelectedArchivedSchemeIds] = useState<number[]>([]);
   const [isLoadingArchived, setIsLoadingArchived] = useState(false);
   const [isRestoringSchemes, setIsRestoringSchemes] = useState(false);
   const [isDeletingArchivedSchemes, setIsDeletingArchivedSchemes] = useState(false);
   const [showDeleteArchivedConfirmDialog, setShowDeleteArchivedConfirmDialog] = useState(false);
   const [archivedSchemesPendingDeletionInfo, setArchivedSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
+  const [editingArchivedDateId, setEditingArchivedDateId] = useState<string | null>(null); // For editing archive date
+  const [newArchivedDate, setNewArchivedDate] = useState<Date | undefined>(undefined); // For editing archive date
+
+  // State for Archiving Schemes
+  const [eligibleForArchivingSchemes, setEligibleForArchivingSchemes] = useState<Scheme[]>([]);
+  const [selectedToArchiveSchemeIds, setSelectedToArchiveSchemeIds] = useState<number[]>([]);
+  const [selectedToArchiveSchemeIds, setSelectedToArchiveSchemeIds] = useState<number[]>([]); // Corrected type
+  const [isProcessingArchiveSelected, setIsProcessingArchiveSelected] = useState(false);
+  const [archiveDateForSelected, setArchiveDateForSelected] = useState<Date | undefined>(new Date());
+
+  // State for Recycle Bin
+  const [softDeletedSchemes, setSoftDeletedSchemes] = useState<Scheme[]>([]);
+  const [softDeletedPayments, setSoftDeletedPayments] = useState<SoftDeletedPaymentInfo[]>([]);
+  const [isLoadingRecycleBin, setIsLoadingRecycleBin] = useState(false);
+  // Dialog states for permanent deletion confirmations from recycle bin
+  const [showDeleteSchemePermanentDialog, setShowDeleteSchemePermanentDialog] = useState(false);
+  const [schemeToPermanentlyDelete, setSchemeToPermanentlyDelete] = useState<Scheme | null>(null);
+  const [showDeletePaymentPermanentDialog, setShowDeletePaymentPermanentDialog] = useState(false);
+  const [paymentToPermanentlyDelete, setPaymentToPermanentlyDelete] = useState<SoftDeletedPaymentInfo | null>(null);
+  // Loading states for recycle bin actions
+  const [isProcessingSchemeRestore, setIsProcessingSchemeRestore] = useState<string | null>(null); // store ID of scheme being processed
+  const [isProcessingSchemePermanentDelete, setIsProcessingSchemePermanentDelete] = useState<string | null>(null);
+  const [isProcessingPaymentRestore, setIsProcessingPaymentRestore] = useState<string | null>(null); // store composite ID like schemeId-paymentId
+  const [isProcessingPaymentPermanentDelete, setIsProcessingPaymentPermanentDelete] = useState<string | null>(null);
+
+  // State for Archiving Schemes
+  const [eligibleForArchivingSchemes, setEligibleForArchivingSchemes] = useState<Scheme[]>([]);
+  const [selectedToArchiveSchemeIds, setSelectedToArchiveSchemeIds] = useState<string[]>([]);
+  const [isProcessingArchiveSelected, setIsProcessingArchiveSelected] = useState(false);
+  const [archiveDateForSelected, setArchiveDateForSelected] = useState<Date | undefined>(new Date());
 
 
   const loadAllData = useCallback(() => {
     if (isImportSectionVisible) {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
-    const allSchemes = getMockSchemes();
-    // Filter for both 'Completed' and 'Closed' statuses
-    const completedAndClosed = allSchemes
-      .filter(s => s.status === 'Completed' || s.status === 'Closed')
+    // Get all non-deleted, non-archived schemes for general purpose
+    const activeNonArchivedSchemes = getMockSchemes({ includeArchived: false, includeDeleted: false });
+
+    // For "Fully Paid & Closed Scheme Management" (Permanent Deletion section)
+    // This section should list schemes that are Fully Paid or Closed, AND NOT ARCHIVED, AND NOT SOFT-DELETED
+    const fullyPaidOrClosedNonArchived = activeNonArchivedSchemes
+      .filter(s => (s.status === 'Fully Paid' || s.status === 'Closed')) // Already filtered for not archived/deleted by getMockSchemes()
       .sort((a, b) => {
-        // Prioritize sorting by closureDate if available, then by startDate or some other criteria
         const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
         const dateB = b.closureDate ? parseISO(b.closureDate) : (b.startDate ? parseISO(b.startDate) : new Date(0));
-        return dateB.getTime() - dateA.getTime(); // Sort descending by date (most recent first)
+        return dateB.getTime() - dateA.getTime();
       });
-    setCompletedSchemes(completedAndClosed);
+    setSchemesForArchival(fullyPaidOrClosedNonArchived); // This state is for the permanent delete section
     setSelectedClosedSchemeIds([]);
 
-    // Load archived schemes
+    // For "Archive Management" - Eligible schemes for archiving
+    // These are also Fully Paid or Closed, not archived, not soft-deleted
+    const eligibleForArchiving = activeNonArchivedSchemes
+      .filter(s => (s.status === 'Fully Paid' || s.status === 'Closed'))
+      .sort((a,b) => (parseISO(b.startDate).getTime() - parseISO(a.startDate).getTime()));
+    setEligibleForArchivingSchemes(eligibleForArchiving);
+    setSelectedToArchiveSchemeIds([]);
+
+
+    // Load archived schemes for "Archive Management" - Displaying archived schemes
     setIsLoadingArchived(true);
-    const archived = getArchivedMockSchemes().sort((a,b) => {
+    const archived = getArchivedSchemes().sort((a,b) => { // getArchivedSchemes now filters by isArchived=true and not soft-deleted
         const dateA = a.archivedDate ? parseISO(a.archivedDate) : (a.closureDate ? parseISO(a.closureDate) : new Date(0));
         const dateB = b.archivedDate ? parseISO(b.archivedDate) : (b.closureDate ? parseISO(b.closureDate) : new Date(0));
         return dateB.getTime() - dateA.getTime(); // Sort descending by date (most recent archived/closed first)
@@ -94,7 +135,13 @@ function DataManagementTabContent() {
     setSelectedArchivedSchemeIds([]);
     setIsLoadingArchived(false);
 
-  }, [isImportSectionVisible]); // Add other dependencies if they affect data loading for archived
+    // Load soft-deleted items for "Recycle Bin"
+    setIsLoadingRecycleBin(true);
+    setSoftDeletedSchemes(getSoftDeletedSchemes().sort((a,b) => parseISO(b.deletedDate!).getTime() - parseISO(a.deletedDate!).getTime()));
+    setSoftDeletedPayments(getSoftDeletedPayments()); // Already sorted by mock data function
+    setIsLoadingRecycleBin(false);
+
+  }, [isImportSectionVisible]);
 
   useEffect(() => {
     loadAllData();
@@ -505,7 +552,7 @@ function DataManagementTabContent() {
   };
 
   // --- Closed Scheme Management Logic ---
-  const handleSelectClosedScheme = (schemeId: string, checked: boolean) => {
+  const handleSelectClosedScheme = (schemeId: number, checked: boolean) => {
     setSelectedClosedSchemeIds(prev =>
       checked ? [...prev, schemeId] : prev.filter(id => id !== schemeId)
     );
@@ -513,7 +560,7 @@ function DataManagementTabContent() {
 
   const handleSelectAllClosedSchemes = (checked: boolean) => {
     if (checked) {
-      setSelectedClosedSchemeIds(completedSchemes.map(s => s.id));
+      setSelectedClosedSchemeIds(schemesForArchival.map(s => s.id)); // s.id is number
     } else {
       setSelectedClosedSchemeIds([]);
     }
@@ -525,7 +572,7 @@ function DataManagementTabContent() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const schemeId of selectedClosedSchemeIds) {
+    for (const schemeId of selectedClosedSchemeIds) { // schemeId is number
       const reopened = reopenMockScheme(schemeId);
       if (reopened) {
         successCount++;
@@ -544,7 +591,7 @@ function DataManagementTabContent() {
   const handleInitiateDeleteSelectedSchemes = () => {
     if (selectedClosedSchemeIds.length === 0) return;
     const info = selectedClosedSchemeIds.map(id => {
-      const scheme = completedSchemes.find(s => s.id === id);
+      const scheme = schemesForArchival.find(s => s.id === id);
       return { id, customerName: scheme?.customerName || 'Unknown', schemeId: scheme?.id.toUpperCase() || 'Unknown ID' };
     });
     setSchemesPendingDeletionInfo(info);
@@ -557,8 +604,8 @@ function DataManagementTabContent() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const schemeId of selectedClosedSchemeIds) {
-      const deleted = deleteFullMockScheme(schemeId);
+    for (const schemeId of selectedClosedSchemeIds) { // schemeId is number
+      const deleted = permanentlyDeleteMockScheme(schemeId); // Corrected function name
       if (deleted) {
         successCount++;
       } else {
@@ -576,11 +623,11 @@ function DataManagementTabContent() {
     setIsDeletingClosedSchemes(false);
   };
 
-  const isAllCompletedSelected = completedSchemes.length > 0 && selectedClosedSchemeIds.length === completedSchemes.length;
+  const isAllSchemesForArchivalSelected = schemesForArchival.length > 0 && selectedClosedSchemeIds.length === schemesForArchival.length;
   const isAllArchivedSelected = archivedSchemesList.length > 0 && selectedArchivedSchemeIds.length === archivedSchemesList.length;
 
   // --- Archived Scheme Management Logic (selection handlers) ---
-  const handleSelectArchivedScheme = (schemeId: string, checked: boolean) => {
+  const handleSelectArchivedScheme = (schemeId: number, checked: boolean) => {
     setSelectedArchivedSchemeIds(prev =>
       checked ? [...prev, schemeId] : prev.filter(id => id !== schemeId)
     );
@@ -588,7 +635,7 @@ function DataManagementTabContent() {
 
   const handleSelectAllArchivedSchemes = (checked: boolean) => {
     if (checked) {
-      setSelectedArchivedSchemeIds(archivedSchemesList.map(s => s.id));
+      setSelectedArchivedSchemeIds(archivedSchemesList.map(s => s.id)); // s.id is number
     } else {
       setSelectedArchivedSchemeIds([]);
     }
@@ -600,8 +647,8 @@ function DataManagementTabContent() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const schemeId of selectedArchivedSchemeIds) {
-      const restoredScheme = unarchiveMockScheme(schemeId);
+    for (const schemeId of selectedArchivedSchemeIds) { // schemeId is number
+      const restoredScheme = unarchiveScheme(schemeId);
       if (restoredScheme) {
         successCount++;
       } else {
@@ -637,8 +684,8 @@ function DataManagementTabContent() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const schemeId of selectedArchivedSchemeIds) {
-      const deleted = deleteFullMockScheme(schemeId);
+    for (const schemeId of selectedArchivedSchemeIds) { // schemeId is number
+      const deleted = permanentlyDeleteMockScheme(schemeId); // Corrected function name
       if (deleted) {
         successCount++;
       } else {
@@ -656,6 +703,144 @@ function DataManagementTabContent() {
     setShowDeleteArchivedConfirmDialog(false);
     setIsDeletingArchivedSchemes(false);
   };
+
+  // --- Recycle Bin Handlers ---
+  const handleRestoreSchemeClicked = async (schemeId: number) => {
+    setIsProcessingSchemeRestore(schemeId.toString());
+    const restored = await restoreMockScheme(schemeId);
+    if (restored) {
+      toast({ title: "Scheme Restored", description: `Scheme ${restored.id} for ${restored.customerName} has been restored.` });
+    } else {
+      toast({ title: "Error", description: "Failed to restore scheme.", variant: "destructive" });
+    }
+    loadAllData(); // Refresh all data sections
+    setIsProcessingSchemeRestore(null);
+  };
+
+  const handleOpenPermanentDeleteSchemeDialog = (scheme: Scheme) => {
+    setSchemeToPermanentlyDelete(scheme);
+    setShowDeleteSchemePermanentDialog(true);
+  };
+
+  const handleConfirmPermanentDeleteScheme = async () => {
+    if (!schemeToPermanentlyDelete) return;
+    setIsProcessingSchemePermanentDelete(schemeToPermanentlyDelete.id.toString());
+    const deleted = await permanentlyDeleteMockScheme(schemeToPermanentlyDelete.id);
+    if (deleted) {
+      toast({ title: "Scheme Permanently Deleted", description: `Scheme ${schemeToPermanentlyDelete.id} has been permanently deleted.` });
+    } else {
+      toast({ title: "Error", description: "Failed to permanently delete scheme.", variant: "destructive" });
+    }
+    loadAllData();
+    setShowDeleteSchemePermanentDialog(false);
+    setSchemeToPermanentlyDelete(null);
+    setIsProcessingSchemePermanentDelete(null);
+  };
+
+  const handleRestorePaymentClicked = async (schemeId: number, paymentId: string) => {
+    const processingId = `${schemeId}-${paymentId}`;
+    setIsProcessingPaymentRestore(processingId);
+    const updatedScheme = await restoreMockPayment(schemeId, paymentId);
+    if (updatedScheme) {
+      toast({ title: "Payment Restored", description: `Payment for scheme ${updatedScheme.id} has been restored.` });
+    } else {
+      toast({ title: "Error", description: "Failed to restore payment.", variant: "destructive" });
+    }
+    loadAllData();
+    setIsProcessingPaymentRestore(null);
+  };
+
+  const handleOpenPermanentDeletePaymentDialog = (paymentInfo: SoftDeletedPaymentInfo) => {
+    setPaymentToPermanentlyDelete(paymentInfo);
+    setShowDeletePaymentPermanentDialog(true);
+  };
+
+  const handleConfirmPermanentDeletePayment = async () => {
+    if (!paymentToPermanentlyDelete) return;
+    const { schemeInfo, payment } = paymentToPermanentlyDelete;
+    const processingId = `${schemeInfo.id}-${payment.id}`;
+    setIsProcessingPaymentPermanentDelete(processingId);
+    const updatedScheme = await permanentlyDeleteMockPaymentFromBin(schemeInfo.id, payment.id);
+    if (updatedScheme) {
+      toast({ title: "Payment Permanently Deleted", description: `Payment for scheme ${schemeInfo.id} has been permanently deleted.` });
+    } else {
+      toast({ title: "Error", description: "Failed to permanently delete payment.", variant: "destructive" });
+    }
+    loadAllData();
+    setShowDeletePaymentPermanentDialog(false);
+    setPaymentToPermanentlyDelete(null);
+    setIsProcessingPaymentPermanentDelete(null);
+  };
+
+  const handleArchiveSelectedSchemes = async () => {
+    if (selectedToArchiveSchemeIds.length === 0 || !archiveDateForSelected) {
+        toast({title: "No selection or date", description: "Please select schemes and an archive date.", variant:"destructive"});
+        return;
+    }
+    setIsProcessingArchiveSelected(true);
+    let successCount = 0;
+    const formattedArchiveDate = formatISO(archiveDateForSelected);
+    for (const schemeId of selectedToArchiveSchemeIds) { // schemeId is number
+        const result = await archiveScheme(schemeId, formattedArchiveDate);
+        if (result) successCount++;
+    }
+    toast({title: "Archiving Complete", description: `${successCount} scheme(s) archived.`});
+    loadAllData();
+    setSelectedToArchiveSchemeIds([]);
+    setIsProcessingArchiveSelected(false);
+  };
+
+  const handleUnarchiveSchemeClicked = async (schemeId: number) => {
+    // Similar to other processing states, manage loading for individual row actions
+    const result = await unarchiveScheme(schemeId);
+    if (result) {
+        toast({title: "Scheme Unarchived", description: `Scheme ${result.id} has been unarchived.`});
+    } else {
+        toast({title: "Error", description: "Failed to unarchive scheme.", variant: "destructive"});
+    }
+    loadAllData();
+  };
+
+  const handleSaveArchiveDate = async (schemeId: number) => {
+    if (!newArchivedDate) {
+        toast({title: "No Date", description: "Please pick a new archive date.", variant: "destructive"});
+        return;
+    }
+    const result = await updateSchemeArchiveDate(schemeId, formatISO(newArchivedDate));
+    if (result) {
+        toast({title: "Archive Date Updated", description: `Archive date for scheme ${result.id} updated.`});
+    } else {
+        toast({title: "Error", description: "Failed to update archive date.", variant: "destructive"});
+    }
+    setEditingArchivedDateId(null);
+    setNewArchivedDate(undefined);
+    loadAllData();
+  };
+
+  const handleInitiatePermanentDeleteArchivedScheme = (scheme: Scheme) => {
+    // This can reuse the existing dialog for permanent deletion if structured generally
+    // or have its own if specific context is needed. For now, let's assume it might need a separate one or clearer text.
+    // For simplicity, let's use a new dialog state or ensure the existing one is clearly for "archived" items.
+    // The existing `schemesPendingDeletionInfo` and `showDeleteArchivedConfirmDialog` can be used.
+     const info = [{ id: scheme.id, customerName: scheme.customerName, schemeId: scheme.id.toString() }]; // Use toString for dialog display if needed
+     setArchivedSchemesPendingDeletionInfo(info);
+     setShowDeleteArchivedConfirmDialog(true); // This dialog is already for "archived"
+  };
+
+  const handleSelectToArchiveScheme = (schemeId: number, checked: boolean) => { // schemeId is number
+    setSelectedToArchiveSchemeIds(prev =>
+      checked ? [...prev, schemeId] : prev.filter(id => id !== schemeId)
+    );
+  };
+
+  const handleSelectAllToArchiveSchemes = (checked: boolean) => {
+    if (checked) {
+      setSelectedToArchiveSchemeIds(eligibleForArchivingSchemes.map(s => s.id)); // s.id is number
+    } else {
+      setSelectedToArchiveSchemeIds([]);
+    }
+  };
+  const isAllEligibleToArchiveSelected = eligibleForArchivingSchemes.length > 0 && selectedToArchiveSchemeIds.length === eligibleForArchivingSchemes.length;
 
 
   return (
@@ -927,10 +1112,10 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Completed & Closed Scheme Management
+            Fully Paid & Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that are 'Completed' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
+            Manage schemes that are 'Fully Paid' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -951,16 +1136,16 @@ function DataManagementTabContent() {
               Delete Selected ({selectedClosedSchemeIds.length})
             </Button>
           </div>
-          {completedSchemes.length > 0 ? (
+          {schemesForArchival.length > 0 ? (
             <ScrollArea className="w-full whitespace-nowrap rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead padding="checkbox" className="w-12">
                       <Checkbox
-                        checked={isAllCompletedSelected}
+                        checked={isAllSchemesForArchivalSelected}
                         onCheckedChange={handleSelectAllClosedSchemes}
-                        aria-label="Select all completed schemes"
+                        aria-label="Select all fully paid or closed schemes"
                         disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
                       />
                     </TableHead>
@@ -971,18 +1156,18 @@ function DataManagementTabContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {completedSchemes.map((scheme) => (
+                  {schemesForArchival.map((scheme) => (
                     <TableRow key={scheme.id} data-state={selectedClosedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
                       <TableCell padding="checkbox">
                         <Checkbox
                           checked={selectedClosedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectClosedScheme(scheme.id, !!checked)}
-                          aria-label={`Select scheme ${scheme.id.toUpperCase()}`}
+                            aria-label={`Select scheme ${scheme.id}`}
                           disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{scheme.customerName}</TableCell>
-                      <TableCell>{scheme.id.toUpperCase()}</TableCell>
+                        <TableCell>{scheme.id}</TableCell>
                       <TableCell>{formatDate(scheme.closureDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(scheme.totalCollected)}</TableCell>
                     </TableRow>
@@ -991,7 +1176,7 @@ function DataManagementTabContent() {
               </Table>
             </ScrollArea>
           ) : (
-            <p className="text-muted-foreground text-center py-4">No completed or closed schemes found.</p>
+            <p className="text-muted-foreground text-center py-4">No fully paid or closed schemes found.</p>
           )}
         </CardContent>
       </Card>
@@ -1088,12 +1273,12 @@ function DataManagementTabContent() {
                         <Checkbox
                           checked={selectedArchivedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectArchivedScheme(scheme.id, !!checked)}
-                          aria-label={`Select archived scheme ${scheme.id.toUpperCase()}`}
+                          aria-label={`Select archived scheme ${scheme.id}`}
                           disabled={isRestoringSchemes || isDeletingArchivedSchemes}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{scheme.customerName}</TableCell>
-                      <TableCell>{scheme.id.toUpperCase()}</TableCell>
+                      <TableCell>{scheme.id}</TableCell>
                       <TableCell>{formatDate(scheme.archivedDate)}</TableCell>
                       <TableCell>{formatDate(scheme.closureDate)}</TableCell>
                     </TableRow>
@@ -1141,6 +1326,377 @@ function DataManagementTabContent() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* Recycle Bin Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-primary" />
+            Recycle Bin
+          </CardTitle>
+          <CardDescription>
+            Manage soft-deleted schemes and payments. You can restore them or delete them permanently.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Soft-Deleted Schemes Table */}
+          <div>
+            <h3 className="text-lg font-medium mb-2 text-foreground">Soft-Deleted Schemes ({softDeletedSchemes.length})</h3>
+            {isLoadingRecycleBin ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading deleted schemes...
+              </div>
+            ) : softDeletedSchemes.length > 0 ? (
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer Name</TableHead>
+                      <TableHead>Scheme ID</TableHead>
+                      <TableHead>Deleted Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {softDeletedSchemes.map((scheme) => (
+                      <TableRow key={scheme.id}>
+                        <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                        <TableCell>{scheme.id}</TableCell>
+                        <TableCell>{formatDate(scheme.deletedDate)}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestoreSchemeClicked(scheme.id)}
+                            disabled={isProcessingSchemeRestore === scheme.id.toString() || !!isProcessingSchemePermanentDelete}
+                          >
+                            {isProcessingSchemeRestore === scheme.id.toString() ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                            Restore
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleOpenPermanentDeleteSchemeDialog(scheme)}
+                            disabled={isProcessingSchemePermanentDelete === scheme.id.toString() || !!isProcessingSchemeRestore}
+                          >
+                            {isProcessingSchemePermanentDelete === scheme.id.toString() ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Delete Permanently
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No soft-deleted schemes found.</p>
+            )}
+          </div>
+
+          {/* Soft-Deleted Payments Table */}
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium mb-2 text-foreground">Soft-Deleted Payments ({softDeletedPayments.length})</h3>
+            {isLoadingRecycleBin ? (
+               <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading deleted payments...
+              </div>
+            ) : softDeletedPayments.length > 0 ? (
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer / Scheme ID</TableHead>
+                      <TableHead>Month #</TableHead>
+                      <TableHead>Amount Expected</TableHead>
+                      <TableHead>Deleted Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {softDeletedPayments.map(({ schemeInfo, payment }) => (
+                      <TableRow key={`${schemeInfo.id}-${payment.id}`} className={cn(schemeInfo.deletedDate && "opacity-60")}>
+                        <TableCell>
+                          <div className="font-medium">{schemeInfo.customerName}</div>
+                          <div className="text-xs text-muted-foreground">{schemeInfo.id} {schemeInfo.deletedDate ? "(Scheme Deleted)" : ""}</div>
+                        </TableCell>
+                        <TableCell>{payment.monthNumber}</TableCell>
+                        <TableCell>{formatCurrency(payment.amountExpected)}</TableCell>
+                        <TableCell>{formatDate(payment.deletedDate)}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                           <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestorePaymentClicked(schemeInfo.id, payment.id)}
+                            disabled={isProcessingPaymentRestore === `${schemeInfo.id}-${payment.id}` || !!isProcessingPaymentPermanentDelete || !!schemeInfo.deletedDate}
+                            title={schemeInfo.deletedDate ? "Parent scheme is deleted. Restore scheme first." : "Restore this payment"}
+                          >
+                            {isProcessingPaymentRestore === `${schemeInfo.id}-${payment.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                            Restore
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleOpenPermanentDeletePaymentDialog({ schemeInfo, payment })}
+                            disabled={isProcessingPaymentPermanentDelete === `${schemeInfo.id}-${payment.id}` || !!isProcessingPaymentRestore}
+                          >
+                            {isProcessingPaymentPermanentDelete === `${schemeInfo.id}-${payment.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Delete Permanently
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No soft-deleted payments found.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog for Permanently Deleting Scheme from Recycle Bin */}
+      {showDeleteSchemePermanentDialog && schemeToPermanentlyDelete && (
+        <AlertDialog open={showDeleteSchemePermanentDialog} onOpenChange={(open) => { if(!isProcessingSchemePermanentDelete) setShowDeleteSchemePermanentDialog(open);}}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                Confirm Permanent Deletion
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete scheme <span className="font-semibold">{schemeToPermanentlyDelete.id}</span> for <span className="font-semibold">{schemeToPermanentlyDelete.customerName}</span>? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteSchemePermanentDialog(false)} disabled={!!isProcessingSchemePermanentDelete}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmPermanentDeleteScheme}
+                disabled={!!isProcessingSchemePermanentDelete}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isProcessingSchemePermanentDelete === schemeToPermanentlyDelete.id.toString() ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Confirmation Dialog for Permanently Deleting Payment from Recycle Bin */}
+      {showDeletePaymentPermanentDialog && paymentToPermanentlyDelete && (
+        <AlertDialog open={showDeletePaymentPermanentDialog} onOpenChange={(open) => { if(!isProcessingPaymentPermanentDelete) setShowDeletePaymentPermanentDialog(open); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                 Confirm Permanent Deletion of Payment
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete payment (Month {paymentToPermanentlyDelete.payment.monthNumber}) for scheme <span className="font-semibold">{paymentToPermanentlyDelete.schemeInfo.id}</span> ({paymentToPermanentlyDelete.schemeInfo.customerName})? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeletePaymentPermanentDialog(false)} disabled={!!isProcessingPaymentPermanentDelete}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmPermanentDeletePayment}
+                disabled={!!isProcessingPaymentPermanentDelete}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isProcessingPaymentPermanentDelete === `${paymentToPermanentlyDelete.schemeInfo.id}-${paymentToPermanentlyDelete.payment.id}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Archive Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ArchiveRestore className="h-5 w-5 text-primary" /> {/* Using ArchiveRestore as a general archive icon */}
+            Archive Management
+          </CardTitle>
+          <CardDescription>
+            Archive 'Fully Paid' or 'Closed' schemes to hide them from active lists. Archived schemes can be unarchived or permanently deleted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Section to Archive Schemes */}
+          <div className="border-b pb-6">
+            <h3 className="text-lg font-medium mb-2 text-foreground">Archive Schemes</h3>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="archive-date-picker">Archive Date for Selected</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="archive-date-picker"
+                      variant={'outline'}
+                      className={cn('w-full sm:w-[200px] justify-start text-left font-normal', !archiveDateForSelected && 'text-muted-foreground')}
+                      disabled={isProcessingArchiveSelected}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {archiveDateForSelected ? formatDateFns(archiveDateForSelected, "dd MMM yyyy") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={archiveDateForSelected}
+                      onSelect={setArchiveDateForSelected}
+                      disabled={(date) => date > new Date() || isProcessingArchiveSelected}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Button
+                onClick={handleArchiveSelectedSchemes}
+                disabled={selectedToArchiveSchemeIds.length === 0 || isProcessingArchiveSelected || !archiveDateForSelected}
+                className="mt-2 sm:mt-6"
+              >
+                {isProcessingArchiveSelected ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArchiveRestore className="mr-2 h-4 w-4" />}
+                Archive Selected ({selectedToArchiveSchemeIds.length})
+              </Button>
+            </div>
+            {eligibleForArchivingSchemes.length > 0 ? (
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead padding="checkbox" className="w-12">
+                        <Checkbox
+                          checked={isAllEligibleToArchiveSelected}
+                          onCheckedChange={handleSelectAllToArchiveSchemes}
+                          aria-label="Select all eligible schemes to archive"
+                          disabled={isProcessingArchiveSelected}
+                        />
+                      </TableHead>
+                      <TableHead>Customer Name</TableHead>
+                      <TableHead>Scheme ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Closure/Fully Paid Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {eligibleForArchivingSchemes.map((scheme) => (
+                      <TableRow key={`to-archive-${scheme.id}`} data-state={selectedToArchiveSchemeIds.includes(scheme.id) ? 'selected' : ''}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            checked={selectedToArchiveSchemeIds.includes(scheme.id)}
+                            onCheckedChange={(checked) => handleSelectToArchiveScheme(scheme.id, !!checked)}
+                            aria-label={`Select scheme ${scheme.id} to archive`}
+                            disabled={isProcessingArchiveSelected}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                        <TableCell>{scheme.id}</TableCell>
+                        <TableCell><SchemeStatusBadge status={scheme.status} /></TableCell>
+                        <TableCell>{formatDate(scheme.closureDate || scheme.payments.find(p=>p.status === 'Paid')?.paymentDate)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No schemes currently eligible for archiving (must be 'Fully Paid' or 'Closed', not already archived, and not soft-deleted).</p>
+            )}
+          </div>
+
+          {/* Section to Manage Currently Archived Schemes */}
+          <div>
+            <h3 className="text-lg font-medium mb-2 text-foreground">Currently Archived Schemes ({archivedSchemesList.length})</h3>
+            {isLoadingArchived ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading archived schemes...
+              </div>
+            ) : archivedSchemesList.length > 0 ? (
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer Name</TableHead>
+                      <TableHead>Scheme ID</TableHead>
+                      <TableHead>Original Status</TableHead>
+                      <TableHead>Archived Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {archivedSchemesList.map((scheme) => (
+                      <TableRow key={`archived-${scheme.id}`}>
+                        <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                      <TableCell>{scheme.id}</TableCell>
+                        <TableCell><SchemeStatusBadge status={scheme.status} /></TableCell> {/* Shows original status */}
+                        <TableCell>
+                        {editingArchivedDateId === scheme.id.toString() ? (
+                            <Popover open={true} onOpenChange={(open) => !open && setEditingArchivedDateId(null)}>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8">
+                                  {newArchivedDate ? formatDateFns(newArchivedDate, "dd MMM yyyy") : formatDate(scheme.archivedDate)} <CalendarIcon className="ml-2 h-3 w-3"/>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                              <Calendar mode="single" selected={newArchivedDate || (scheme.archivedDate ? parseISO(scheme.archivedDate) : undefined)} onSelect={setNewArchivedDate} initialFocus />
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            formatDate(scheme.archivedDate)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right space-x-1">
+                        {editingArchivedDateId === scheme.id.toString() ? (
+                            <>
+                              <Button variant="default" size="sm" onClick={() => handleSaveArchiveDate(scheme.id)} className="h-8">Save</Button>
+                              <Button variant="ghost" size="sm" onClick={() => { setEditingArchivedDateId(null); setNewArchivedDate(undefined);}} className="h-8">Cancel</Button>
+                            </>
+                          ) : (
+                          <Button variant="outline" size="sm" onClick={() => { setEditingArchivedDateId(scheme.id.toString()); setNewArchivedDate(scheme.archivedDate ? parseISO(scheme.archivedDate) : undefined )}} className="h-8">
+                              <CalendarIcon className="mr-1 h-3 w-3"/> Edit Date
+                            </Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => handleUnarchiveSchemeClicked(scheme.id)} className="h-8">
+                             <RefreshCcw className="mr-1 h-3 w-3"/> Unarchive
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleInitiatePermanentDeleteArchivedScheme(scheme)} className="h-8">
+                            <Trash2 className="mr-1 h-3 w-3"/> Delete Permanently
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">No schemes are currently archived.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+
+      {/* Recycle Bin Card (already implemented in previous step, shown here for context of where it is) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-primary" />
+            Recycle Bin
+          </CardTitle>
+          <CardDescription>
+            Manage soft-deleted schemes and payments. You can restore them or delete them permanently.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Soft-Deleted Schemes Table ... */}
+          {/* Soft-Deleted Payments Table ... */}
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog for Permanently Deleting Scheme from Recycle Bin ... */}
+      {/* Confirmation Dialog for Permanently Deleting Payment from Recycle Bin ... */}
+
 
     </div>
   );

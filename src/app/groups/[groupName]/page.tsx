@@ -25,7 +25,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
   'Active': 1,
   'Upcoming': 2,
-  'Completed': 3,
+  'Fully Paid': 3,
   'Closed': 4,
   Archived: 0
 };
@@ -80,7 +80,7 @@ export default function GroupDetailsPage() {
       const searchTermLower = schemeSearchTerm.toLowerCase();
       filteredForSearch = filteredForSearch.filter(scheme =>
         scheme.customerName.toLowerCase().includes(searchTermLower) ||
-        scheme.id.toLowerCase().includes(searchTermLower)
+        scheme.id.toString().toLowerCase().includes(searchTermLower) // Convert number to string for search
       );
     }
 
@@ -446,7 +446,7 @@ export default function GroupDetailsPage() {
                             >
                               <TableCell className="sticky left-0 bg-card/80 dark:bg-card/80 z-10 pl-8 py-2.5">
                                 <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary text-sm block">
-                                  {scheme.id.toUpperCase()}
+                                  {scheme.id}
                                 </Link>
                               </TableCell>
                               <TableCell className="text-sm py-2.5">{formatDate(scheme.startDate)}</TableCell>

@@ -35,7 +35,7 @@ export function SchemeHistoryPanel({ isOpen, onClose, scheme }: SchemeHistoryPan
         <SheetHeader className="relative pr-8"> {/* Add padding to avoid overlap with close button */}
           <SheetTitle className="font-headline">Transaction History</SheetTitle>
           <SheetDescription>
-            For {scheme.customerName} - Scheme ID: {scheme.id.toUpperCase()}
+            For {scheme.customerName} - Scheme ID: {scheme.id}
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="flex-grow my-4 pr-5">

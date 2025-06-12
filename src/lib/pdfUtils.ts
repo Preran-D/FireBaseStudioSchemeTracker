@@ -44,31 +44,75 @@ export const exportGroupSchemesToPdf = (
     'Status',
   ];
 
-  const tableRows: any[][] = [];
+  let currentY = 55; // Initial Y position for the first table
 
-  schemes.forEach(scheme => {
+  schemes.forEach((scheme, index) => {
     const schemeTotals = calculateSchemeTotals(scheme);
     const status = (getSchemeStatus(scheme).toLowerCase() !== 'closed') ? 'ACTIVE' : 'CLOSED';
 
-
-    tableRows.push([
+    const schemeTableRows = [[
       scheme.customerName,
-      scheme.id.toUpperCase(),
+      scheme.id.toString(), // scheme.id is now number
       formatDate(scheme.startDate),
-      "Rs."+(scheme.monthlyPaymentAmount)+"/-",
-      "Rs."+(schemeTotals.totalCollected)+"/-",
+      "Rs." + scheme.monthlyPaymentAmount + "/-",
+      "Rs." + (schemeTotals.totalCollected ?? 0) + "/-", // Use ?? 0 for potential undefined
       `${schemeTotals.paymentsMadeCount || 0} / ${scheme.durationMonths}`,
       status,
-    ]);
-  });
+    ]];
 
-  autoTable(doc, {
-    head: [tableColumns],
-    body: tableRows,
-    startY: 55, // Start table after title and summary
-    theme: 'striped',
-    headStyles: { fillColor: [22, 160, 133] }, // Example: Teal color for header
-    margin: { top: 10 },
+    autoTable(doc, {
+      head: [tableColumns], // Always provide header columns
+      body: schemeTableRows,
+      startY: currentY,
+      theme: 'striped',
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: 10 },
+      didDrawPage: (data) => { // Ensure currentY is updated if a page break occurs
+        currentY = data.cursor?.y || currentY;
+      }
+      // Removed didParseCell hack, relying on autoTable's default width calculations or explicit widths if issues arise
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY || currentY; // Update Y to position after the scheme table
+
+    // Add Transaction Details
+    if (scheme.payments && scheme.payments.length > 0) {
+      currentY += 4; // Add a small gap before the transaction table
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text("Transactions:", 14, currentY);
+      currentY += 5;
+
+      const transactionTableColumns = ['Month #', 'Payment Date', 'Amount Paid', 'Status'];
+      const transactionTableRows = scheme.payments.map(p => [
+        p.monthNumber,
+        p.paymentDate ? formatDate(p.paymentDate) : 'N/A',
+        p.amountPaid ? formatCurrency(p.amountPaid) : 'N/A',
+        p.status,
+      ]);
+
+      autoTable(doc, {
+        head: [transactionTableColumns],
+        body: transactionTableRows,
+        startY: currentY,
+        theme: 'grid', // Use a different theme for transactions for visual distinction
+        headStyles: { fillColor: [75, 75, 75] }, // Darker grey for transaction header
+        styles: { fontSize: 8 },
+        margin: { left: 14 + 2, right: 14 }, // Indent transaction table slightly
+        tableWidth: 'auto', // Adjust table width to content
+        didDrawPage: (data) => { // Ensure currentY is updated if a page break occurs
+          currentY = data.cursor?.y || currentY;
+        }
+      });
+      currentY = (doc as any).lastAutoTable.finalY || currentY;
+    } else {
+      currentY += 5; // Add a small gap
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.text("No payments recorded for this scheme.", 14 + 2, currentY); // Indent "No payments" text
+      currentY += 7;
+    }
+    currentY += 10; // Add some padding before the next scheme entry
   });
 
   doc.save(`Group_${groupName}_Schemes.pdf`);
@@ -78,7 +122,7 @@ export const exportGroupSchemesToPdf = (
 interface CustomerReportSchemeSummary {
   totalSchemes: number;
   activeSchemes: number;
-  completedSchemes: number;
+  fullyPaidSchemes: number;
   closedSchemes: number;
   overdueSchemes: number;
   totalCollected: number;
@@ -156,7 +200,7 @@ export const exportCustomerReportsToPdf = (customers: CustomerReportDataForPdf[]
     summaryX += 60; // Adjust spacing as needed
     doc.text(`Active: ${customer.schemesSummary.activeSchemes}`, summaryX, currentY);
     summaryX += 30;
-    doc.text(`Completed: ${customer.schemesSummary.completedSchemes}`, summaryX, currentY);
+    doc.text(`Fully Paid: ${customer.schemesSummary.fullyPaidSchemes}`, summaryX, currentY);
     currentY += 5;
     summaryX = 14; // Reset X for next line
     doc.text(`Closed: ${customer.schemesSummary.closedSchemes}`, summaryX, currentY);
@@ -174,7 +218,7 @@ export const exportCustomerReportsToPdf = (customers: CustomerReportDataForPdf[]
         const totals = calculateSchemeTotals(scheme); // Recalculate for safety, though already in summary
         const status = getSchemeStatus(scheme); // Use current status
         return [
-          scheme.id.toUpperCase(),
+          scheme.id.toString(), // scheme.id is now number
           formatDate(scheme.startDate),
           "Rs." + scheme.monthlyPaymentAmount + "/-",
           status,

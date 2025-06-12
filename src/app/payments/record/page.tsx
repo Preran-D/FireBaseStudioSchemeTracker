@@ -65,9 +65,9 @@ export default function RecordPaymentPage() {
   const [pageLoading, setPageLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
-  const [monthsToPayPerScheme, setMonthsToPayPerScheme] = useState<{ [schemeId: string]: number }>({});
-  const [paymentModePerScheme, setPaymentModePerScheme] = useState<{ [schemeId: string]: PaymentMode[] }>({});
+  const [selectedSchemeIds, setSelectedSchemeIds] = useState<number[]>([]); // Store numbers
+  const [monthsToPayPerScheme, setMonthsToPayPerScheme] = useState<{ [schemeId: number]: number }>({}); // Key is number
+  const [paymentModePerScheme, setPaymentModePerScheme] = useState<{ [schemeId: number]: PaymentMode[] }>({}); // Key is number
 
   const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
   const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
@@ -171,28 +171,29 @@ export default function RecordPaymentPage() {
   };
 
   const handleToggleGroupSuggestion = (groupToToggle: GroupDetail) => {
-    const groupSchemeIds = groupToToggle.schemes
+    const groupSchemeIds = groupToToggle.schemes // scheme.id is number
       .filter(s => allRecordableSchemes.some(rs => rs.id === s.id && (rs.durationMonths - (rs.paymentsMadeCount || 0)) > 0))
-      .map(s => s.id);
+      .map(s => s.id); // This correctly maps to number[]
 
-    let newSelectedIds = [...selectedSchemeIds];
+    let newSelectedIds = [...selectedSchemeIds]; // selectedSchemeIds is number[]
     let newMonths = { ...monthsToPayPerScheme };
     let newModes = { ...paymentModePerScheme };
 
     if (activeGroupSelection === groupToToggle.groupName) {
+      // groupSchemeIds is number[], selectedSchemeIds is number[]
       newSelectedIds = selectedSchemeIds.filter(id => !groupSchemeIds.includes(id));
-      groupSchemeIds.forEach(id => {
+      groupSchemeIds.forEach(id => { // id is number
         delete newMonths[id];
         delete newModes[id];
       });
       setActiveGroupSelection(null);
     } else {
-      const currentSelectedSet = new Set(selectedSchemeIds);
-      groupSchemeIds.forEach(id => currentSelectedSet.add(id));
+      const currentSelectedSet = new Set(selectedSchemeIds); // selectedSchemeIds is number[]
+      groupSchemeIds.forEach(id => currentSelectedSet.add(id)); // id is number
       newSelectedIds = Array.from(currentSelectedSet);
 
-      groupSchemeIds.forEach(id => {
-        const scheme = allRecordableSchemes.find(s => s.id === id);
+      groupSchemeIds.forEach(id => { // id is number
+        const scheme = allRecordableSchemes.find(s => s.id === id); // s.id is number
         const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
         if (!newMonths[id] || newMonths[id] === 0) {
           newMonths[id] = maxMonths > 0 ? 1 : 0;
@@ -228,7 +229,7 @@ export default function RecordPaymentPage() {
       unselectedItems = unselectedItems.filter(
         (s) =>
           s.customerName.toLowerCase().includes(lowerSearchTerm) ||
-          s.id.toLowerCase().includes(lowerSearchTerm) ||
+          s.id.toString().toLowerCase().includes(lowerSearchTerm) || // s.id is number
           (s.customerGroupName && s.customerGroupName.toLowerCase().includes(lowerSearchTerm))
       );
     }
@@ -242,16 +243,16 @@ export default function RecordPaymentPage() {
     return [...selectedItems, ...unselectedItems];
   }, [allRecordableSchemes, searchTerm, selectedSchemeIds, suggestedGroup, groupNameSuggestions, activeGroupSelection]);
 
-  const handleSchemeSelectionToggle = (schemeId: string, checked: boolean) => {
-    setSelectedSchemeIds((prevIds) =>
+  const handleSchemeSelectionToggle = (schemeId: number, checked: boolean) => { // schemeId is number
+    setSelectedSchemeIds((prevIds) => // prevIds is number[]
       checked ? [...prevIds, schemeId] : prevIds.filter((id) => id !== schemeId)
     );
 
     if (checked) {
-      setMonthsToPayPerScheme((prevMonths) => {
+      setMonthsToPayPerScheme((prevMonths) => { // prevMonths keys are numbers
         const newMonths = { ...prevMonths };
-        if (!newMonths[schemeId] || newMonths[schemeId] === 0) {
-          const scheme = allRecordableSchemes.find(s => s.id === schemeId);
+        if (!newMonths[schemeId] || newMonths[schemeId] === 0) { // schemeId is number
+          const scheme = allRecordableSchemes.find(s => s.id === schemeId); // s.id is number
           const maxMonths = scheme ? (scheme.durationMonths - (scheme.paymentsMadeCount || 0)) : 1;
           newMonths[schemeId] = maxMonths > 0 ? 1 : 0;
         }
@@ -267,23 +268,23 @@ export default function RecordPaymentPage() {
     } else {
       setMonthsToPayPerScheme(prev => {
           const newMonths = {...prev};
-          delete newMonths[schemeId];
+          delete newMonths[schemeId]; // schemeId is number
           return newMonths;
       });
-      setPaymentModePerScheme(prev => {
+      setPaymentModePerScheme(prev => { // prev keys are numbers
           const newModes = {...prev};
-          delete newModes[schemeId];
+          delete newModes[schemeId]; // schemeId is number
           return newModes;
       });
     }
   };
 
-  const handleMonthsToPayChange = (schemeId: string, delta: number) => {
-    const scheme = allRecordableSchemes.find((s) => s.id === schemeId);
+  const handleMonthsToPayChange = (schemeId: number, delta: number) => { // schemeId is number
+    const scheme = allRecordableSchemes.find((s) => s.id === schemeId); // s.id is number
     if (!scheme) return;
 
-    setMonthsToPayPerScheme((prevMonths) => {
-      const currentMonths = prevMonths[schemeId] || 0;
+    setMonthsToPayPerScheme((prevMonths) => { // prevMonths keys are numbers
+      const currentMonths = prevMonths[schemeId] || 0; // schemeId is number
       let newMonthsCount = currentMonths + delta;
       const maxMonths = scheme.durationMonths - (scheme.paymentsMadeCount || 0);
 
@@ -291,17 +292,17 @@ export default function RecordPaymentPage() {
       if (newMonthsCount < 0 && maxMonths <= 0) newMonthsCount = 0;
       if (newMonthsCount > maxMonths) newMonthsCount = maxMonths;
 
-      return { ...prevMonths, [schemeId]: newMonthsCount };
+      return { ...prevMonths, [schemeId]: newMonthsCount }; // schemeId is number
     });
   };
 
-  const handlePaymentModeChange = (schemeId: string, mode: PaymentMode, checked: boolean) => {
-    setPaymentModePerScheme(prev => {
-      const currentModesForScheme = prev[schemeId] || [];
+  const handlePaymentModeChange = (schemeId: number, mode: PaymentMode, checked: boolean) => { // schemeId is number
+    setPaymentModePerScheme(prev => { // prev keys are numbers
+      const currentModesForScheme = prev[schemeId] || []; // schemeId is number
       const newModesForScheme = checked
         ? [...currentModesForScheme, mode]
         : currentModesForScheme.filter(m => m !== mode);
-      return { ...prev, [schemeId]: newModesForScheme };
+      return { ...prev, [schemeId]: newModesForScheme }; // schemeId is number
     });
   };
 
@@ -314,18 +315,18 @@ export default function RecordPaymentPage() {
       }
       return total;
     }, 0);
-  }, [selectedSchemeIds, monthsToPayPerScheme, allRecordableSchemes]);
+  }, [selectedSchemeIds, monthsToPayPerScheme, allRecordableSchemes]); // selectedSchemeIds is number[], monthsToPayPerScheme keys are numbers
 
   const isSubmissionDisabled = useMemo(() => {
     if (processingPayment) return true;
     if (selectedSchemeIds.length === 0) return true;
 
     let atLeastOneSchemeHasMonths = false;
-    for (const schemeId of selectedSchemeIds) {
-      const months = monthsToPayPerScheme[schemeId] || 0;
+    for (const schemeId of selectedSchemeIds) { // schemeId is number
+      const months = monthsToPayPerScheme[schemeId] || 0; // schemeId is number
       if (months > 0) {
         atLeastOneSchemeHasMonths = true;
-        const modes = paymentModePerScheme[schemeId] || [];
+        const modes = paymentModePerScheme[schemeId] || []; // schemeId is number
         if (modes.length === 0) {
           return true;
         }
@@ -334,11 +335,11 @@ export default function RecordPaymentPage() {
     if (!atLeastOneSchemeHasMonths && selectedSchemeIds.length > 0) return true;
 
     return !form.formState.isValid;
-  }, [processingPayment, selectedSchemeIds, monthsToPayPerScheme, paymentModePerScheme, form.formState.isValid]);
+  }, [processingPayment, selectedSchemeIds, monthsToPayPerScheme, paymentModePerScheme, form.formState.isValid]); // Dependencies are correct
 
-  const handleShowSchemePeek = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, schemeId: string) => {
+  const handleShowSchemePeek = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, schemeId: number) => { // schemeId is number
     event.preventDefault();
-    const schemeToShow = allRecordableSchemes.find(s => s.id === schemeId);
+    const schemeToShow = allRecordableSchemes.find(s => s.id === schemeId); // s.id is number
     if (schemeToShow) {
       setSchemeForPeekPanel(schemeToShow);
       setIsSchemePeekPanelOpen(true);
@@ -529,11 +530,11 @@ export default function RecordPaymentPage() {
               >
                 <div className="flex-grow space-y-1.5">
                   <div className="flex justify-between items-start">
-                    <a href={`/schemes/${scheme.id}`} onClick={(e) => handleShowSchemePeek(e, scheme.id)}
+                    <a href={`/schemes/${scheme.id}`} onClick={(e) => handleShowSchemePeek(e, scheme.id)} // scheme.id is number
                       className="font-semibold text-primary hover:underline text-lg flex items-center">
                       {scheme.customerName} <ExternalLink className="h-4 w-4 ml-1.5"/>
                     </a>
-                    <span className="font-mono text-sm font-bold text-muted-foreground">{scheme.id.toUpperCase()}</span>
+                    <span className="font-mono text-sm font-bold text-muted-foreground">{scheme.id}</span>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1">
                     {scheme.customerGroupName && <div className="flex items-center gap-1.5"><Users className="h-4 w-4"/>{scheme.customerGroupName}</div>}

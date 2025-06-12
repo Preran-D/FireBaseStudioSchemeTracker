@@ -39,7 +39,7 @@ interface AssignGroupDialogProps {
   onClose: () => void;
   scheme: Scheme;
   existingGroupNames: string[];
-  onSubmit: (schemeId: string, groupName?: string) => void;
+  onSubmit: (schemeId: number, groupName?: string) => void;
   isLoading?: boolean;
 }
 
@@ -85,7 +85,7 @@ export function AssignGroupDialog({ isOpen, onClose, scheme, existingGroupNames,
         <DialogHeader>
           <DialogTitle className="font-headline">Assign/Change Group for {scheme.customerName}</DialogTitle>
           <DialogDescription>
-            Scheme ID: {scheme.id.toUpperCase()} <br/>
+            Scheme ID: {scheme.id} <br/>
             Current Group: {scheme.customerGroupName || 'None'}
           </DialogDescription>
         </DialogHeader>
