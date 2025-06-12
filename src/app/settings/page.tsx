@@ -5,8 +5,8 @@ import { useState, type ReactNode, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme } from '@/lib/mock-data';
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive } from 'lucide-react'; // Added Archive
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
 import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
 import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
 // import { exportToExcel } from '@/lib/excelUtils'; // This was removed in a previous task
@@ -53,6 +53,7 @@ function DataManagementTabContent() {
   const [selectedClosedSchemeIds, setSelectedClosedSchemeIds] = useState<string[]>([]);
   const [isReopeningClosedSchemes, setIsReopeningClosedSchemes] = useState(false);
   const [isDeletingClosedSchemes, setIsDeletingClosedSchemes] = useState(false);
+  const [isArchivingSelectedSchemes, setIsArchivingSelectedSchemes] = useState(false); // New state
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [schemesPendingDeletionInfo, setSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
 
@@ -71,9 +72,9 @@ function DataManagementTabContent() {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
     const allSchemes = getMockSchemes();
-    // Filter for both 'Completed' and 'Closed' statuses
+    // Filter for both 'Fully Paid' and 'Closed' statuses
     const completedAndClosed = allSchemes
-      .filter(s => s.status === 'Completed' || s.status === 'Closed')
+      .filter(s => s.status === 'Fully Paid' || s.status === 'Closed')
       .sort((a, b) => {
         // Prioritize sorting by closureDate if available, then by startDate or some other criteria
         const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
@@ -541,6 +542,67 @@ function DataManagementTabContent() {
     setIsReopeningClosedSchemes(false);
   };
 
+  const handleArchiveSelectedSchemes = async () => {
+    if (selectedClosedSchemeIds.length === 0) {
+      toast({ title: "No Schemes Selected", description: "Please select schemes to archive.", variant: "destructive" });
+      return;
+    }
+    setIsArchivingSelectedSchemes(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Directly use MOCK_SCHEMES from import for checking current status before archiving
+    // This is a temporary workaround for not having a direct 'getNonReactiveMockSchemes()'
+    // In a real scenario, you'd fetch the latest full list or ensure `completedSchemes` is always perfectly up-to-date.
+    const currentSystemSchemes = getMockSchemes({ includeArchived: true });
+
+
+    for (const schemeId of selectedClosedSchemeIds) {
+      const schemeInList = completedSchemes.find(s => s.id === schemeId); // Check if it was in the displayed list
+      if (schemeInList) {
+        const actualSchemeToArchive = currentSystemSchemes.find(s => s.id === schemeId); // Get its most current state
+
+        if (actualSchemeToArchive && actualSchemeToArchive.status === 'Closed') {
+            const result = archiveMockScheme(schemeId); // archiveMockScheme is from mock-data
+            if (result) {
+              successCount++;
+            } else {
+              errorCount++;
+              toast({ title: "Archive Error", description: `Failed to archive scheme ${schemeId}. It might not be in a state suitable for archiving.`, variant: "destructive" });
+            }
+        } else if (actualSchemeToArchive && actualSchemeToArchive.status === 'Fully Paid') {
+            errorCount++;
+            toast({ title: "Not Archived", description: `Scheme ${schemeId} (${actualSchemeToArchive.customerName}) is 'Fully Paid' but not 'Closed'. Please close it first if you wish to archive it immediately.`, variant: "default", duration: 6000 });
+        } else if (actualSchemeToArchive && actualSchemeToArchive.status === 'Archived') {
+            errorCount++;
+            toast({ title: "Already Archived", description: `Scheme ${schemeId} (${actualSchemeToArchive.customerName}) is already archived.`, variant: "default" });
+        } else {
+            errorCount++;
+            toast({ title: "Not Archived", description: `Scheme ${schemeId} (${actualSchemeToArchive?.customerName}) could not be archived (current status: ${actualSchemeToArchive?.status}).`, variant: "destructive" });
+        }
+      } else {
+        errorCount++;
+         toast({ title: "Scheme not found", description: `Scheme with ID ${schemeId} not found in the current list. It might have been updated.`, variant: "destructive" });
+      }
+    }
+
+    if (successCount > 0) {
+      toast({
+        title: "Archiving Complete",
+        description: `${successCount} selected scheme(s) archived. ${errorCount > 0 ? `${errorCount} other(s) not archived (see other messages).` : ''}`,
+      });
+    } else if (errorCount > 0 && successCount === 0) {
+      // Individual toasts for errors/non-actions already shown.
+      // Optionally, show a summary toast if no successes occurred but there were attempts.
+      // toast({ title: "Archiving Processed", description: "No schemes were archived. See previous messages for details.", variant: "default"});
+    }
+
+
+    loadAllData();
+    setIsArchivingSelectedSchemes(false);
+    // setSelectedClosedSchemeIds([]); // Clear selection after action
+  };
+
   const handleInitiateDeleteSelectedSchemes = () => {
     if (selectedClosedSchemeIds.length === 0) return;
     const info = selectedClosedSchemeIds.map(id => {
@@ -927,25 +989,33 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Completed & Closed Scheme Management
+            Fully Paid & Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that are 'Completed' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
+            Manage schemes that are 'Fully Paid' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <Button
               onClick={handleReopenSelectedSchemes}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
             >
               {isReopeningClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
               Reopen Selected ({selectedClosedSchemeIds.length})
             </Button>
             <Button
+              variant="outline"
+              onClick={() => handleArchiveSelectedSchemes()}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
+            >
+              {isArchivingSelectedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
+              Archive Selected ({selectedClosedSchemeIds.length})
+            </Button>
+            <Button
               variant="destructive"
               onClick={handleInitiateDeleteSelectedSchemes}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
             >
               {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
               Delete Selected ({selectedClosedSchemeIds.length})
@@ -961,7 +1031,7 @@ function DataManagementTabContent() {
                         checked={isAllCompletedSelected}
                         onCheckedChange={handleSelectAllClosedSchemes}
                         aria-label="Select all completed schemes"
-                        disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
+                        disabled={isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
                       />
                     </TableHead>
                     <TableHead>Customer Name</TableHead>
@@ -978,7 +1048,7 @@ function DataManagementTabContent() {
                           checked={selectedClosedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectClosedScheme(scheme.id, !!checked)}
                           aria-label={`Select scheme ${scheme.id.toUpperCase()}`}
-                          disabled={isReopeningClosedSchemes || isDeletingClosedSchemes}
+                          disabled={isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{scheme.customerName}</TableCell>
@@ -1152,6 +1222,7 @@ function RecommendedSettingsTabContent() {
   const { toast } = useToast(); // Added for toast messages
   const [autoArchive, setAutoArchive] = useState(false);
   const [isProcessingArchive, setIsProcessingArchive] = useState(false); // Added for loading state
+  const [archiveDays, setArchiveDays] = useState(60);
   const [defaultPaymentMode, setDefaultPaymentMode] = useState<DefaultPaymentModeType>("Cash");
   const paymentModeOptions: DefaultPaymentModeType[] = ["Cash", "Card", "UPI"];
 
@@ -1163,8 +1234,8 @@ function RecommendedSettingsTabContent() {
       const schemesToArchive = allSchemes.filter(scheme => {
         if (scheme.status === 'Closed' && scheme.closureDate) {
           const closureDate = parseISO(scheme.closureDate);
-          const sixtyDaysAgo = subDays(new Date(), 60);
-          return isBefore(closureDate, sixtyDaysAgo);
+          const daysAgo = subDays(new Date(), archiveDays);
+          return isBefore(closureDate, daysAgo);
         }
         return false;
       });
@@ -1230,13 +1301,30 @@ function RecommendedSettingsTabContent() {
             />
           </div>
           <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">
+            <Label htmlFor="archive-days" className="font-medium block mb-2">Archive Grace Period (Days)</Label>
+            <Input
+              id="archive-days"
+              type="number"
+              value={archiveDays}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                setArchiveDays(isNaN(val) || val < 0 ? 0 : val);
+              }}
+              className="max-w-xs"
+              disabled={isProcessingArchive}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Number of days after a scheme is 'Closed' before it can be manually archived using the 'Run Archiving Process Now' button.
+            </p>
+          </div>
+          <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">
             <Label className="font-medium block mb-2">Manual Archiving</Label>
             <Button onClick={handleRunArchiving} disabled={isProcessingArchive} className="w-full sm:w-auto">
               {isProcessingArchive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArchiveRestore className="mr-2 h-4 w-4" />}
               Run Archiving Process Now
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
-              Manually archives 'Closed' schemes where the closure date is older than 60 days.
+              Manually archives 'Closed' schemes where the closure date is older than the configured grace period.
             </p>
           </div>
            <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">

@@ -91,7 +91,7 @@ export function getSchemeStatus(scheme: Scheme): SchemeStatus {
   
   const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
   if (allPaymentsPaid) {
-    return 'Completed'; // All payments made, but not yet manually 'Closed'.
+    return 'Fully Paid'; // All payments made, but not yet manually 'Closed'.
   }
 
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));
