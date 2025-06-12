@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, FileText as FileTextIcon, Search, Download } from 'lucide-react'; // Using FileTextIcon alias for clarity
 import { exportCustomerReportsToPdf } from '@/lib/pdfUtils'; // Import the new PDF export function
+import { ExportPdfDialog } from '@/components/dialogs/ExportPdfDialog'; // Import the new dialog
 import { useToast } from '@/hooks/use-toast'; // Import useToast
 
 // Define a structure for customer-centric data
@@ -37,6 +38,7 @@ export default function ReportsPage() {
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportPdfDialogOpen, setIsExportPdfDialogOpen] = useState(false); // State for the export dialog
   const { toast } = useToast(); // Initialize useToast
 
   useEffect(() => {
@@ -117,32 +119,44 @@ export default function ReportsPage() {
 
   const isAllDisplayedSelected = displayedCustomers.length > 0 && selectedCustomerIds.length === displayedCustomers.length;
 
-  const handleExportCustomerPdf = async () => {
+  const handleExportCustomerPdf = () => {
     if (selectedCustomerIds.length === 0) {
-      // Consider a toast message here
+      toast({
+        title: "No Customers Selected",
+        description: "Please select at least one customer to export their report.",
+        variant: "default", // Or "warning" if you have one
+      });
       return;
     }
+    // Open the dialog
+    setIsExportPdfDialogOpen(true);
+  };
+
+  const handleConfirmExportCustomerPdf = async (exportType: 'condensed' | 'detailed') => {
     setIsExportingPdf(true);
+    setIsExportPdfDialogOpen(false); // Close dialog
+
     const customersToExport = allCustomersData.filter(c => selectedCustomerIds.includes(c.customerId));
 
-    // Placeholder for PDF export logic
-    // console.log("Exporting PDF for:", customersToExport.map(c => c.customerName));
     try {
-      await exportCustomerReportsToPdf(customersToExport);
+      // Brief delay to allow UI to update (dialog close, button loader)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      await exportCustomerReportsToPdf(customersToExport, exportType); // Pass exportType
       toast({
         title: "PDF Export Successful",
-        description: `Report for ${customersToExport.length} customer(s) is being downloaded.`,
+        description: `${exportType.charAt(0).toUpperCase() + exportType.slice(1)} report for ${customersToExport.length} customer(s) is being downloaded.`,
       });
     } catch (error) {
       console.error("Failed to export customer reports to PDF:", error);
       toast({
         title: "PDF Export Failed",
-        description: "An error occurred while generating the PDF.",
+        description: `An error occurred while generating the ${exportType} PDF.`,
         variant: "destructive",
       });
+    } finally {
+      setIsExportingPdf(false);
     }
-
-    setIsExportingPdf(false);
   };
 
 
@@ -163,7 +177,7 @@ export default function ReportsPage() {
           Customer Reports
         </h1>
         <Button
-          onClick={handleExportCustomerPdf}
+          onClick={handleExportCustomerPdf} // This now opens the dialog
           disabled={selectedCustomerIds.length === 0 || isExportingPdf}
           size="lg"
         >
@@ -171,6 +185,13 @@ export default function ReportsPage() {
           Export Selected to PDF ({selectedCustomerIds.length})
         </Button>
       </div>
+
+      <ExportPdfDialog
+        isOpen={isExportPdfDialogOpen}
+        onOpenChange={setIsExportPdfDialogOpen}
+        onExport={handleConfirmExportCustomerPdf}
+        isExporting={isExportingPdf}
+      />
 
       <Card className="shadow-lg">
         <CardHeader>
