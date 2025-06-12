@@ -84,33 +84,96 @@ export let MOCK_SCHEMES: Scheme[] = [
   createScheme('Diana Prince', subMonths(new Date(), 5), 500, "Smith Family", "5432109876", "Themyscira Island, Paradise"), 
   createScheme('Edward Scissorhands', subMonths(new Date(), 13), 2000, "Solo Ventures", "4321098765", "Gothic Mansion, Suburbia"), 
   createScheme('Fiona Gallagher', subMonths(new Date(), 11), 750, "Office Buddies", "3210987654", "South Side, Chicago"), 
-  createScheme('George Jetson', subMonths(new Date(), 3), 1200, "Office Buddies", "2109876543", "Orbit City, Skypad Apartments"),
+  createScheme('George Jetson', subMonths(new Date(), 3), 1200, undefined, "2109876543", "Orbit City, Skypad Apartments"),
   createScheme('Hannah Montana', subMonths(new Date(), 1), 600, undefined, "1098765432", "Malibu, CA"), 
   createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family", "0987654321", "Central City Apt"), 
 ];
 
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
 if (fionaSchemeIdx !== -1) {
+  // Ensure Fiona's scheme is fully paid to become 'Completed'
   MOCK_SCHEMES[fionaSchemeIdx].payments = MOCK_SCHEMES[fionaSchemeIdx].payments.map((p, index) => {
-    if (index < 10) { 
+    // Pay all 12 installments for Fiona
+    if (index < MOCK_SCHEMES[fionaSchemeIdx].durationMonths) {
       return { ...p, amountPaid: p.amountExpected, paymentDate: p.dueDate, status: 'Paid' as const, modeOfPayment: ['UPI'] as PaymentMode[] };
     }
     return p;
   });
+  // Ensure closureDate is NOT set for Fiona, so it's purely 'Completed'
+  MOCK_SCHEMES[fionaSchemeIdx].closureDate = undefined;
+
   MOCK_SCHEMES[fionaSchemeIdx].payments.forEach(p => p.status = getPaymentStatus(p, MOCK_SCHEMES[fionaSchemeIdx].startDate));
-  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]);
+  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]); // This should correctly set to 'Completed'
   const totals = calculateSchemeTotals(MOCK_SCHEMES[fionaSchemeIdx]);
   MOCK_SCHEMES[fionaSchemeIdx] = { ...MOCK_SCHEMES[fionaSchemeIdx], ...totals };
 }
 
 
-export const getMockSchemes = (): Scheme[] => JSON.parse(JSON.stringify(MOCK_SCHEMES.map(s => {
+export const getMockSchemes = (options?: { includeArchived?: boolean }): Scheme[] => {
+  const includeArchived = options?.includeArchived || false;
+  let schemesToProcess = MOCK_SCHEMES;
+
+  if (!includeArchived) {
+    schemesToProcess = MOCK_SCHEMES.filter(s => s.status !== 'Archived');
+  }
+
+  return JSON.parse(JSON.stringify(schemesToProcess.map(s => {
     const tempScheme = JSON.parse(JSON.stringify(s));
-    tempScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, tempScheme.startDate));
-    const status = getSchemeStatus(tempScheme);
+    // Ensure payments exist before trying to iterate
+    if (tempScheme.payments && Array.isArray(tempScheme.payments)) {
+      tempScheme.payments.forEach((p: Payment) => p.status = getPaymentStatus(p, tempScheme.startDate));
+    } else {
+      tempScheme.payments = []; // Initialize if undefined or not an array
+    }
+
+    // If scheme is already 'Archived', preserve it. Otherwise, calculate.
+    const status = tempScheme.status === 'Archived' ? 'Archived' : getSchemeStatus(tempScheme);
     const totals = calculateSchemeTotals(tempScheme);
+    // Ensure the status in the returned object is the potentially preserved 'Archived' status
     return { ...tempScheme, ...totals, status };
   })));
+};
+
+export const getArchivedMockSchemes = (): Scheme[] => {
+  // Uses getMockSchemes internal processing to ensure consistent scheme object structure
+  // and that the 'Archived' status is correctly preserved.
+  const allSchemesIncludingArchived = getMockSchemes({ includeArchived: true });
+  return allSchemesIncludingArchived.filter(s => s.status === 'Archived');
+};
+
+
+export const archiveMockScheme = (schemeId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+
+  if (scheme.status === 'Closed') {
+    scheme.status = 'Archived';
+    scheme.archivedDate = formatISO(new Date());
+    MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
+    return getMockSchemeById(schemeId); // Return a fresh copy with calculated fields
+  }
+  return undefined;
+};
+
+export const unarchiveMockScheme = (schemeId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  if (scheme.status === 'Archived') {
+    scheme.archivedDate = undefined;
+    // Revert to 'Closed'. getSchemeStatus will be called by getMockSchemeById
+    // and should correctly evaluate it based on its payments if it wasn't truly 'Closed' before archiving.
+    // Forcing it to 'Closed' here is a safe bet if it was archived from 'Closed'.
+    // If getSchemeStatus is robust, it might correctly set it to 'Completed' if all payments are made.
+    scheme.status = 'Closed';
+    MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
+    return getMockSchemeById(schemeId); // Return a fresh copy
+  }
+  return undefined;
+};
 
 export const getMockSchemeById = (id: string): Scheme | undefined => {
   const schemeFromGlobalArray = MOCK_SCHEMES.find(s => s.id === id);
@@ -684,6 +747,10 @@ export const deleteFullMockScheme = (schemeId: string): boolean => {
   MOCK_SCHEMES = MOCK_SCHEMES.filter(s => s.id !== schemeId);
   return MOCK_SCHEMES.length < initialLength;
 };
+
+// Note for getSchemeStatus in utils.ts:
+// It should ideally check: if (scheme.status === 'Archived') return 'Archived'; at the beginning.
+// This was partially handled in getMockSchemes by preserving 'Archived' status before calling getSchemeStatus.
 
 export const updateMockGroupName = (oldGroupName: string, newGroupName: string): boolean => {
   if (!newGroupName || newGroupName.trim() === "") return false;

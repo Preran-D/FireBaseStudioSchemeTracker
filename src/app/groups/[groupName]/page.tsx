@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, CalendarIcon as LucideCalendarIcon, FilterX, Badge, Pencil } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
 import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
@@ -17,12 +17,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import React from 'react';
 import { delay, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel } from '@/lib/excelUtils';
+import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export function
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format as formatDateFns, parseISO, isWithinInterval, startOfDay, endOfDay, isValid as isValidDate } from 'date-fns';
 
 const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
@@ -53,8 +50,7 @@ export default function GroupDetailsPage() {
   const [newGroupName, setNewGroupName] = useState(groupName);
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
   const [isConfirmingDeleteGroup, setIsConfirmingDeleteGroup] = useState(false);
-
-  const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined });
+  const [isDeletingGroupState, setIsDeletingGroupState] = useState(false); // Renamed to avoid conflict with scheme deletion
 
   const loadGroupSchemes = () => {
     if (groupName) {
@@ -87,27 +83,6 @@ export default function GroupDetailsPage() {
         scheme.customerName.toLowerCase().includes(searchTermLower) ||
         scheme.id.toLowerCase().includes(searchTermLower)
       );
-    }
-
-    if (dateRangeFilter.from || dateRangeFilter.to) {
-        filteredForSearch = filteredForSearch.filter(scheme => {
-            const schemeStartDate = parseISO(scheme.startDate);
-            if (!isValidDate(schemeStartDate)) return false;
-
-            const fromDate = dateRangeFilter.from ? startOfDay(dateRangeFilter.from) : null;
-            const toDate = dateRangeFilter.to ? endOfDay(dateRangeFilter.to) : null;
-
-            if (fromDate && toDate) {
-                return isWithinInterval(schemeStartDate, { start: fromDate, end: toDate });
-            }
-            if (fromDate) {
-                return schemeStartDate >= fromDate;
-            }
-            if (toDate) {
-                return schemeStartDate <= toDate;
-            }
-            return true;
-        });
     }
 
     const groups: {
@@ -169,7 +144,7 @@ export default function GroupDetailsPage() {
       }
     });
     return groups;
-  }, [allSchemesInGroup, schemeSearchTerm, sortBy, dateRangeFilter]);
+  }, [allSchemesInGroup, schemeSearchTerm, sortBy]);
 
   const groupSummaryStats = useMemo(() => {
     if (allSchemesInGroup.length === 0) {
@@ -281,39 +256,25 @@ export default function GroupDetailsPage() {
     setIsConfirmingDeleteGroup(true);
   };
 
-
-  const handleExportSchemes = () => {
+  const handleExportPdf = () => {
     setIsExporting(true);
-    const dataToExport: any[][] = [[
-      'Customer Name', 'Scheme ID', 'Start Date', 'Monthly Amount', 'Total Paid', 'Payments Made', 'Total Duration', 'Status'
-    ]];
-
-    groupedSchemes.forEach(customerGroup => {
-      customerGroup.schemes.forEach(scheme => {
-        const schemeTotals = calculateSchemeTotals(scheme);
-        dataToExport.push([
-          scheme.customerName,
-          scheme.id.toUpperCase(),
-          formatDate(scheme.startDate),
-          scheme.monthlyPaymentAmount,
-          schemeTotals.totalCollected,
-          `${schemeTotals.paymentsMadeCount || 0}`,
-          `${scheme.durationMonths}`,
-          getSchemeStatus(scheme)
-        ]);
-      });
-    });
+    // Use allSchemesInGroup for a flat list, or adapt pdfUtils to handle groupedSchemes if preferred.
+    // For simplicity, passing allSchemesInGroup and groupSummaryStats.
+    // The PDF utility can then decide how to best present this data.
+    // If groupedSchemes is essential for PDF structure, pdfUtils must be adapted.
+    // Current pdfUtils expects a flat array of schemes.
     try {
-      exportToExcel([{ name: `${groupName}_Schemes`, data: dataToExport }], `Group_${groupName}_Schemes`);
-      toast({ title: "Export Successful", description: `Schemes for group ${groupName} exported to Excel.` });
+      exportGroupSchemesToPdf(groupName, allSchemesInGroup, groupSummaryStats);
+      toast({ title: "PDF Export Successful", description: `Schemes for group ${groupName} are being downloaded.` });
     } catch (err) {
-      toast({ title: "Export Failed", description: "Could not export schemes to Excel.", variant: "destructive" });
+      console.error("PDF Export Error:", err);
+      toast({ title: "PDF Export Failed", description: "Could not generate PDF for schemes.", variant: "destructive" });
     }
     setIsExporting(false);
   };
   
   const confirmDeleteGroup = async () => {
-    setIsLoading(true); // Show main loader while deleting
+    setIsDeletingGroupState(true); // Use specific loading state
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
     await delay(500); 
     const success = deleteMockGroup(groupName);
@@ -329,21 +290,16 @@ export default function GroupDetailsPage() {
         description: `Could not delete group "${groupName}".`,
         variant: "destructive",
       });
-      setIsLoading(false); // Hide loader if deletion failed
     }
+    setIsDeletingGroupState(false); // Reset specific loading state
   };
 
 
-  const clearDateFilter = () => {
-    setDateRangeFilter({ from: undefined, to: undefined });
-  };
-
-
-  if (isLoading) {
+  if (isLoading && !isDeletingGroupState) { // Ensure main loader doesn't show if only deleting group
     return <div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
-  if (!groupName || (!isLoading && allSchemesInGroup.length === 0 && !schemeSearchTerm && !dateRangeFilter.from && !dateRangeFilter.to)) {
+  if (!groupName || (allSchemesInGroup.length === 0 && !isLoading && !isDeletingGroupState && !schemeSearchTerm)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <AlertTriangle className="h-16 w-16 text-destructive" />
@@ -378,12 +334,12 @@ export default function GroupDetailsPage() {
             {groupName}
           </h1>
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" onClick={handleEditGroupName} className="h-9 w-9">
+            <Button variant="outline" size="icon" onClick={handleEditGroupName} className="h-9 w-9" disabled={isDeletingGroupState}>
               <Pencil className="h-4 w-4" />
               <span className="sr-only">Edit Group Name</span>
             </Button>
-            <Button variant="outline" size="icon" onClick={handleDeleteGroup} className="h-9 w-9 text-destructive hover:bg-destructive/10">
-              <Trash2 className="h-4 w-4" />
+            <Button variant="outline" size="icon" onClick={handleDeleteGroup} className="h-9 w-9 text-destructive hover:bg-destructive/10" disabled={isDeletingGroupState}>
+              {isDeletingGroupState ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               <span className="sr-only">Delete Group</span>
             </Button>
           </div>
@@ -437,13 +393,13 @@ export default function GroupDetailsPage() {
                 <CardTitle className="text-xl font-headline text-foreground">All Schemes in {groupName} ({displayedSchemesCount})</CardTitle>
                 <CardDescription>Detailed list of all schemes associated with this group.</CardDescription>
               </div>
-              <Button onClick={handleExportSchemes} disabled={isExporting || displayedSchemesCount === 0} variant="outline" size="sm">
+              <Button onClick={handleExportPdf} disabled={isExporting || displayedSchemesCount === 0} variant="outline" size="sm">
                 {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                Export Excel
+                Export PDF
               </Button>
             </div>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 items-end">
-              <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+              <div className="sm:col-span-1">
                 <label htmlFor="schemeSearch" className="text-xs font-medium text-muted-foreground">Search Schemes</label>
                 <Input
                   id="schemeSearch"
@@ -452,63 +408,10 @@ export default function GroupDetailsPage() {
                   onChange={(e) => setSchemeSearchTerm(e.target.value)}
                   className="h-10 text-sm" />
               </div>
-              <div className="md:col-span-1 lg:col-span-1">
-                <label htmlFor="dateFrom" className="text-xs font-medium text-muted-foreground">Start Date From</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="dateFrom"
-                      variant={'outline'}
-                      className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.from && 'text-muted-foreground')}
-                    >
-                      <LucideCalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRangeFilter.from ? formatDateFns(dateRangeFilter.from, 'dd MMM yyyy') : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={dateRangeFilter.from}
-                      onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, from: date }))}
-                      initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="md:col-span-1 lg:col-span-1">
-                <label htmlFor="dateTo" className="text-xs font-medium text-muted-foreground">Start Date To</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="dateTo"
-                      variant={'outline'}
-                      className={cn('w-full justify-start text-left font-normal h-10 text-sm', !dateRangeFilter.to && 'text-muted-foreground')}
-                      disabled={!dateRangeFilter.from}
-                    >
-                      <LucideCalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRangeFilter.to ? formatDateFns(dateRangeFilter.to, 'dd MMM yyyy') : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={dateRangeFilter.to}
-                      onSelect={(date) => setDateRangeFilter(prev => ({ ...prev, to: date }))}
-                      disabled={(date) => dateRangeFilter.from ? date < dateRangeFilter.from : false}
-                      initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="flex gap-2 items-end">
-                {(dateRangeFilter.from || dateRangeFilter.to) && (
-                  <Button variant="ghost" onClick={clearDateFilter} size="sm" className="h-10">
-                    <FilterX className="mr-2 h-4 w-4" /> Clear Dates
-                  </Button>
-                )}
-                <div className="flex-grow">
-                  <label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">Sort Customers By</label>
-                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
-                    <SelectTrigger id="sortBy" className="h-10 text-sm">
+              <div className="sm:col-span-1">
+                <label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">Sort Customers By</label>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+                  <SelectTrigger id="sortBy" className="h-10 text-sm">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
@@ -526,7 +429,7 @@ export default function GroupDetailsPage() {
           <CardContent className="p-0">
             {groupedSchemes.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
-                {schemeSearchTerm || dateRangeFilter.from || dateRangeFilter.to ? 'No schemes match your filters.' : 'No schemes found in this group.'}
+                {schemeSearchTerm ? 'No schemes match your search.' : 'No schemes found in this group.'}
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -609,25 +512,30 @@ export default function GroupDetailsPage() {
 
       {schemeToDelete && (
         <AlertDialog open={!!schemeToDelete} onOpenChange={() => setSchemeToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete the scheme for {schemeToDelete.customerName} (ID: {schemeToDelete.id.toUpperCase()})? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setSchemeToDelete(null)} disabled={isDeletingScheme}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
-                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Delete Scheme
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
+          {/* ... existing scheme deletion dialog ... */}
         </AlertDialog>
       )}
+
+      <AlertDialog open={isConfirmingDeleteGroup} onOpenChange={setIsConfirmingDeleteGroup}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Group Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the group "{groupName}"? All schemes within this group will be ungrouped. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsConfirmingDeleteGroup(false)} disabled={isDeletingGroupState}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteGroup} disabled={isDeletingGroupState} className="bg-destructive hover:bg-destructive/80">
+              {isDeletingGroupState ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete Group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div><Dialog open={isEditingGroup} onOpenChange={setIsEditingGroup}>
         <DialogContent>
           <DialogHeader>

@@ -32,6 +32,10 @@ export function SchemeStatusBadge({ status }: SchemeStatusBadgeProps) {
       variant = 'destructive'; // Use destructive variant, color comes from classes
       className = 'bg-red-500/20 text-red-700 border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20';
       break;
+    case 'Archived':
+      variant = 'outline'; // Use outline variant
+      className = 'bg-slate-400/20 text-slate-600 border-slate-400/30 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20';
+      break;
     default:
       variant = 'outline';
   }

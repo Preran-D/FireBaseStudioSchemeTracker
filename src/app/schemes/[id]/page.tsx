@@ -7,9 +7,9 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone } from 'lucide-react';
+import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2 } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails } from '@/lib/mock-data';
+import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
@@ -73,6 +73,9 @@ export default function SchemeDetailsPage() {
   const [inlineMonthsToPay, setInlineMonthsToPay] = useState(1);
   const [inlinePaymentModes, setInlinePaymentModes] = useState<PaymentMode[]>(['Cash']);
   const [isInlinePaymentProcessing, setIsInlinePaymentProcessing] = useState(false);
+
+  const [isConfirmingDeleteScheme, setIsConfirmingDeleteScheme] = useState(false);
+  const [isDeletingScheme, setIsDeletingScheme] = useState(false);
 
   const inlinePaymentForm = useForm<InlinePaymentFormValues>({
     resolver: zodResolver(inlinePaymentFormSchema),
@@ -281,6 +284,47 @@ export default function SchemeDetailsPage() {
     return scheme.status !== 'Closed' && scheme.status !== 'Completed' && maxInlineMonthsToPay > 0;
   }, [scheme, maxInlineMonthsToPay]);
 
+  const handleOpenDeleteSchemeDialog = () => {
+    setIsConfirmingDeleteScheme(true);
+  };
+
+  const handleConfirmDeleteScheme = async () => {
+    if (!scheme) return;
+    setIsDeletingScheme(true);
+    const success = deleteFullMockScheme(scheme.id);
+    if (success) {
+      toast({
+        title: "Scheme Deleted",
+        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been deleted.`,
+      });
+      // Navigate away
+      const allSchemes = getMockSchemes(); // Get fresh list after deletion
+      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName);
+
+      if (remainingSchemesForCustomer.length > 0) {
+        router.push(`/schemes/${remainingSchemesForCustomer[0].id}`);
+      } else if (scheme.customerGroupName) {
+        // Check if group still exists (has other schemes)
+        const groupStillExists = allSchemes.some(s => s.customerGroupName === scheme.customerGroupName);
+        if (groupStillExists) {
+          router.push(`/groups/${encodeURIComponent(scheme.customerGroupName)}`);
+        } else {
+          router.push('/groups'); // Group is now empty, go to groups list
+        }
+      } else {
+        router.push('/schemes');
+      }
+    } else {
+      toast({
+        title: "Error Deleting Scheme",
+        description: `Could not delete scheme ID ${scheme.id.toUpperCase()}.`,
+        variant: "destructive",
+      });
+      setIsDeletingScheme(false);
+    }
+    setIsConfirmingDeleteScheme(false); // Close dialog regardless of outcome, unless navigation happens first
+  };
+
 
   if (isLoading || !scheme) {
     return (
@@ -328,7 +372,12 @@ export default function SchemeDetailsPage() {
                     {!scheme.customerPhone && !scheme.customerAddress && <span>No contact details available.</span>}
                 </CardDescription>
             </div>
-            <Button onClick={() => setIsEditCustomerDetailsDialogOpen(true)} variant="outline" size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
+            <Button
+              onClick={() => setIsEditCustomerDetailsDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme}
+            >
               <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </Button>
         </CardHeader>
@@ -404,7 +453,12 @@ export default function SchemeDetailsPage() {
             <Button onClick={() => setIsAssignGroupDialogOpen(true)} variant="outline"size="sm" disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing}>
               <Users2 className="mr-2 h-4 w-4" /> Manage Group
             </Button>
-             <Button onClick={() => setIsHistoryPanelOpen(true)} variant="outline" size="sm" disabled={isInlinePaymentProcessing}>
+             <Button
+                onClick={() => setIsHistoryPanelOpen(true)}
+                variant="outline"
+                size="sm"
+                disabled={isInlinePaymentProcessing || isDeletingScheme}
+              >
                 <History className="mr-2 h-4 w-4" /> View History
             </Button>
           </div>
@@ -611,15 +665,28 @@ export default function SchemeDetailsPage() {
           <CardContent className="space-y-3">
             <Button 
                 size="lg"
-                variant="destructive"
+                variant="outline" // Changed from destructive to outline for less prominence than delete
                 className="w-full"
                 onClick={() => openManualCloseDialog(scheme)}
-                disabled={scheme.status === 'Closed' || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing}
+                disabled={scheme.status === 'Closed' || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme || isUpdatingCustomerDetails}
             >
                 <FileWarning className="mr-2 h-4 w-4" /> Close Manually
             </Button>
-            <p className="text-xs text-muted-foreground">
-                Manually closing a scheme will mark it as 'Closed' on a selected date. This is an administrative action and does not automatically reconcile pending payments.
+             <p className="text-xs text-muted-foreground px-1">
+                Manually closing a scheme will mark it as 'Closed'. This is an administrative action.
+            </p>
+            <Button
+                size="lg"
+                variant="destructive"
+                className="w-full mt-3" // Added margin top
+                onClick={handleOpenDeleteSchemeDialog}
+                disabled={isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme || isUpdatingCustomerDetails}
+            >
+                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Scheme
+            </Button>
+             <p className="text-xs text-muted-foreground px-1">
+                Permanently delete this scheme and all its associated payment records. This action cannot be undone.
             </p>
           </CardContent>
         </Card>
@@ -714,7 +781,28 @@ export default function SchemeDetailsPage() {
         onClose={() => setIsHistoryPanelOpen(false)}
         scheme={scheme}
       />
+
+      {isConfirmingDeleteScheme && scheme && (
+        <AlertDialog open={isConfirmingDeleteScheme} onOpenChange={(open) => { if(!isDeletingScheme) setIsConfirmingDeleteScheme(open);}}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Scheme Deletion</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span>? All associated payment records will also be removed. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setIsConfirmingDeleteScheme(false)} disabled={isDeletingScheme}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
+                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
-    
