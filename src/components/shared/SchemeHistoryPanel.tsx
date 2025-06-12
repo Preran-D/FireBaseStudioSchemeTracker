@@ -31,8 +31,8 @@ export function SchemeHistoryPanel({ isOpen, onClose, scheme }: SchemeHistoryPan
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col z-[51]"> {/* Added z-[51] to ensure it's above dialog overlay */}
-        <SheetHeader className="pr-8"> {/* Add padding to avoid overlap with close button */}
+      <SheetContent className="w-full sm:max-w-lg flex flex-col z-[51]"> 
+        <SheetHeader className="relative pr-8"> {/* Add padding to avoid overlap with close button */}
           <SheetTitle className="font-headline">Transaction History</SheetTitle>
           <SheetDescription>
             For {scheme.customerName} - Scheme ID: {scheme.id.toUpperCase()}
@@ -48,14 +48,13 @@ export function SchemeHistoryPanel({ isOpen, onClose, scheme }: SchemeHistoryPan
                   <TableHead>Paid Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Mode</TableHead>
-                  <TableHead>Status</TableHead>
+                  {/* <TableHead>Status</TableHead> */}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {allPaymentsWithStatus.map((payment) => (
                   <TableRow key={payment.id} className={payment.currentStatus === 'Paid' ? 'bg-green-500/5' : ''}>
                     <TableCell>{payment.monthNumber}</TableCell>
-                    <TableCell>{formatDate(payment.dueDate)}</TableCell>
                     <TableCell>{formatDate(payment.paymentDate)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(payment.amountPaid ?? payment.amountExpected)}</TableCell>
                     <TableCell>{payment.modeOfPayment?.join(', ') || '-'}</TableCell>

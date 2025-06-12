@@ -8,8 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil } from 'lucide-react';
-import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
+import type { Scheme, SchemeStatus } from '@/types/scheme';
+import { getMockSchemes, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import React from 'react';
 import { delay, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
-import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export function
+import { exportGroupSchemesToPdf } from '@/lib/pdfUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -27,6 +27,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Upcoming': 2,
   'Completed': 3,
   'Closed': 4,
+  Archived: 0
 };
 
 export default function GroupDetailsPage() {
@@ -42,10 +43,8 @@ export default function GroupDetailsPage() {
   const [schemeSearchTerm, setSchemeSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'oldestFirst' | 'newestFirst' | 'statusPriority'>('customerNameAsc');
 
-  const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
-  const [isDeletingScheme, setIsDeletingScheme] = useState(false);
+  // const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState(groupName);
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
@@ -191,32 +190,6 @@ export default function GroupDetailsPage() {
     setIsSchemePeekPanelOpen(true);
   };
 
-  const handleDeleteScheme = (scheme: Scheme) => {
-    setSchemeToDelete(scheme);
-  };
-
-  const confirmDeleteScheme = () => {
-    if (schemeToDelete) {
-      setIsDeletingScheme(true);
-      const success = deleteFullMockScheme(schemeToDelete.id);
-      if (success) {
-        toast({
-          title: "Scheme Deleted",
-          description: `Scheme ID ${schemeToDelete.id.toUpperCase()} for ${schemeToDelete.customerName} has been deleted.`,
-        });
-        loadGroupSchemes(); 
-      } else {
-        toast({
-          title: "Error Deleting Scheme",
-          description: `Could not delete scheme ID ${schemeToDelete.id.toUpperCase()}.`,
-          variant: "destructive",
-        });
-      }
-      setSchemeToDelete(null);
-      setIsDeletingScheme(false);
-    }
-  };
-
   const handleEditGroupName = () => {
     setNewGroupName(groupName);
     setIsEditingGroup(true);
@@ -232,7 +205,7 @@ export default function GroupDetailsPage() {
       return;
     }
     setIsSavingGroupName(true);
-    await delay(500); 
+    await new Promise(resolve => delay(resolve, 500)); 
     const success = updateMockGroupName(groupName, newGroupName.trim());
     if (success) {
       toast({
@@ -276,7 +249,7 @@ export default function GroupDetailsPage() {
   const confirmDeleteGroup = async () => {
     setIsDeletingGroupState(true); // Use specific loading state
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
-    await delay(500); 
+    await new Promise(resolve => delay(resolve, 500)); 
     const success = deleteMockGroup(groupName);
     if (success) {
       toast({
@@ -424,7 +397,6 @@ export default function GroupDetailsPage() {
                   </Select>
                 </div>
               </div>
-            </div>
           </CardHeader>
           <CardContent className="p-0">
             {groupedSchemes.length === 0 ? (
@@ -442,7 +414,7 @@ export default function GroupDetailsPage() {
                       <TableHead className="text-base font-semibold text-right">Total Paid</TableHead>
                       <TableHead className="text-base font-semibold text-center min-w-[100px]">Payments</TableHead>
                       <TableHead className="text-base font-semibold min-w-[100px]">Status</TableHead>
-                      <TableHead className="text-base font-semibold text-center min-w-[120px]">Actions</TableHead>
+                      <TableHead className="text-base font-semibold text-center min-w-[120px]">Payments</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -487,10 +459,10 @@ export default function GroupDetailsPage() {
                                   <History className="h-4 w-4 text-primary" />
                                   <span className="sr-only">View History for {scheme.id}</span>
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteScheme(scheme)} className="h-8 w-8" disabled={isDeletingScheme}>
+                                {/* <Button variant="ghost" size="icon" onClick={() => handleDeleteScheme(scheme)} className="h-8 w-8" disabled={isDeletingScheme}>
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                   <span className="sr-only">Delete Scheme {scheme.id}</span>
-                                </Button>
+                                </Button> */}
                               </TableCell>
                             </motion.tr>
                           );
@@ -509,12 +481,6 @@ export default function GroupDetailsPage() {
         isOpen={isSchemePeekPanelOpen}
         onClose={() => setIsSchemePeekPanelOpen(false)}
         scheme={schemeForPeekPanel} />
-
-      {schemeToDelete && (
-        <AlertDialog open={!!schemeToDelete} onOpenChange={() => setSchemeToDelete(null)}>
-          {/* ... existing scheme deletion dialog ... */}
-        </AlertDialog>
-      )}
 
       <AlertDialog open={isConfirmingDeleteGroup} onOpenChange={setIsConfirmingDeleteGroup}>
         <AlertDialogContent>
