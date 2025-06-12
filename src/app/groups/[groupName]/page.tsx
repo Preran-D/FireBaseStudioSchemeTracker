@@ -27,6 +27,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Upcoming': 2,
   'Completed': 3,
   'Closed': 4,
+  Archived: 0
 };
 
 export default function GroupDetailsPage() {
@@ -232,7 +233,7 @@ export default function GroupDetailsPage() {
       return;
     }
     setIsSavingGroupName(true);
-    await delay(500); 
+    await new Promise(resolve => delay(resolve, 500));
     const success = updateMockGroupName(groupName, newGroupName.trim());
     if (success) {
       toast({
@@ -276,7 +277,7 @@ export default function GroupDetailsPage() {
   const confirmDeleteGroup = async () => {
     setIsDeletingGroupState(true); // Use specific loading state
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
-    await delay(500); 
+    await new Promise(resolve => delay(resolve, 500));
     const success = deleteMockGroup(groupName);
     if (success) {
       toast({
@@ -424,7 +425,6 @@ export default function GroupDetailsPage() {
                   </Select>
                 </div>
               </div>
-            </div>
           </CardHeader>
           <CardContent className="p-0">
             {groupedSchemes.length === 0 ? (
