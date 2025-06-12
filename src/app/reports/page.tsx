@@ -71,7 +71,7 @@ export default function ReportsPage() {
       customerEntry.schemesSummary.totalCollected += scheme.totalCollected || 0;
 
       if (scheme.status === 'Active') customerEntry.schemesSummary.activeSchemes++;
-      if (scheme.status === 'Completed') customerEntry.schemesSummary.completedSchemes++;
+      if (scheme.status === 'Fully Paid') customerEntry.schemesSummary.completedSchemes++;
       if (scheme.status === 'Closed') customerEntry.schemesSummary.closedSchemes++;
       if (scheme.status === 'Overdue') customerEntry.schemesSummary.overdueSchemes++;
 

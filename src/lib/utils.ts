@@ -82,35 +82,46 @@ export function getSchemeStatus(scheme: Scheme): SchemeStatus {
   }
 
   // Ensure all individual payment statuses are up-to-date for accurate calculation
-  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  // Process only non-deleted payments for status updates
+  scheme.payments.filter(p => !p.isDeleted).forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
   // If a scheme has a closureDate, it is considered 'Closed' by manual action.
   if (scheme.closureDate) {
     return 'Closed';
   }
   
-  const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
+  const activePayments = scheme.payments.filter(p => !p.isDeleted);
+
+  const allPaymentsPaid = activePayments.length > 0 && activePayments.every(p => p.status === 'Paid');
   if (allPaymentsPaid) {
-    return 'Completed'; // All payments made, but not yet manually 'Closed'.
+    return 'Fully Paid'; // All payments made, but not yet manually 'Closed'.
   }
 
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));
   if (isFuture(schemeStartDate)) return 'Upcoming';
 
-  const hasOverduePayment = scheme.payments.some(p => p.status === 'Overdue');
+  const hasOverduePayment = activePayments.some(p => p.status === 'Overdue');
   if (hasOverduePayment) return 'Overdue';
   
+  // If there are no active payments and it's not upcoming or fully paid, consider it Active.
+  // This might need refinement based on business logic for schemes with all payments deleted.
+  // For now, if not Closed, Upcoming, Fully Paid, or Overdue, it's Active.
   return 'Active';
 }
 
 
 export function calculateSchemeTotals(scheme: Scheme): Partial<Scheme> {
-  const totalCollected = scheme.payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
-  const totalExpected = scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0);
-  const paymentsMadeCount = scheme.payments.filter(p => p.status === 'Paid').length;
+  const activePayments = scheme.payments.filter(p => !p.isDeleted);
+
+  const totalCollected = activePayments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+  // For totalExpected, it's usually based on the scheme's defined duration and monthly amount,
+  // not just non-deleted payments. This reflects the full value of the scheme.
+  const originalTotalExpected = scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0);
+
+  const paymentsMadeCount = activePayments.filter(p => p.status === 'Paid').length;
   return {
     totalCollected,
-    totalRemaining: totalExpected - totalCollected,
+    totalRemaining: originalTotalExpected - totalCollected,
     paymentsMadeCount,
   };
 }

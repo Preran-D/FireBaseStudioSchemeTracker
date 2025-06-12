@@ -71,9 +71,9 @@ function DataManagementTabContent() {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
     const allSchemes = getMockSchemes();
-    // Filter for both 'Completed' and 'Closed' statuses
+    // Filter for both 'Fully Paid' and 'Closed' statuses
     const completedAndClosed = allSchemes
-      .filter(s => s.status === 'Completed' || s.status === 'Closed')
+      .filter(s => s.status === 'Fully Paid' || s.status === 'Closed')
       .sort((a, b) => {
         // Prioritize sorting by closureDate if available, then by startDate or some other criteria
         const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
@@ -927,10 +927,10 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Completed & Closed Scheme Management
+            Fully Paid & Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that are 'Completed' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
+            Manage schemes that are 'Fully Paid' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

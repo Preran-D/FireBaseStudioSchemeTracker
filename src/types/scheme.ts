@@ -12,9 +12,10 @@ export interface Payment {
   amountPaid?: number;
   status: PaymentStatus;
   modeOfPayment?: PaymentMode[];
+  isDeleted?: boolean;
 }
 
-export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
+export type SchemeStatus = 'Active' | 'Fully Paid' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
 
 export interface Scheme {
   id: string;

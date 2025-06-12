@@ -91,7 +91,7 @@ export let MOCK_SCHEMES: Scheme[] = [
 
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
 if (fionaSchemeIdx !== -1) {
-  // Ensure Fiona's scheme is fully paid to become 'Completed'
+  // Ensure Fiona's scheme is fully paid to become 'Fully Paid'
   MOCK_SCHEMES[fionaSchemeIdx].payments = MOCK_SCHEMES[fionaSchemeIdx].payments.map((p, index) => {
     // Pay all 12 installments for Fiona
     if (index < MOCK_SCHEMES[fionaSchemeIdx].durationMonths) {
@@ -99,11 +99,11 @@ if (fionaSchemeIdx !== -1) {
     }
     return p;
   });
-  // Ensure closureDate is NOT set for Fiona, so it's purely 'Completed'
+  // Ensure closureDate is NOT set for Fiona, so it's purely 'Fully Paid'
   MOCK_SCHEMES[fionaSchemeIdx].closureDate = undefined;
 
   MOCK_SCHEMES[fionaSchemeIdx].payments.forEach(p => p.status = getPaymentStatus(p, MOCK_SCHEMES[fionaSchemeIdx].startDate));
-  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]); // This should correctly set to 'Completed'
+  MOCK_SCHEMES[fionaSchemeIdx].status = getSchemeStatus(MOCK_SCHEMES[fionaSchemeIdx]); // This should correctly set to 'Fully Paid'
   const totals = calculateSchemeTotals(MOCK_SCHEMES[fionaSchemeIdx]);
   MOCK_SCHEMES[fionaSchemeIdx] = { ...MOCK_SCHEMES[fionaSchemeIdx], ...totals };
 }
@@ -167,7 +167,7 @@ export const unarchiveMockScheme = (schemeId: string): Scheme | undefined => {
     // Revert to 'Closed'. getSchemeStatus will be called by getMockSchemeById
     // and should correctly evaluate it based on its payments if it wasn't truly 'Closed' before archiving.
     // Forcing it to 'Closed' here is a safe bet if it was archived from 'Closed'.
-    // If getSchemeStatus is robust, it might correctly set it to 'Completed' if all payments are made.
+    // If getSchemeStatus is robust, it might correctly set it to 'Fully Paid' if all payments are made.
     scheme.status = 'Closed';
     MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
     return getMockSchemeById(schemeId); // Return a fresh copy
@@ -269,7 +269,7 @@ export const updateMockSchemePayment = (schemeId: string, paymentId: string, pay
 
   // If it was closed and now no longer meets "Closed" criteria (which means all payments are NOT paid)
   // then remove closureDate. This should be handled by getSchemeStatus not returning 'Closed' if not all paid.
-  if(wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed'){
+  if(wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid'){
       scheme.closureDate = undefined; 
   }
   
@@ -310,7 +310,7 @@ export const editMockPaymentDetails = (schemeId: string, paymentId: string, deta
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
   scheme.status = getSchemeStatus(scheme); 
 
-  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed') {
+  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') {
     scheme.closureDate = undefined; 
   }
   
@@ -341,20 +341,65 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
-  scheme.payments[paymentIndex].amountPaid = undefined;
-  scheme.payments[paymentIndex].paymentDate = undefined;
-  scheme.payments[paymentIndex].modeOfPayment = undefined;
-  
-  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
-  scheme.status = getSchemeStatus(scheme); 
+  // Soft delete: mark the payment as deleted
+  scheme.payments[paymentIndex].isDeleted = true;
+  // Important: We should still retain original payment details like amountPaid, paymentDate etc.
+  // for historical accuracy or if it needs to be restored.
+  // Clearing them as done previously (amountPaid = undefined, etc.) is not ideal for soft delete.
+  // However, the status of this payment should be re-evaluated.
+  scheme.payments[paymentIndex].status = getPaymentStatus(scheme.payments[paymentIndex], scheme.startDate);
 
-  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Completed') {
-    scheme.closureDate = undefined; 
+
+  scheme.payments.forEach(p => {
+    // Ensure all payments (especially if not the one being deleted) have up-to-date statuses
+    // This is important because deleting one payment might affect overdue status of others, etc.
+    // However, getPaymentStatus itself doesn't yet know about isDeleted.
+    // For now, we rely on calculateSchemeTotals and getSchemeStatus to filter deleted items.
+    if (p.id !== paymentId) { // Re-evaluate others, the deleted one is already handled
+        p.status = getPaymentStatus(p, scheme.startDate);
+    }
+  });
+  scheme.status = getSchemeStatus(scheme);
+
+  if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') {
+    scheme.closureDate = undefined;
   }
-  
-  const totals = calculateSchemeTotals(scheme); 
+
+  const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
-  
+
+  return getMockSchemeById(schemeId);
+};
+
+export const restoreMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+
+  // Similar restrictions for closed schemes as in delete/update might be relevant,
+  // but for now, we'll assume restoring is generally allowed and recalculations will handle state.
+  // if (scheme.status === 'Closed' && scheme.closureDate) { ... }
+
+  const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
+  if (paymentIndex === -1) return undefined;
+
+  if (!scheme.payments[paymentIndex].isDeleted) {
+    console.warn(`Payment ${paymentId} in scheme ${schemeId} is not marked as deleted. No action taken.`);
+    return getMockSchemeById(schemeId); // Return current state
+  }
+
+  scheme.payments[paymentIndex].isDeleted = false;
+  // Re-evaluate its status now that it's restored
+  scheme.payments[paymentIndex].status = getPaymentStatus(scheme.payments[paymentIndex], scheme.startDate);
+
+  // Re-evaluate all payment statuses and the overall scheme status
+  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  scheme.status = getSchemeStatus(scheme);
+
+  const totals = calculateSchemeTotals(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
   return getMockSchemeById(schemeId);
 };
 
@@ -422,7 +467,7 @@ export const recordNextDuePaymentsForCustomer = (
 
   const customerSchemesIndices = MOCK_SCHEMES
     .map((scheme, index) => ({ scheme, index }))
-    .filter(({ scheme }) => scheme.customerName === customerName && scheme.status !== 'Closed' && scheme.status !== 'Completed'); // Filter out Closed and Completed
+    .filter(({ scheme }) => scheme.customerName === customerName && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid'); // Filter out Closed and Completed
     
   customerSchemesIndices.forEach(({ scheme }) => { 
       let nextRecordablePaymentIndex = -1;
@@ -479,7 +524,7 @@ export const recordNextDuePaymentsForCustomerGroup = (
 
   const schemesInGroupIndices = MOCK_SCHEMES
     .map((scheme, index) => ({ scheme, index })) 
-    .filter(({ scheme }) => scheme.customerGroupName === groupName && scheme.status !== 'Closed' && scheme.status !== 'Completed'); // Filter out Closed and Completed
+    .filter(({ scheme }) => scheme.customerGroupName === groupName && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid'); // Filter out Closed and Completed
 
   schemesInGroupIndices.forEach(({ scheme }) => { 
       if (paymentDetails.schemeIdsToRecord && paymentDetails.schemeIdsToRecord.length > 0 && !paymentDetails.schemeIdsToRecord.includes(scheme.id)) {
@@ -538,8 +583,8 @@ export const getGroupDetails = (): GroupDetail[] => {
       groupEntry.customerNames.add(scheme.customerName);
 
       let hasRecordablePaymentForThisScheme = false;
-      // Only count recordable if not Closed and not Completed
-      if (scheme.status !== 'Closed' && scheme.status !== 'Completed' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
+      // Only count recordable if not Closed and not Fully Paid
+      if (scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         for (let i = 0; i < scheme.payments.length; i++) {
           const payment = scheme.payments[i];
           if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -734,7 +779,7 @@ export const reopenMockScheme = (schemeId: string): Scheme | undefined => {
   
   // Re-evaluate all payment statuses and then the scheme status
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
-  scheme.status = getSchemeStatus(scheme); // This will now set to Active, Overdue, or Completed based on actuals
+  scheme.status = getSchemeStatus(scheme); // This will now set to Active, Overdue, or Fully Paid based on actuals
 
   const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };

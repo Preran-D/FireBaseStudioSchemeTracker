@@ -24,7 +24,7 @@ export function SchemeStatusBadge({ status }: SchemeStatusBadgeProps) {
       variant = 'secondary'; // Use secondary variant, color comes from classes
       className = 'bg-orange-500/20 text-orange-700 border-orange-500/30 dark:bg-orange-400/10 dark:text-orange-400 dark:border-orange-400/20';
       break;
-    case 'Completed':
+    case 'Fully Paid':
       variant = 'default'; // Use default (primary-like) variant, color comes from classes
       className = 'bg-green-500/20 text-green-700 border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20';
       break;

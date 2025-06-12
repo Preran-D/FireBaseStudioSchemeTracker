@@ -21,12 +21,14 @@ export function SchemeHistoryPanel({ isOpen, onClose, scheme }: SchemeHistoryPan
     return null;
   }
 
-  const paidPayments = scheme.payments.filter(p => p.status === 'Paid');
-  const allPaymentsWithStatus = scheme.payments.map(p => ({
-    ...p,
-    // Ensure status is freshly calculated if not already done (though dashboard usually does this)
-    currentStatus: getPaymentStatus(p, scheme.startDate) 
-  }));
+  const paidPayments = scheme.payments.filter(p => p.status === 'Paid' && !p.isDeleted);
+  const allPaymentsWithStatus = scheme.payments
+    .filter(p => !p.isDeleted) // Filter out deleted payments
+    .map(p => ({
+      ...p,
+      // Ensure status is freshly calculated if not already done (though dashboard usually does this)
+      currentStatus: getPaymentStatus(p, scheme.startDate)
+    }));
 
 
   return (

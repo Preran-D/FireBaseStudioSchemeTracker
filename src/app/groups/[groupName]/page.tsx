@@ -25,7 +25,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
   'Active': 1,
   'Upcoming': 2,
-  'Completed': 3,
+  'Fully Paid': 3,
   'Closed': 4,
   Archived: 0
 };

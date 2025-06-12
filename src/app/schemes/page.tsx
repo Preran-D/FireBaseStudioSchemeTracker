@@ -23,7 +23,7 @@ const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
   'Active': 1,
   'Upcoming': 2,
-  'Completed': 3,
+  'Fully Paid': 3,
   'Closed': 4,
 };
 
@@ -99,7 +99,7 @@ export default function SchemesPage() {
     { value: 'all', label: 'All Statuses' },
     { value: 'Active', label: 'Active' },
     { value: 'Overdue', label: 'Overdue' },
-    { value: 'Completed', label: 'Completed' },
+    { value: 'Fully Paid', label: 'Fully Paid' },
     { value: 'Upcoming', label: 'Upcoming' },
     { value: 'Closed', label: 'Closed' },
   ];

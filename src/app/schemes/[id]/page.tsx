@@ -281,7 +281,7 @@ export default function SchemeDetailsPage() {
 
   const canRecordPayment = useMemo(() => {
     if (!scheme) return false;
-    return scheme.status !== 'Closed' && scheme.status !== 'Completed' && maxInlineMonthsToPay > 0;
+    return scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && maxInlineMonthsToPay > 0;
   }, [scheme, maxInlineMonthsToPay]);
 
   const handleOpenDeleteSchemeDialog = () => {
@@ -433,7 +433,7 @@ export default function SchemeDetailsPage() {
       <Card className={cn(
         "glassmorphism overflow-hidden",
         scheme.status === 'Active' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
-        scheme.status === 'Completed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
+        scheme.status === 'Fully Paid' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--positive-value))]",
         scheme.status === 'Overdue' && "ring-2 ring-offset-2 ring-offset-background ring-orange-500 dark:ring-orange-400",
         scheme.status === 'Upcoming' && "ring-2 ring-offset-2 ring-offset-background ring-yellow-500 dark:ring-yellow-400",
         scheme.status === 'Closed' && "ring-2 ring-offset-2 ring-offset-background ring-[hsl(var(--destructive))]"
@@ -498,14 +498,14 @@ export default function SchemeDetailsPage() {
               <p className="text-muted-foreground">Total Remaining</p>
               <p className="font-semibold text-base text-orange-600 dark:text-orange-500">{formatCurrency(scheme.totalRemaining)}</p>
             </div>
-            {scheme.status === 'Completed' && !scheme.closureDate && (
+            {scheme.status === 'Fully Paid' && !scheme.closureDate && (
               <div className="col-span-2">
                 <Badge variant="default" className="bg-positive-value/80 text-primary-foreground hover:bg-positive-value/70">
                   All Payments Made
                 </Badge>
               </div>
             )}
-             {scheme.status === 'Completed' && scheme.closureDate && ( 
+             {scheme.status === 'Fully Paid' && scheme.closureDate && (
                 <div className="col-span-2">
                     <p className="text-xs text-muted-foreground">This fully paid scheme was manually closed on {formatDate(scheme.closureDate)}.</p>
                 </div>
@@ -578,7 +578,7 @@ export default function SchemeDetailsPage() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    {maxInlineMonthsToPay === 0 && scheme.status !== 'Closed' && scheme.status !== 'Completed' && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
+                    {maxInlineMonthsToPay === 0 && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && <FormDescription className="text-green-600 dark:text-green-500 mt-1">All due payments made for this scheme.</FormDescription>}
                   </div>
 
                   <div>
@@ -629,7 +629,7 @@ export default function SchemeDetailsPage() {
           </Card>
         )}
 
-        {(!canRecordPayment && scheme.status !== 'Closed' && scheme.status !== 'Completed') && (
+        {(!canRecordPayment && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') && (
            <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
             <CardContent className="text-center py-10">
                 <Info className="h-10 w-10 text-primary mx-auto mb-3" />
@@ -639,7 +639,7 @@ export default function SchemeDetailsPage() {
            </Card>
         )}
 
-        {(scheme.status === 'Closed' || scheme.status === 'Completed') && (
+        {(scheme.status === 'Closed' || scheme.status === 'Fully Paid') && (
              <Card className="lg:col-span-2 glassmorphism flex items-center justify-center">
                 <CardContent className="text-center py-10">
                     <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
@@ -649,7 +649,7 @@ export default function SchemeDetailsPage() {
                     <p className="text-muted-foreground">
                         {scheme.status === 'Closed' ? `This scheme was manually closed on ${formatDate(scheme.closureDate!)}.` : 'All payments for this scheme have been completed.'}
                     </p>
-                     {scheme.status === 'Completed' && !scheme.closureDate && ( 
+                     {scheme.status === 'Fully Paid' && !scheme.closureDate && (
                          <p className="text-xs text-muted-foreground mt-1">You can still manually close it via Scheme Actions.</p>
                      )}
                 </CardContent>

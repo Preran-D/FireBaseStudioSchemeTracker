@@ -60,7 +60,7 @@ export function SchemeCompletionArc({
 
   let progressStrokeColor = "hsl(var(--positive-value))"; // Default to green (for Active, Overdue, Upcoming, Completed)
   let textBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Default green for completed badge
-  let textBadgeLabel = "Completed";
+  let textBadgeLabel = "Fully Paid";
 
   if (status === 'Closed') {
     progressStrokeColor = 'hsl(var(--destructive))'; // Red for Closed arc
@@ -69,13 +69,13 @@ export function SchemeCompletionArc({
   } else if (isCompleted) {
     progressStrokeColor = 'hsl(var(--positive-value))'; // Green for Completed arc
     textBadgeBgColor = "bg-[hsl(var(--positive-value))] text-primary-foreground"; // Green for Completed badge
-    textBadgeLabel = "Completed";
+    textBadgeLabel = "Fully Paid";
   }
 
 
   return (
     <div className={cn("relative flex flex-col items-center justify-center", className)} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`Scheme progress: ${paymentsMadeCount} of ${durationMonths} payments made. Status: ${status || (isCompleted ? 'Completed' : 'In Progress')}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`Scheme progress: ${paymentsMadeCount} of ${durationMonths} payments made. Status: ${status || (isCompleted ? 'Fully Paid' : 'In Progress')}`}>
         {/* Removed unused SVG defs for gradients as we are using solid HSL colors now */}
         <path
           d={backgroundArcPath}
