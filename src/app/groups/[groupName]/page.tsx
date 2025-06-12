@@ -18,6 +18,7 @@ import React from 'react';
 import { delay, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
 import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export function
+import { ExportPdfDialog } from '@/components/dialogs/ExportPdfDialog'; // Import the new dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -46,6 +47,7 @@ export default function GroupDetailsPage() {
   const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
   const [isDeletingScheme, setIsDeletingScheme] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportPdfDialogOpen, setIsExportPdfDialogOpen] = useState(false); // State for the export dialog
 
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState(groupName);
@@ -258,20 +260,28 @@ export default function GroupDetailsPage() {
   };
 
   const handleExportPdf = () => {
+    // Opens the dialog instead of directly exporting
+    if (allSchemesInGroup.length === 0) {
+      toast({ title: "No Schemes", description: "There are no schemes in this group to export.", variant: "default" });
+      return;
+    }
+    setIsExportPdfDialogOpen(true);
+  };
+
+  const handleConfirmExportPdf = async (exportType: 'condensed' | 'detailed') => {
     setIsExporting(true);
-    // Use allSchemesInGroup for a flat list, or adapt pdfUtils to handle groupedSchemes if preferred.
-    // For simplicity, passing allSchemesInGroup and groupSummaryStats.
-    // The PDF utility can then decide how to best present this data.
-    // If groupedSchemes is essential for PDF structure, pdfUtils must be adapted.
-    // Current pdfUtils expects a flat array of schemes.
+    setIsExportPdfDialogOpen(false); // Close dialog
     try {
-      exportGroupSchemesToPdf(groupName, allSchemesInGroup, groupSummaryStats);
-      toast({ title: "PDF Export Successful", description: `Schemes for group ${groupName} are being downloaded.` });
+      // Wait for a brief moment to allow UI to update (dialog to close, loader to show on button)
+      await new Promise(resolve => setTimeout(resolve, 100));
+      exportGroupSchemesToPdf(groupName, allSchemesInGroup, groupSummaryStats, exportType);
+      toast({ title: "PDF Export Successful", description: `Schemes for group ${groupName} (${exportType}) are being downloaded.` });
     } catch (err) {
       console.error("PDF Export Error:", err);
-      toast({ title: "PDF Export Failed", description: "Could not generate PDF for schemes.", variant: "destructive" });
+      toast({ title: "PDF Export Failed", description: `Could not generate ${exportType} PDF for schemes.`, variant: "destructive" });
+    } finally {
+      setIsExporting(false);
     }
-    setIsExporting(false);
   };
   
   const confirmDeleteGroup = async () => {
@@ -515,6 +525,13 @@ export default function GroupDetailsPage() {
           {/* ... existing scheme deletion dialog ... */}
         </AlertDialog>
       )}
+
+      <ExportPdfDialog
+        isOpen={isExportPdfDialogOpen}
+        onOpenChange={setIsExportPdfDialogOpen}
+        onExport={handleConfirmExportPdf}
+        isExporting={isExporting}
+      />
 
       <AlertDialog open={isConfirmingDeleteGroup} onOpenChange={setIsConfirmingDeleteGroup}>
         <AlertDialogContent>
