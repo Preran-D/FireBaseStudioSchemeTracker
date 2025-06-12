@@ -14,7 +14,7 @@ export interface Payment {
   modeOfPayment?: PaymentMode[];
 }
 
-export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
+export type SchemeStatus = 'Active' | 'Fully Paid' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
 
 export interface Scheme {
   id: string;
