@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme } from '@/lib/mock-data';
-import type { Scheme, PaymentMode, GroupDetail, Payment } from '@/types/scheme';
-import { formatDate, formatCurrency, getPaymentStatus, generateId } from '@/lib/utils';
-import { exportToExcel } from '@/lib/excelUtils';
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme } from '@/lib/mock-data';
+import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
+import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
+// import { exportToExcel } from '@/lib/excelUtils'; // This was removed in a previous task
 import * as XLSX from 'xlsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { formatISO, format as formatDateFns, parseISO, isValid as isValidDate } from 'date-fns';
+import { formatISO, format as formatDateFns, parseISO, isValid as isValidDate, isBefore, subDays, } from 'date-fns'; // Added comma
 
 interface ImportUIRow {
   id: string;
@@ -56,18 +56,45 @@ function DataManagementTabContent() {
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [schemesPendingDeletionInfo, setSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
 
+  // State for Archived Scheme Management
+  const [archivedSchemesList, setArchivedSchemesList] = useState<Scheme[]>([]);
+  const [selectedArchivedSchemeIds, setSelectedArchivedSchemeIds] = useState<string[]>([]);
+  const [isLoadingArchived, setIsLoadingArchived] = useState(false);
+  const [isRestoringSchemes, setIsRestoringSchemes] = useState(false);
+  const [isDeletingArchivedSchemes, setIsDeletingArchivedSchemes] = useState(false);
+  const [showDeleteArchivedConfirmDialog, setShowDeleteArchivedConfirmDialog] = useState(false);
+  const [archivedSchemesPendingDeletionInfo, setArchivedSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
+
 
   const loadAllData = useCallback(() => {
     if (isImportSectionVisible) {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
     const allSchemes = getMockSchemes();
-    const completed = allSchemes
-      .filter(s => s.status === 'Completed')
-      .sort((a, b) => (a.closureDate && b.closureDate ? parseISO(b.closureDate).getTime() - parseISO(a.closureDate).getTime() : 0));
-    setCompletedSchemes(completed);
-    setSelectedClosedSchemeIds([]); // Clear selection on reload
-  }, [isImportSectionVisible]);
+    // Filter for both 'Completed' and 'Closed' statuses
+    const completedAndClosed = allSchemes
+      .filter(s => s.status === 'Completed' || s.status === 'Closed')
+      .sort((a, b) => {
+        // Prioritize sorting by closureDate if available, then by startDate or some other criteria
+        const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
+        const dateB = b.closureDate ? parseISO(b.closureDate) : (b.startDate ? parseISO(b.startDate) : new Date(0));
+        return dateB.getTime() - dateA.getTime(); // Sort descending by date (most recent first)
+      });
+    setCompletedSchemes(completedAndClosed);
+    setSelectedClosedSchemeIds([]);
+
+    // Load archived schemes
+    setIsLoadingArchived(true);
+    const archived = getArchivedMockSchemes().sort((a,b) => {
+        const dateA = a.archivedDate ? parseISO(a.archivedDate) : (a.closureDate ? parseISO(a.closureDate) : new Date(0));
+        const dateB = b.archivedDate ? parseISO(b.archivedDate) : (b.closureDate ? parseISO(b.closureDate) : new Date(0));
+        return dateB.getTime() - dateA.getTime(); // Sort descending by date (most recent archived/closed first)
+    });
+    setArchivedSchemesList(archived);
+    setSelectedArchivedSchemeIds([]);
+    setIsLoadingArchived(false);
+
+  }, [isImportSectionVisible]); // Add other dependencies if they affect data loading for archived
 
   useEffect(() => {
     loadAllData();
@@ -550,6 +577,85 @@ function DataManagementTabContent() {
   };
 
   const isAllCompletedSelected = completedSchemes.length > 0 && selectedClosedSchemeIds.length === completedSchemes.length;
+  const isAllArchivedSelected = archivedSchemesList.length > 0 && selectedArchivedSchemeIds.length === archivedSchemesList.length;
+
+  // --- Archived Scheme Management Logic (selection handlers) ---
+  const handleSelectArchivedScheme = (schemeId: string, checked: boolean) => {
+    setSelectedArchivedSchemeIds(prev =>
+      checked ? [...prev, schemeId] : prev.filter(id => id !== schemeId)
+    );
+  };
+
+  const handleSelectAllArchivedSchemes = (checked: boolean) => {
+    if (checked) {
+      setSelectedArchivedSchemeIds(archivedSchemesList.map(s => s.id));
+    } else {
+      setSelectedArchivedSchemeIds([]);
+    }
+  };
+
+  const handleRestoreSelectedArchivedSchemes = async () => {
+    if (selectedArchivedSchemeIds.length === 0) return;
+    setIsRestoringSchemes(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const schemeId of selectedArchivedSchemeIds) {
+      const restoredScheme = unarchiveMockScheme(schemeId);
+      if (restoredScheme) {
+        successCount++;
+      } else {
+        errorCount++;
+        // Attempt to find the scheme in the main list to log its current status if unarchive failed
+        const currentSchemeState = getMockSchemes({ includeArchived: true }).find(s => s.id === schemeId);
+        console.warn(`Failed to restore scheme ${schemeId}. Current status: ${currentSchemeState?.status}`);
+      }
+    }
+    toast({
+      title: "Restore Operation Complete",
+      description: `${successCount} scheme(s) restored. ${errorCount > 0 ? `${errorCount} error(s) - check console for details.` : ''}`,
+      variant: errorCount > 0 ? "destructive" : "default"
+    });
+    loadAllData();
+    setSelectedArchivedSchemeIds([]); // Clear selection
+    setIsRestoringSchemes(false);
+  };
+
+  const handleInitiateDeleteArchivedSchemes = () => {
+    if (selectedArchivedSchemeIds.length === 0) return;
+    const info = selectedArchivedSchemeIds.map(id => {
+      const scheme = archivedSchemesList.find(s => s.id === id); // Use archivedSchemesList
+      return { id, customerName: scheme?.customerName || 'Unknown', schemeId: scheme?.id.toUpperCase() || 'Unknown ID' };
+    });
+    setArchivedSchemesPendingDeletionInfo(info); // Use dedicated state
+    setShowDeleteArchivedConfirmDialog(true); // Use dedicated dialog state
+  };
+
+  const handleConfirmDeleteSelectedArchivedSchemes = async () => {
+    if (selectedArchivedSchemeIds.length === 0) return;
+    setIsDeletingArchivedSchemes(true); // Use dedicated loading state
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const schemeId of selectedArchivedSchemeIds) {
+      const deleted = deleteFullMockScheme(schemeId);
+      if (deleted) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
+    }
+    toast({
+      title: "Deletion Operation Complete",
+      description: `${successCount} archived scheme(s) permanently deleted. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`,
+      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
+    });
+    loadAllData();
+    setSelectedArchivedSchemeIds([]);
+    setArchivedSchemesPendingDeletionInfo([]);
+    setShowDeleteArchivedConfirmDialog(false);
+    setIsDeletingArchivedSchemes(false);
+  };
 
 
   return (
@@ -821,10 +927,10 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Closed Scheme Management
+            Completed & Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that have been marked as 'Completed'. You can reopen or permanently delete them.
+            Manage schemes that are 'Completed' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -885,7 +991,7 @@ function DataManagementTabContent() {
               </Table>
             </ScrollArea>
           ) : (
-            <p className="text-muted-foreground text-center py-4">No completed schemes found.</p>
+            <p className="text-muted-foreground text-center py-4">No completed or closed schemes found.</p>
           )}
         </CardContent>
       </Card>
@@ -923,6 +1029,119 @@ function DataManagementTabContent() {
         </AlertDialog>
       )}
 
+      {/* Archived Scheme Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ArchiveRestore className="h-5 w-5 text-primary opacity-80" /> {/* Changed icon */}
+            Archived Scheme Management
+          </CardTitle>
+          <CardDescription>
+            Manage schemes that have been archived. You can restore them (returning them to their previous state, typically 'Closed') or permanently delete them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <Button
+              onClick={handleRestoreSelectedArchivedSchemes}
+              disabled={selectedArchivedSchemeIds.length === 0 || isRestoringSchemes || isDeletingArchivedSchemes}
+            >
+              {isRestoringSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Restore Selected ({selectedArchivedSchemeIds.length})
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleInitiateDeleteArchivedSchemes}
+              disabled={selectedArchivedSchemeIds.length === 0 || isRestoringSchemes || isDeletingArchivedSchemes}
+            >
+              {isDeletingArchivedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Permanently Delete Selected ({selectedArchivedSchemeIds.length})
+            </Button>
+          </div>
+          {isLoadingArchived ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading archived schemes...
+            </div>
+          ) : archivedSchemesList.length > 0 ? (
+            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead padding="checkbox" className="w-12">
+                      <Checkbox
+                        checked={isAllArchivedSelected}
+                        onCheckedChange={handleSelectAllArchivedSchemes}
+                        aria-label="Select all archived schemes"
+                        disabled={isRestoringSchemes || isDeletingArchivedSchemes}
+                      />
+                    </TableHead>
+                    <TableHead>Customer Name</TableHead>
+                    <TableHead>Scheme ID</TableHead>
+                    <TableHead>Archived Date</TableHead>
+                    <TableHead>Original Closure Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archivedSchemesList.map((scheme) => (
+                    <TableRow key={scheme.id} data-state={selectedArchivedSchemeIds.includes(scheme.id) ? 'selected' : ''}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedArchivedSchemeIds.includes(scheme.id)}
+                          onCheckedChange={(checked) => handleSelectArchivedScheme(scheme.id, !!checked)}
+                          aria-label={`Select archived scheme ${scheme.id.toUpperCase()}`}
+                          disabled={isRestoringSchemes || isDeletingArchivedSchemes}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                      <TableCell>{scheme.id.toUpperCase()}</TableCell>
+                      <TableCell>{formatDate(scheme.archivedDate)}</TableCell>
+                      <TableCell>{formatDate(scheme.closureDate)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No archived schemes found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+
+      {/* Confirmation Dialog for Deleting Archived Schemes */}
+      {showDeleteArchivedConfirmDialog && (
+        <AlertDialog open={showDeleteArchivedConfirmDialog} onOpenChange={(open) => !open && setShowDeleteArchivedConfirmDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                Confirm Permanent Deletion of Archived Schemes
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                You are about to permanently delete {archivedSchemesPendingDeletionInfo.length} archived scheme(s):
+                <ul className="list-disc pl-5 mt-2 text-sm max-h-40 overflow-y-auto">
+                  {archivedSchemesPendingDeletionInfo.map(s => <li key={s.id}>{s.customerName} (ID: {s.schemeId})</li>)}
+                </ul>
+                This action cannot be undone. All associated data will be removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteArchivedConfirmDialog(false)} disabled={isDeletingArchivedSchemes}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteSelectedArchivedSchemes}
+                disabled={isDeletingArchivedSchemes}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isDeletingArchivedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
     </div>
   );
 }
@@ -930,9 +1149,46 @@ function DataManagementTabContent() {
 type DefaultPaymentModeType = "Cash" | "Card" | "UPI";
 
 function RecommendedSettingsTabContent() {
+  const { toast } = useToast(); // Added for toast messages
   const [autoArchive, setAutoArchive] = useState(false);
+  const [isProcessingArchive, setIsProcessingArchive] = useState(false); // Added for loading state
   const [defaultPaymentMode, setDefaultPaymentMode] = useState<DefaultPaymentModeType>("Cash");
   const paymentModeOptions: DefaultPaymentModeType[] = ["Cash", "Card", "UPI"];
+
+  const handleRunArchiving = async () => {
+    setIsProcessingArchive(true);
+    let archivedCount = 0;
+    try {
+      const allSchemes = getMockSchemes({ includeArchived: true }); // Fetch all, including already archived
+      const schemesToArchive = allSchemes.filter(scheme => {
+        if (scheme.status === 'Closed' && scheme.closureDate) {
+          const closureDate = parseISO(scheme.closureDate);
+          const sixtyDaysAgo = subDays(new Date(), 60);
+          return isBefore(closureDate, sixtyDaysAgo);
+        }
+        return false;
+      });
+
+      for (const scheme of schemesToArchive) {
+        const result = archiveMockScheme(scheme.id);
+        if (result) {
+          archivedCount++;
+        }
+      }
+
+      if (archivedCount > 0) {
+        toast({ title: "Archiving Complete", description: `${archivedCount} scheme(s) were archived.` });
+      } else {
+        toast({ title: "Archiving Complete", description: "No schemes were eligible for archiving at this time." });
+      }
+    } catch (error) {
+      console.error("Error during archiving:", error);
+      toast({ title: "Archiving Error", description: "An error occurred while trying to archive schemes.", variant: "destructive" });
+    }
+    setIsProcessingArchive(false);
+    // Potentially call loadAllData() here if it's in the same component and needs to refresh a list
+    // that might now exclude these archived schemes, but DataManagementTabContent handles its own loadAllData.
+  };
 
   return (
     <div className="space-y-8 mt-6">
@@ -958,16 +1214,30 @@ function RecommendedSettingsTabContent() {
           <CardDescription>Configure settings related to data handling and automated tasks.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-            <div>
-              <Label htmlFor="auto-archive" className="font-medium">Auto-Archive Completed Schemes</Label>
-              <p className="text-xs text-muted-foreground">Automatically archive schemes 90 days after completion.</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors gap-4">
+            <div className="flex-grow">
+              <Label htmlFor="auto-archive" className="font-medium">Enable Auto-Archiving (Future Feature)</Label>
+              <p className="text-xs text-muted-foreground">
+                When enabled, the system would periodically archive 'Closed' schemes older than 60 days.
+                For now, please use the manual button.
+              </p>
             </div>
             <Switch
               id="auto-archive"
               checked={autoArchive}
               onCheckedChange={setAutoArchive}
+              disabled={isProcessingArchive}
             />
+          </div>
+          <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">
+            <Label className="font-medium block mb-2">Manual Archiving</Label>
+            <Button onClick={handleRunArchiving} disabled={isProcessingArchive} className="w-full sm:w-auto">
+              {isProcessingArchive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArchiveRestore className="mr-2 h-4 w-4" />}
+              Run Archiving Process Now
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Manually archives 'Closed' schemes where the closure date is older than 60 days.
+            </p>
           </div>
            <div className="p-4 border rounded-lg hover:bg-muted/30 transition-colors">
             <Label className="font-medium block mb-2">Default Payment Mode for New Entries</Label>

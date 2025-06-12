@@ -76,6 +76,11 @@ export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'sta
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
+  // If the scheme is already marked as 'Archived', its status should remain 'Archived'.
+  if (scheme.status === 'Archived') {
+    return 'Archived';
+  }
+
   // Ensure all individual payment statuses are up-to-date for accurate calculation
   scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   

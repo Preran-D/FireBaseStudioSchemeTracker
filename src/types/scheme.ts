@@ -14,7 +14,7 @@ export interface Payment {
   modeOfPayment?: PaymentMode[];
 }
 
-export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming' | 'Closed';
+export type SchemeStatus = 'Active' | 'Completed' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
 
 export interface Scheme {
   id: string;
@@ -27,6 +27,7 @@ export interface Scheme {
   durationMonths: 12;
   status: SchemeStatus;
   closureDate?: string; // ISO Date string, set when scheme is manually closed
+  archivedDate?: string; // ISO Date string, set when scheme is archived
   payments: Payment[];
   // Calculated fields (optional, can be derived)
   totalCollected?: number;

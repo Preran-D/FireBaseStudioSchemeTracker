@@ -37,6 +37,8 @@
     "dotenv": "^16.5.0",
     "firebase": "^11.8.1",
     "framer-motion": "^11.2.10",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.475.0",
     "next": "15.3.3",
     "patch-package": "^8.0.0",

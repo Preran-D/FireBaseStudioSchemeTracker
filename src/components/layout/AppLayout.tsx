@@ -5,7 +5,7 @@ import type { PropsWithChildren } from 'react';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, ListChecks, Repeat, UsersRound, Settings, Bell, User, MoreVertical, Sun, Moon, Palette } from 'lucide-react';
+import { LayoutDashboard, ListChecks, Repeat, UsersRound, Settings, Bell, User, MoreVertical, Sun, Moon, Palette, FileText } from 'lucide-react'; // Added FileText
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ const navItems = [
   { href: '/schemes', label: 'Schemes', icon: ListChecks },
   { href: '/transactions', label: 'Transactions', icon: Repeat },
   { href: '/groups', label: 'Groups', icon: UsersRound },
+  { href: '/reports', label: 'Reports', icon: FileText }, // Added Reports link
 ];
 
 const utilityNavItems = [
