@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil } from 'lucide-react';
-import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil, Archive as ArchiveIcon } from 'lucide-react'; // Added ArchiveIcon
+import type { Scheme, Payment, PaymentMode, SchemeStatus, MockGroup } from '@/types/scheme'; // Added MockGroup
+import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup, MOCK_GROUPS } from '@/lib/mock-data'; // Imported MOCK_GROUPS to check status
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
@@ -54,11 +54,26 @@ export default function GroupDetailsPage() {
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
   const [isConfirmingDeleteGroup, setIsConfirmingDeleteGroup] = useState(false);
   const [isDeletingGroupState, setIsDeletingGroupState] = useState(false); // Renamed to avoid conflict with scheme deletion
+  const [isGroupArchived, setIsGroupArchived] = useState(false);
+  const [groupArchivedDate, setGroupArchivedDate] = useState<string | undefined>(undefined);
 
   const loadGroupSchemes = () => {
     if (groupName) {
       setIsLoading(true);
-      const allSchemes = getMockSchemes();
+
+      // Check if the group itself is archived
+      const groupData = MOCK_GROUPS.find(g => g.groupName === groupName);
+      if (groupData?.isArchived) {
+        setIsGroupArchived(true);
+        setGroupArchivedDate(groupData.archivedDate);
+        setAllSchemesInGroup([]); // No need to show schemes for an archived group
+        setIsLoading(false);
+        return;
+      }
+      setIsGroupArchived(false);
+      setGroupArchivedDate(undefined);
+
+      const allSchemes = getMockSchemes(); // This already filters out archived schemes by default
       const schemesForThisGroup = allSchemes
         .filter(s => s.customerGroupName === groupName)
         .sort((a, b) => {
@@ -74,8 +89,18 @@ export default function GroupDetailsPage() {
   };
 
   useEffect(() => {
-    loadGroupSchemes();
-  }, [groupName]);
+    // Ensure MOCK_GROUPS is available before trying to load schemes
+    // This handles cases where MOCK_GROUPS might not be immediately populated on first render.
+    // A more robust solution might involve a global state or ensuring mock-data initializes first.
+    if (MOCK_GROUPS.length > 0 || process.env.NODE_ENV === 'test') { // Added test env condition for easier testing
+        loadGroupSchemes();
+    } else {
+        // If MOCK_GROUPS isn't ready, retry shortly.
+        // This is a simple polling, consider a more sophisticated state management for real apps.
+        const timer = setTimeout(() => loadGroupSchemes(), 50);
+        return () => clearTimeout(timer);
+    }
+  }, [groupName]); // Dependency on groupName ensures reload if that changes
 
   const groupedSchemes = useMemo(() => {
     let filteredForSearch = [...allSchemesInGroup];
@@ -288,17 +313,17 @@ export default function GroupDetailsPage() {
     setIsDeletingGroupState(true); // Use specific loading state
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
     await new Promise(resolve => delay(resolve, 500));
-    const success = deleteMockGroup(groupName);
+    const success = deleteMockGroup(groupName); // This now archives the group
     if (success) {
       toast({
-        title: "Group Deleted",
-        description: `Group "${groupName}" has been deleted. Schemes are now ungrouped.`,
+        title: "Group Moved to Trash",
+        description: `Group "${groupName}" has been moved to trash. You can manage archived groups in Settings.`,
       });
       router.push('/groups'); // Navigate back to groups list
     } else {
       toast({
-        title: "Error Deleting Group",
-        description: `Could not delete group "${groupName}".`,
+        title: "Error Moving Group to Trash",
+        description: `Could not move group "${groupName}" to trash. It might already be archived or another error occurred.`,
         variant: "destructive",
       });
     }
@@ -306,17 +331,35 @@ export default function GroupDetailsPage() {
   };
 
 
-  if (isLoading && !isDeletingGroupState) { // Ensure main loader doesn't show if only deleting group
+  if (isLoading && !isDeletingGroupState && !isGroupArchived) { // Ensure main loader doesn't show if only deleting group or group is archived
     return <div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+  }
+
+  if (isGroupArchived) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-4">
+        <ArchiveIcon className="h-16 w-16 text-blue-500" />
+        <h2 className="text-2xl font-semibold">Group Archived</h2>
+        <p className="text-muted-foreground max-w-md">
+          The group "{groupName}" was moved to trash on {formatDate(groupArchivedDate)}.
+        </p>
+        <p className="text-muted-foreground max-w-md">
+          You can restore or permanently delete it from the <Link href="/settings" className="text-primary hover:underline">Settings</Link> page.
+        </p>
+        <Button onClick={() => router.push('/groups')} size="lg" className="mt-4">
+          <ArrowLeft className="mr-2 h-5 w-5" /> Back to All Groups
+        </Button>
+      </div>
+    );
   }
 
   if (!groupName || (allSchemesInGroup.length === 0 && !isLoading && !isDeletingGroupState && !schemeSearchTerm)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-4">
         <AlertTriangle className="h-16 w-16 text-destructive" />
         <h2 className="text-2xl font-semibold">Group Not Found or Empty</h2>
         <p className="text-muted-foreground max-w-md">
-          The group "{groupName}" does not exist or has no schemes associated with it.
+          The group "{groupName}" does not exist, has no active schemes, or is currently empty.
         </p>
         <Button onClick={() => router.push('/groups')} size="lg">
           <ArrowLeft className="mr-2 h-5 w-5" /> Back to All Groups
@@ -536,9 +579,9 @@ export default function GroupDetailsPage() {
       <AlertDialog open={isConfirmingDeleteGroup} onOpenChange={setIsConfirmingDeleteGroup}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Group Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Move to Trash</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the group "{groupName}"? All schemes within this group will be ungrouped. This action cannot be undone.
+              Are you sure you want to move the group "{groupName}" to trash? Schemes will not be deleted but will be unassigned from this group if you later choose to permanently delete the group from trash. You can restore the group from Settings.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -546,8 +589,8 @@ export default function GroupDetailsPage() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteGroup} disabled={isDeletingGroupState} className="bg-destructive hover:bg-destructive/80">
-              {isDeletingGroupState ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete Group
+              {isDeletingGroupState ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

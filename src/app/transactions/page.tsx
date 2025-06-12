@@ -212,12 +212,12 @@ export default function TransactionsPage() {
   const handleDeletePaymentConfirm = () => {
     if (!paymentToDelete) return;
     setIsDeletingPayment(true);
-    const updatedScheme = deleteMockPayment(paymentToDelete.schemeId, paymentToDelete.id);
+    const updatedScheme = deleteMockPayment(paymentToDelete.schemeId, paymentToDelete.id); // This now archives
     if (updatedScheme) {
-      toast({ title: 'Payment Deleted', description: `Payment record for ${paymentToDelete.customerName} (Month ${paymentToDelete.monthNumber}) has been removed.` });
+      toast({ title: 'Payment Moved to Trash', description: `Payment record for ${paymentToDelete.customerName} (Month ${paymentToDelete.monthNumber}) has been moved to trash.` });
       loadData();
     } else {
-      toast({ title: 'Error', description: 'Failed to delete payment.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to move payment to trash.', variant: 'destructive' });
     }
     setPaymentToDelete(null);
     setIsDeletingPayment(false);
@@ -269,7 +269,7 @@ export default function TransactionsPage() {
                     <Edit className="mr-2 h-4 w-4" /> Edit
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setPaymentToDelete(transaction)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
                   </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href={`/schemes/${transaction.schemeId}`} className="flex items-center">
@@ -459,17 +459,17 @@ export default function TransactionsPage() {
         <AlertDialog open={!!paymentToDelete} onOpenChange={(open) => !open && setPaymentToDelete(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Delete Payment</AlertDialogTitle>
+              <AlertDialogTitle>Confirm Move to Trash</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete the payment record for {paymentToDelete.customerName} (Month {paymentToDelete.monthNumber}, Amount: {formatCurrency(paymentToDelete.amountPaid)})?
-                This action will mark the payment as unpaid and cannot be undone easily.
+                Are you sure you want to move this payment record to trash? (Customer: {paymentToDelete.customerName}, Month: {paymentToDelete.monthNumber}, Amount: {formatCurrency(paymentToDelete.amountPaid)})
+                You can restore or permanently delete it later from Settings.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setPaymentToDelete(null)} disabled={isDeletingPayment}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeletePaymentConfirm} disabled={isDeletingPayment} className="bg-destructive hover:bg-destructive/90">
                 {isDeletingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Payment
+                Move to Trash
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -5,9 +5,9 @@ import { useState, type ReactNode, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive } from 'lucide-react'; // Added Archive
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
-import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive, Users2 as Users2Icon, ListChecks as ListChecksIcon } from 'lucide-react'; // Added Archive, Users2Icon (for groups), ListChecksIcon
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme, getArchivedGroups, unarchiveMockGroup, deleteFullMockGroup, getArchivedPaymentsForAllSchemes, unarchiveMockPayment, deleteFullMockPayment, type ArchivedPaymentAugmented } from '@/lib/mock-data'; // Added group and payment archival functions and type
+import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus, MockGroup } from '@/types/scheme'; // Added SchemeStatus, MockGroup
 import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
 // import { exportToExcel } from '@/lib/excelUtils'; // This was removed in a previous task
 import * as XLSX from 'xlsx';
@@ -54,8 +54,6 @@ function DataManagementTabContent() {
   const [isReopeningClosedSchemes, setIsReopeningClosedSchemes] = useState(false);
   const [isDeletingClosedSchemes, setIsDeletingClosedSchemes] = useState(false);
   const [isArchivingSelectedSchemes, setIsArchivingSelectedSchemes] = useState(false); // New state
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
-  const [schemesPendingDeletionInfo, setSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
 
   // State for Archived Scheme Management
   const [archivedSchemesList, setArchivedSchemesList] = useState<Scheme[]>([]);
@@ -66,15 +64,33 @@ function DataManagementTabContent() {
   const [showDeleteArchivedConfirmDialog, setShowDeleteArchivedConfirmDialog] = useState(false);
   const [archivedSchemesPendingDeletionInfo, setArchivedSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
 
+  // State for Archived Group Management
+  const [archivedGroupsList, setArchivedGroupsList] = useState<MockGroup[]>([]);
+  const [selectedArchivedGroupNames, setSelectedArchivedGroupNames] = useState<string[]>([]);
+  const [isLoadingArchivedGroups, setIsLoadingArchivedGroups] = useState(false);
+  const [isRestoringGroups, setIsRestoringGroups] = useState(false);
+  const [isDeletingArchivedGroupsFull, setIsDeletingArchivedGroupsFull] = useState(false);
+  const [showDeleteArchivedGroupsConfirmDialog, setShowDeleteArchivedGroupsConfirmDialog] = useState(false);
+  const [archivedGroupsPendingDeletionInfo, setArchivedGroupsPendingDeletionInfo] = useState<{ groupName: string }[]>([]);
+
+  // State for Archived Transaction Management
+  const [archivedTransactionsList, setArchivedTransactionsList] = useState<ArchivedPaymentAugmented[]>([]);
+  const [selectedArchivedPaymentIds, setSelectedArchivedPaymentIds] = useState<string[]>([]);
+  const [isLoadingArchivedTransactions, setIsLoadingArchivedTransactions] = useState(false);
+  const [isRestoringTransactions, setIsRestoringTransactions] = useState(false);
+  const [isDeletingArchivedTransactionsFull, setIsDeletingArchivedTransactionsFull] = useState(false);
+  const [showDeleteArchivedTransactionsConfirmDialog, setShowDeleteArchivedTransactionsConfirmDialog] = useState(false);
+  const [archivedTransactionsPendingDeletionInfo, setArchivedTransactionsPendingDeletionInfo] = useState<ArchivedPaymentAugmented[]>([]);
+
 
   const loadAllData = useCallback(() => {
     if (isImportSectionVisible) {
       setExistingGroupNamesForImport(getUniqueGroupNames());
     }
     const allSchemes = getMockSchemes();
-    // Filter for both 'Fully Paid' and 'Closed' statuses
+    // Filter for 'Closed' status
     const completedAndClosed = allSchemes
-      .filter(s => s.status === 'Fully Paid' || s.status === 'Closed')
+      .filter(s => s.status === 'Closed')
       .sort((a, b) => {
         // Prioritize sorting by closureDate if available, then by startDate or some other criteria
         const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
@@ -94,6 +110,38 @@ function DataManagementTabContent() {
     setArchivedSchemesList(archived);
     setSelectedArchivedSchemeIds([]);
     setIsLoadingArchived(false);
+
+    // Load archived groups
+    setIsLoadingArchivedGroups(true);
+    const fetchedArchivedGroups = getArchivedGroups().sort((a, b) => {
+      const dateA = a.archivedDate ? parseISO(a.archivedDate) : new Date(0);
+      const dateB = b.archivedDate ? parseISO(b.archivedDate) : new Date(0);
+      if (dateB.getTime() === dateA.getTime()) {
+        return a.groupName.localeCompare(b.groupName); // Secondary sort by name
+      }
+      return dateB.getTime() - dateA.getTime(); // Primary sort by date desc
+    });
+    setArchivedGroupsList(fetchedArchivedGroups);
+    setSelectedArchivedGroupNames([]);
+    setIsLoadingArchivedGroups(false);
+
+    // Load archived transactions
+    setIsLoadingArchivedTransactions(true);
+    const fetchedArchivedTransactions = getArchivedPaymentsForAllSchemes().sort((a, b) => {
+      const dateA = a.archivedDate ? parseISO(a.archivedDate) : new Date(0);
+      const dateB = b.archivedDate ? parseISO(b.archivedDate) : new Date(0);
+      if (dateB.getTime() !== dateA.getTime()) {
+        return dateB.getTime() - dateA.getTime(); // Primary sort by archived date desc
+      }
+      const nameCompare = a.customerName.localeCompare(b.customerName);
+      if (nameCompare !== 0) {
+        return nameCompare; // Secondary sort by customer name
+      }
+      return a.schemeId.localeCompare(b.schemeId); // Tertiary sort by schemeId
+    });
+    setArchivedTransactionsList(fetchedArchivedTransactions);
+    setSelectedArchivedPaymentIds([]);
+    setIsLoadingArchivedTransactions(false);
 
   }, [isImportSectionVisible]); // Add other dependencies if they affect data loading for archived
 
@@ -603,41 +651,6 @@ function DataManagementTabContent() {
     // setSelectedClosedSchemeIds([]); // Clear selection after action
   };
 
-  const handleInitiateDeleteSelectedSchemes = () => {
-    if (selectedClosedSchemeIds.length === 0) return;
-    const info = selectedClosedSchemeIds.map(id => {
-      const scheme = completedSchemes.find(s => s.id === id);
-      return { id, customerName: scheme?.customerName || 'Unknown', schemeId: scheme?.id.toUpperCase() || 'Unknown ID' };
-    });
-    setSchemesPendingDeletionInfo(info);
-    setShowDeleteConfirmDialog(true);
-  };
-
-  const handleConfirmDeleteSelectedSchemes = async () => {
-    if (selectedClosedSchemeIds.length === 0) return;
-    setIsDeletingClosedSchemes(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const schemeId of selectedClosedSchemeIds) {
-      const deleted = deleteFullMockScheme(schemeId);
-      if (deleted) {
-        successCount++;
-      } else {
-        errorCount++;
-      }
-    }
-    toast({
-      title: "Deletion Operation Complete",
-      description: `${successCount} scheme(s) permanently deleted. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`,
-      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
-    });
-    loadAllData(); // Refresh the list of completed schemes
-    setShowDeleteConfirmDialog(false);
-    setSchemesPendingDeletionInfo([]);
-    setIsDeletingClosedSchemes(false);
-  };
-
   const isAllCompletedSelected = completedSchemes.length > 0 && selectedClosedSchemeIds.length === completedSchemes.length;
   const isAllArchivedSelected = archivedSchemesList.length > 0 && selectedArchivedSchemeIds.length === archivedSchemesList.length;
 
@@ -718,6 +731,173 @@ function DataManagementTabContent() {
     setShowDeleteArchivedConfirmDialog(false);
     setIsDeletingArchivedSchemes(false);
   };
+
+  // --- Archived Group Management Logic ---
+  const handleSelectArchivedGroup = (groupName: string, checked: boolean) => {
+    setSelectedArchivedGroupNames(prev =>
+      checked ? [...prev, groupName] : prev.filter(name => name !== groupName)
+    );
+  };
+
+  const handleSelectAllArchivedGroups = (checked: boolean) => {
+    if (checked) {
+      setSelectedArchivedGroupNames(archivedGroupsList.map(g => g.groupName));
+    } else {
+      setSelectedArchivedGroupNames([]);
+    }
+  };
+
+  const handleRestoreSelectedArchivedGroups = async () => {
+    if (selectedArchivedGroupNames.length === 0) return;
+    setIsRestoringGroups(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let errorMessages: string[] = [];
+
+    for (const groupName of selectedArchivedGroupNames) {
+      const restoredGroup = unarchiveMockGroup(groupName);
+      if (restoredGroup) {
+        successCount++;
+      } else {
+        errorCount++;
+        errorMessages.push(`Failed to restore group "${groupName}". It might not be archived or an error occurred.`);
+      }
+    }
+    toast({
+      title: "Group Restore Operation Complete",
+      description: `${successCount} group(s) restored. ${errorCount > 0 ? `${errorCount} error(s). ${errorMessages.join(' ')}` : ''}`,
+      variant: errorCount > 0 ? (successCount > 0 ? "default" : "destructive") : "default"
+    });
+    loadAllData(); // Refresh data including groups
+    setIsRestoringGroups(false);
+  };
+
+  const handleInitiateDeleteArchivedGroups = () => {
+    if (selectedArchivedGroupNames.length === 0) return;
+    const info = selectedArchivedGroupNames.map(groupName => ({ groupName }));
+    setArchivedGroupsPendingDeletionInfo(info);
+    setShowDeleteArchivedGroupsConfirmDialog(true);
+  };
+
+  const handleConfirmDeleteSelectedArchivedGroups = async () => {
+    if (selectedArchivedGroupNames.length === 0) return;
+    setIsDeletingArchivedGroupsFull(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let errorMessages: string[] = [];
+
+    for (const groupName of selectedArchivedGroupNames) {
+      const deleted = deleteFullMockGroup(groupName);
+      if (deleted) {
+        successCount++;
+      } else {
+        errorCount++;
+        errorMessages.push(`Failed to delete group "${groupName}".`);
+      }
+    }
+    toast({
+      title: "Group Deletion Operation Complete",
+      description: `${successCount} group(s) permanently deleted. Schemes within these groups have been unassigned. ${errorCount > 0 ? `${errorCount} error(s). ${errorMessages.join(' ')}` : ''}`,
+      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
+    });
+    loadAllData(); // Refresh data
+    setArchivedGroupsPendingDeletionInfo([]);
+    setShowDeleteArchivedGroupsConfirmDialog(false);
+    setIsDeletingArchivedGroupsFull(false);
+  };
+
+  const isAllArchivedGroupsSelected = archivedGroupsList.length > 0 && selectedArchivedGroupNames.length === archivedGroupsList.length;
+
+  // --- Archived Transaction Management Logic ---
+  const handleSelectArchivedTransaction = (paymentId: string, checked: boolean) => {
+    setSelectedArchivedPaymentIds(prev =>
+      checked ? [...prev, paymentId] : prev.filter(id => id !== paymentId)
+    );
+  };
+
+  const handleSelectAllArchivedTransactions = (checked: boolean) => {
+    if (checked) {
+      setSelectedArchivedPaymentIds(archivedTransactionsList.map(t => t.id));
+    } else {
+      setSelectedArchivedPaymentIds([]);
+    }
+  };
+
+  const handleRestoreSelectedArchivedTransactions = async () => {
+    if (selectedArchivedPaymentIds.length === 0) return;
+    setIsRestoringTransactions(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let errorMessages: string[] = [];
+
+    for (const paymentId of selectedArchivedPaymentIds) {
+      const transaction = archivedTransactionsList.find(t => t.id === paymentId);
+      if (transaction) {
+        const restoredScheme = unarchiveMockPayment(transaction.schemeId, transaction.id);
+        if (restoredScheme) {
+          successCount++;
+        } else {
+          errorCount++;
+          errorMessages.push(`Failed to restore transaction ${paymentId} for scheme ${transaction.schemeId}.`);
+        }
+      } else {
+        errorCount++;
+        errorMessages.push(`Transaction details not found for ID ${paymentId}.`);
+      }
+    }
+    toast({
+      title: "Transaction Restore Operation Complete",
+      description: `${successCount} transaction(s) restored. ${errorCount > 0 ? `${errorCount} error(s). ${errorMessages.join(' ')}` : ''}`,
+      variant: errorCount > 0 ? (successCount > 0 ? "default" : "destructive") : "default"
+    });
+    loadAllData(); // Refresh all data
+    setIsRestoringTransactions(false);
+  };
+
+  const handleInitiateDeleteArchivedTransactions = () => {
+    if (selectedArchivedPaymentIds.length === 0) return;
+    const info = selectedArchivedPaymentIds.map(id => {
+      const t = archivedTransactionsList.find(txn => txn.id === id);
+      return t || { paymentId: id, schemeId: 'Unknown', customerName: 'Unknown', monthNumber: 0 }; // Fallback for safety
+    }).map(t => ({ paymentId: t.id, schemeId: t.schemeId, customerName: t.customerName, monthNumber: t.monthNumber }));
+    setArchivedTransactionsPendingDeletionInfo(info as any); // Cast needed if fallback is used and type is strict
+    setShowDeleteArchivedTransactionsConfirmDialog(true);
+  };
+
+  const handleConfirmDeleteSelectedArchivedTransactions = async () => {
+    if (selectedArchivedPaymentIds.length === 0) return;
+    setIsDeletingArchivedTransactionsFull(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let errorMessages: string[] = [];
+
+    for (const paymentId of selectedArchivedPaymentIds) {
+      const transaction = archivedTransactionsList.find(t => t.id === paymentId);
+      if (transaction) {
+        const updatedScheme = deleteFullMockPayment(transaction.schemeId, transaction.id);
+        if (updatedScheme) {
+          successCount++;
+        } else {
+          errorCount++;
+          errorMessages.push(`Failed to delete transaction ${paymentId} for scheme ${transaction.schemeId}.`);
+        }
+      } else {
+        errorCount++;
+        errorMessages.push(`Transaction details not found for ID ${paymentId} for deletion.`);
+      }
+    }
+    toast({
+      title: "Transaction Deletion Operation Complete",
+      description: `${successCount} transaction(s) permanently deleted. ${errorCount > 0 ? `${errorCount} error(s). ${errorMessages.join(' ')}` : ''}`,
+      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
+    });
+    loadAllData(); // Refresh all data
+    setArchivedTransactionsPendingDeletionInfo([]);
+    setShowDeleteArchivedTransactionsConfirmDialog(false);
+    setIsDeletingArchivedTransactionsFull(false);
+  };
+
+  const isAllArchivedTransactionsSelected = archivedTransactionsList.length > 0 && selectedArchivedPaymentIds.length === archivedTransactionsList.length;
 
 
   return (
@@ -989,10 +1169,10 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Fully Paid & Closed Scheme Management
+            Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that are 'Fully Paid' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
+            Manage schemes that are 'Closed' (manually by an admin). You can reopen or archive them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1011,14 +1191,6 @@ function DataManagementTabContent() {
             >
               {isArchivingSelectedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               Archive Selected ({selectedClosedSchemeIds.length})
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleInitiateDeleteSelectedSchemes}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
-            >
-              {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Delete Selected ({selectedClosedSchemeIds.length})
             </Button>
           </div>
           {completedSchemes.length > 0 ? (
@@ -1065,39 +1237,6 @@ function DataManagementTabContent() {
           )}
         </CardContent>
       </Card>
-
-      {showDeleteConfirmDialog && (
-        <AlertDialog open={showDeleteConfirmDialog} onOpenChange={(open) => !open && setShowDeleteConfirmDialog(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
-                Confirm Permanent Deletion
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                You are about to permanently delete {schemesPendingDeletionInfo.length} scheme(s):
-                <ul className="list-disc pl-5 mt-2 text-sm max-h-40 overflow-y-auto">
-                  {schemesPendingDeletionInfo.map(s => <li key={s.id}>{s.customerName} (ID: {s.schemeId})</li>)}
-                </ul>
-                This action cannot be undone. Associated payments and history will also be removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setShowDeleteConfirmDialog(false)} disabled={isDeletingClosedSchemes}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmDeleteSelectedSchemes}
-                disabled={isDeletingClosedSchemes}
-                className="bg-destructive hover:bg-destructive/90"
-              >
-                {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Permanently
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
 
       {/* Archived Scheme Management Card */}
       <Card>
@@ -1205,6 +1344,236 @@ function DataManagementTabContent() {
                 className="bg-destructive hover:bg-destructive/90"
               >
                 {isDeletingArchivedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Archived Group Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <Users2Icon className="h-5 w-5 text-primary opacity-80" /> {/* Using Users2Icon as an example */}
+            Archived Group Management
+          </CardTitle>
+          <CardDescription>
+            Manage groups that have been moved to trash (archived). You can restore them or permanently delete them.
+            Permanently deleting a group will also remove its association from all schemes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <Button
+              onClick={handleRestoreSelectedArchivedGroups}
+              disabled={selectedArchivedGroupNames.length === 0 || isRestoringGroups || isDeletingArchivedGroupsFull}
+            >
+              {isRestoringGroups ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Restore Selected ({selectedArchivedGroupNames.length})
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleInitiateDeleteArchivedGroups}
+              disabled={selectedArchivedGroupNames.length === 0 || isRestoringGroups || isDeletingArchivedGroupsFull}
+            >
+              {isDeletingArchivedGroupsFull ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Permanently Delete Selected ({selectedArchivedGroupNames.length})
+            </Button>
+          </div>
+          {isLoadingArchivedGroups ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading archived groups...
+            </div>
+          ) : archivedGroupsList.length > 0 ? (
+            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={isAllArchivedGroupsSelected}
+                        onCheckedChange={handleSelectAllArchivedGroups}
+                        aria-label="Select all archived groups"
+                        disabled={isRestoringGroups || isDeletingArchivedGroupsFull}
+                      />
+                    </TableHead>
+                    <TableHead>Group Name</TableHead>
+                    <TableHead>Archived Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archivedGroupsList.map((group) => (
+                    <TableRow key={group.groupName} data-state={selectedArchivedGroupNames.includes(group.groupName) ? 'selected' : ''}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedArchivedGroupNames.includes(group.groupName)}
+                          onCheckedChange={(checked) => handleSelectArchivedGroup(group.groupName, !!checked)}
+                          aria-label={`Select archived group ${group.groupName}`}
+                          disabled={isRestoringGroups || isDeletingArchivedGroupsFull}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{group.groupName}</TableCell>
+                      <TableCell>{formatDate(group.archivedDate)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No archived groups found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog for Deleting Archived Groups */}
+      {showDeleteArchivedGroupsConfirmDialog && (
+        <AlertDialog open={showDeleteArchivedGroupsConfirmDialog} onOpenChange={(open) => !open && setShowDeleteArchivedGroupsConfirmDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                Confirm Permanent Deletion of Archived Groups
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                You are about to permanently delete {archivedGroupsPendingDeletionInfo.length} archived group(s):
+                <ul className="list-disc pl-5 mt-2 text-sm max-h-40 overflow-y-auto">
+                  {archivedGroupsPendingDeletionInfo.map(g => <li key={g.groupName}>{g.groupName}</li>)}
+                </ul>
+                This action cannot be undone. All schemes currently in this/these group(s) will be unassigned from it/them.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteArchivedGroupsConfirmDialog(false)} disabled={isDeletingArchivedGroupsFull}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteSelectedArchivedGroups}
+                disabled={isDeletingArchivedGroupsFull}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isDeletingArchivedGroupsFull ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Permanently
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Archived Transaction Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ListChecksIcon className="h-5 w-5 text-primary opacity-80" />
+            Archived Transaction Management
+          </CardTitle>
+          <CardDescription>
+            Manage individual payment transactions that have been moved to trash. You can restore them to their scheme or permanently delete them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <Button
+              onClick={handleRestoreSelectedArchivedTransactions}
+              disabled={selectedArchivedPaymentIds.length === 0 || isRestoringTransactions || isDeletingArchivedTransactionsFull}
+            >
+              {isRestoringTransactions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Restore Selected ({selectedArchivedPaymentIds.length})
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleInitiateDeleteArchivedTransactions}
+              disabled={selectedArchivedPaymentIds.length === 0 || isRestoringTransactions || isDeletingArchivedTransactionsFull}
+            >
+              {isDeletingArchivedTransactionsFull ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Permanently Delete Selected ({selectedArchivedPaymentIds.length})
+            </Button>
+          </div>
+          {isLoadingArchivedTransactions ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading archived transactions...
+            </div>
+          ) : archivedTransactionsList.length > 0 ? (
+            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={isAllArchivedTransactionsSelected}
+                        onCheckedChange={handleSelectAllArchivedTransactions}
+                        aria-label="Select all archived transactions"
+                        disabled={isRestoringTransactions || isDeletingArchivedTransactionsFull}
+                      />
+                    </TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Scheme ID</TableHead>
+                    <TableHead className="text-center">Month #</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Expected Amt.</TableHead>
+                    <TableHead>Archived Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archivedTransactionsList.map((txn) => (
+                    <TableRow key={txn.id} data-state={selectedArchivedPaymentIds.includes(txn.id) ? 'selected' : ''}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedArchivedPaymentIds.includes(txn.id)}
+                          onCheckedChange={(checked) => handleSelectArchivedTransaction(txn.id, !!checked)}
+                          aria-label={`Select transaction ${txn.id}`}
+                          disabled={isRestoringTransactions || isDeletingArchivedTransactionsFull}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{txn.customerName}</TableCell>
+                      <TableCell>{txn.schemeId.toUpperCase()}</TableCell>
+                      <TableCell className="text-center">{txn.monthNumber}</TableCell>
+                      <TableCell>{formatDate(txn.dueDate)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(txn.amountExpected)}</TableCell>
+                      <TableCell>{formatDate(txn.archivedDate)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">No archived transactions found.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Confirmation Dialog for Deleting Archived Transactions */}
+      {showDeleteArchivedTransactionsConfirmDialog && (
+        <AlertDialog open={showDeleteArchivedTransactionsConfirmDialog} onOpenChange={(open) => !open && setShowDeleteArchivedTransactionsConfirmDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
+                Confirm Permanent Deletion of Archived Transactions
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                You are about to permanently delete {archivedTransactionsPendingDeletionInfo.length} archived transaction(s). This action cannot be undone.
+                <ScrollArea className="max-h-40 mt-2 border rounded-md p-2">
+                  <ul className="list-disc pl-5 text-sm ">
+                    {archivedTransactionsPendingDeletionInfo.map(t => (
+                      <li key={t.paymentId}>
+                        {t.customerName} (Scheme: {t.schemeId.toUpperCase()}, Month: {t.monthNumber})
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowDeleteArchivedTransactionsConfirmDialog(false)} disabled={isDeletingArchivedTransactionsFull}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteSelectedArchivedTransactions}
+                disabled={isDeletingArchivedTransactionsFull}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {isDeletingArchivedTransactionsFull ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                 Delete Permanently
               </AlertDialogAction>
             </AlertDialogFooter>
