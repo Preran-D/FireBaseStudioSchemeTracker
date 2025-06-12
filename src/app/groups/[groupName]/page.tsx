@@ -333,6 +333,7 @@ export default function GroupDetailsPage() {
     }
   };
 
+
   const clearDateFilter = () => {
     setDateRangeFilter({ from: undefined, to: undefined });
   };
