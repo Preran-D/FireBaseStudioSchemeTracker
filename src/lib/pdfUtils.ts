@@ -25,11 +25,11 @@ export const exportGroupSchemesToPdf = (
   doc.setFontSize(11);
   doc.text(`Total Customers: ${groupSummaryStats.totalCustomers}`, 14, 32);
   doc.text(`Total Schemes: ${groupSummaryStats.totalSchemes}`, 14, 38);
-  doc.text(`Active Schemes: ${groupSummaryStats.activeSchemesCount}`, 14, 44);
+  // doc.text(`Active Schemes: ${groupSummaryStats.activeSchemesCount}`, 14, 44);
 
-  doc.text(`Total Collected: ${formatCurrency(groupSummaryStats.totalPaid)}`, 80, 32);
-  doc.text(`Total Pending: ${formatCurrency(groupSummaryStats.totalPending)}`, 80, 38);
-  doc.text(`Total Overdue: ${formatCurrency(groupSummaryStats.totalOverdueAmount)}`, 80, 44);
+  doc.text(`Total paid: ${"Rs." + (groupSummaryStats.totalPaid) + "/-"}`, 80, 32);
+  // doc.text(`Total Pending: ${"Rs." + (groupSummaryStats.totalPending) + "/-"}`, 80, 38);
+  // doc.text(`Total Overdue: ${"Rs." + (groupSummaryStats.totalOverdueAmount) + "/-"}`, 80, 44);
 
   doc.line(14, 50, doc.internal.pageSize.width - 14, 50); // Horizontal line separator
 
@@ -38,9 +38,9 @@ export const exportGroupSchemesToPdf = (
     'Customer Name',
     'Scheme ID',
     'Start Date',
-    'Monthly Amt.',
+    'Amount',
     'Total Paid',
-    'Payments (Made/Total)',
+    'Payments',
     'Status',
   ];
 
@@ -48,14 +48,15 @@ export const exportGroupSchemesToPdf = (
 
   schemes.forEach(scheme => {
     const schemeTotals = calculateSchemeTotals(scheme);
-    const status = getSchemeStatus(scheme);
+    const status = (getSchemeStatus(scheme).toLowerCase() !== 'closed') ? 'ACTIVE' : 'CLOSED';
+
 
     tableRows.push([
       scheme.customerName,
       scheme.id.toUpperCase(),
       formatDate(scheme.startDate),
-      formatCurrency(scheme.monthlyPaymentAmount),
-      formatCurrency(schemeTotals.totalCollected),
+      "Rs."+(scheme.monthlyPaymentAmount)+"/-",
+      "Rs."+(schemeTotals.totalCollected)+"/-",
       `${schemeTotals.paymentsMadeCount || 0} / ${scheme.durationMonths}`,
       status,
     ]);
