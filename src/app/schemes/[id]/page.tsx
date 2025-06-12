@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2 } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme } from '@/lib/mock-data';
+import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
@@ -291,33 +291,34 @@ export default function SchemeDetailsPage() {
   const handleConfirmDeleteScheme = async () => {
     if (!scheme) return;
     setIsDeletingScheme(true);
-    const success = deleteFullMockScheme(scheme.id);
-    if (success) {
+    // Changed from deleteFullMockScheme to archiveMockScheme
+    const archivedScheme = archiveMockScheme(scheme.id);
+    if (archivedScheme) {
       toast({
-        title: "Scheme Deleted",
-        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been deleted.`,
+        title: "Scheme Moved to Trash",
+        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been moved to trash.`,
       });
       // Navigate away
-      const allSchemes = getMockSchemes(); // Get fresh list after deletion
-      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName);
+      const allSchemes = getMockSchemes({ includeArchived: true }); // Get fresh list, ensure archived are available for nav logic
+      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName && s.id !== scheme.id && s.status !== 'Archived');
 
       if (remainingSchemesForCustomer.length > 0) {
         router.push(`/schemes/${remainingSchemesForCustomer[0].id}`);
       } else if (scheme.customerGroupName) {
-        // Check if group still exists (has other schemes)
-        const groupStillExists = allSchemes.some(s => s.customerGroupName === scheme.customerGroupName);
+        // Check if group still exists (has other schemes, not archived)
+        const groupStillExists = allSchemes.some(s => s.customerGroupName === scheme.customerGroupName && s.status !== 'Archived');
         if (groupStillExists) {
           router.push(`/groups/${encodeURIComponent(scheme.customerGroupName)}`);
         } else {
-          router.push('/groups'); // Group is now empty, go to groups list
+          router.push('/groups'); // Group is now empty or only contains archived schemes, go to groups list
         }
       } else {
         router.push('/schemes');
       }
     } else {
       toast({
-        title: "Error Deleting Scheme",
-        description: `Could not delete scheme ID ${scheme.id.toUpperCase()}.`,
+        title: "Error Moving Scheme to Trash",
+        description: `Could not move scheme ID ${scheme.id.toUpperCase()} to trash. It might already be archived or an error occurred.`,
         variant: "destructive",
       });
       setIsDeletingScheme(false);
@@ -683,10 +684,10 @@ export default function SchemeDetailsPage() {
                 disabled={isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme || isUpdatingCustomerDetails}
             >
                 {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Scheme
+                Move to Trash
             </Button>
              <p className="text-xs text-muted-foreground px-1">
-                Permanently delete this scheme and all its associated payment records. This action cannot be undone.
+                Move this scheme to trash. You can restore or permanently delete it later from Settings.
             </p>
           </CardContent>
         </Card>
@@ -786,9 +787,9 @@ export default function SchemeDetailsPage() {
         <AlertDialog open={isConfirmingDeleteScheme} onOpenChange={(open) => { if(!isDeletingScheme) setIsConfirmingDeleteScheme(open);}}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Scheme Deletion</AlertDialogTitle>
+              <AlertDialogTitle>Confirm Move to Trash</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to permanently delete scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span>? All associated payment records will also be removed. This action cannot be undone.
+                Are you sure you want to move scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span> to trash? You can restore or permanently delete it later from the Settings page.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -796,8 +797,8 @@ export default function SchemeDetailsPage() {
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
-                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm Delete
+                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Move to Trash
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

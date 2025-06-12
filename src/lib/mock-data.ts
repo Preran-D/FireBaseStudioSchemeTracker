@@ -1,5 +1,5 @@
 
-import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus } from '@/types/scheme';
+import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus, MockGroup } from '@/types/scheme'; // Added MockGroup
 import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId } from '@/lib/utils';
 import { subMonths, addMonths, formatISO, parseISO, startOfDay } from 'date-fns';
 
@@ -88,6 +88,27 @@ export let MOCK_SCHEMES: Scheme[] = [
   createScheme('Hannah Montana', subMonths(new Date(), 1), 600, undefined, "1098765432", "Malibu, CA"), 
   createScheme('Iris West', subMonths(new Date(), 6), 900, "Smith Family", "0987654321", "Central City Apt"), 
 ];
+
+// Initialize MOCK_GROUPS
+export let MOCK_GROUPS: MockGroup[] = [];
+
+export function initializeMockGroups(): void {
+  if (MOCK_GROUPS.length > 0) {
+    // Already initialized
+    return;
+  }
+  const groupNames = new Set<string>();
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerGroupName) {
+      groupNames.add(scheme.customerGroupName);
+    }
+  });
+  MOCK_GROUPS = Array.from(groupNames).map(name => ({ groupName: name, isArchived: false }));
+  // console.log('MOCK_GROUPS initialized:', MOCK_GROUPS.length, 'groups');
+}
+
+initializeMockGroups(); // Call this once to populate MOCK_GROUPS
+
 
 const fionaSchemeIdx = MOCK_SCHEMES.findIndex(s => s.customerName === 'Fiona Gallagher');
 if (fionaSchemeIdx !== -1) {
@@ -341,21 +362,30 @@ export const deleteMockPayment = (schemeId: string, paymentId: string): Scheme |
   const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
   if (paymentIndex === -1) return undefined;
 
-  scheme.payments[paymentIndex].amountPaid = undefined;
-  scheme.payments[paymentIndex].paymentDate = undefined;
-  scheme.payments[paymentIndex].modeOfPayment = undefined;
-  
-  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate)); 
-  scheme.status = getSchemeStatus(scheme); 
+  // Instead of clearing details, mark as archived
+  scheme.payments[paymentIndex].isArchived = true;
+  scheme.payments[paymentIndex].archivedDate = formatISO(new Date());
+  // Note: The payment's original details (amountPaid, paymentDate, modeOfPayment, status) are preserved.
+  // The status field might seem contradictory (e.g. 'Paid' but also archived).
+  // UI will need to primarily use isArchived to hide/filter these payments.
+  // Calculations in utils.ts (getSchemeStatus, calculateSchemeTotals) might need adjustment
+  // if archived payments should not contribute to totals or affect scheme status.
+  // For now, this subtask assumes utils.ts will be updated separately if needed.
+
+  // Recalculate scheme status and totals (assuming utils are or will be archive-aware)
+  scheme.payments.forEach(p => {
+    if (!p.isArchived) p.status = getPaymentStatus(p, scheme.startDate);
+  });
+  scheme.status = getSchemeStatus(scheme);
 
   if (wasClosed && scheme.status !== 'Closed' && scheme.status !== 'Fully Paid') {
-    scheme.closureDate = undefined; 
+    scheme.closureDate = undefined;
   }
-  
-  const totals = calculateSchemeTotals(scheme); 
+
+  const totals = calculateSchemeTotals(scheme);
   MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
-  
-  return getMockSchemeById(schemeId);
+
+  return getMockSchemeById(schemeId); // Returns a fresh, recalculated scheme object
 };
 
 interface CloseSchemeOptions {
@@ -528,18 +558,32 @@ export const recordNextDuePaymentsForCustomerGroup = (
 };
 
 export const getGroupDetails = (): GroupDetail[] => {
-  const currentSchemes = getMockSchemes(); 
+  // Ensure MOCK_GROUPS is initialized if it hasn't been (e.g., during hot module replacement or direct calls)
+  if (MOCK_GROUPS.length === 0 && MOCK_SCHEMES.length > 0) {
+    initializeMockGroups();
+  }
+
+  const nonArchivedGroupNames = MOCK_GROUPS
+    .filter(g => !g.isArchived)
+    .map(g => g.groupName);
+
+  const currentSchemes = getMockSchemes(); // Gets non-archived schemes by default
   const groupsMap = new Map<string, { schemes: Scheme[]; customerNames: Set<string>; recordableSchemeCount: number }>();
 
+  // Initialize map with non-archived groups to ensure they appear even if they have no schemes currently
+  nonArchivedGroupNames.forEach(groupName => {
+    groupsMap.set(groupName, { schemes: [], customerNames: new Set(), recordableSchemeCount: 0 });
+  });
+
   currentSchemes.forEach(scheme => {
-    if (scheme.customerGroupName) {
-      const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], customerNames: new Set(), recordableSchemeCount: 0 };
+    // Only process schemes that belong to a non-archived group
+    if (scheme.customerGroupName && nonArchivedGroupNames.includes(scheme.customerGroupName)) {
+      const groupEntry = groupsMap.get(scheme.customerGroupName)!; // Should exist due to pre-initialization
       groupEntry.schemes.push(scheme);
       groupEntry.customerNames.add(scheme.customerName);
 
       let hasRecordablePaymentForThisScheme = false;
-      // Only count recordable if not Closed and not Fully Paid
-      if (scheme.status !== 'Closed' && scheme.status !== 'Fully Paid' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
+      if (scheme.status !== 'Closed' && scheme.status !== 'Completed' && (scheme.status === 'Active' || scheme.status === 'Overdue')) {
         for (let i = 0; i < scheme.payments.length; i++) {
           const payment = scheme.payments[i];
           if (getPaymentStatus(payment, scheme.startDate) !== 'Paid') {
@@ -560,29 +604,28 @@ export const getGroupDetails = (): GroupDetail[] => {
       if (hasRecordablePaymentForThisScheme) {
         groupEntry.recordableSchemeCount++;
       }
-      groupsMap.set(scheme.customerGroupName, groupEntry);
+      // groupsMap.set(scheme.customerGroupName, groupEntry); // Not needed as we are modifying the entry directly
     }
   });
 
   return Array.from(groupsMap.entries()).map(([groupName, data]) => ({
     groupName,
-    schemes: data.schemes, 
+    schemes: data.schemes,
     customerNames: Array.from(data.customerNames).sort(),
     totalSchemesInGroup: data.schemes.length,
     recordableSchemeCount: data.recordableSchemeCount,
-  })).sort((a,b) => a.groupName.localeCompare(b.groupName));
+  })).sort((a, b) => a.groupName.localeCompare(b.groupName));
 };
 
 
 export const getUniqueGroupNames = (): string[] => {
-  const groupNames = new Set<string>();
-  const currentSchemes = getMockSchemes(); 
-  currentSchemes.forEach(scheme => {
-    if (scheme.customerGroupName) {
-      groupNames.add(scheme.customerGroupName);
-    }
-  });
-  return Array.from(groupNames).sort((a, b) => a.localeCompare(b));
+  // Ensure MOCK_GROUPS is initialized
+  if (MOCK_GROUPS.length === 0 && MOCK_SCHEMES.length > 0) {
+    initializeMockGroups();
+  }
+  return MOCK_GROUPS.filter(g => !g.isArchived)
+                    .map(g => g.groupName)
+                    .sort((a, b) => a.localeCompare(b));
 };
 
 export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Scheme | undefined => {
@@ -752,25 +795,196 @@ export const deleteFullMockScheme = (schemeId: string): boolean => {
 // It should ideally check: if (scheme.status === 'Archived') return 'Archived'; at the beginning.
 // This was partially handled in getMockSchemes by preserving 'Archived' status before calling getSchemeStatus.
 
-export const updateMockGroupName = (oldGroupName: string, newGroupName: string): boolean => {
-  if (!newGroupName || newGroupName.trim() === "") return false;
-  let changed = false;
+export const updateMockGroupName = (oldGroupName: string, newGroupName: string): { success: boolean; message?: string } => {
+  const trimmedNewGroupName = newGroupName.trim();
+  if (!trimmedNewGroupName) {
+    return { success: false, message: "New group name cannot be empty." };
+  }
+
+  if (oldGroupName === trimmedNewGroupName) {
+    return { success: true, message: "Group name is already set to this value." }; // No change needed
+  }
+
+  // Ensure MOCK_GROUPS is initialized
+  if (MOCK_GROUPS.length === 0 && MOCK_SCHEMES.length > 0) {
+    initializeMockGroups();
+  }
+
+  const oldGroupIndex = MOCK_GROUPS.findIndex(g => g.groupName === oldGroupName);
+  if (oldGroupIndex === -1) {
+    // This case should ideally not happen if oldGroupName comes from a valid source (non-archived group)
+    // However, if a group was somehow deleted/archived externally or old name is arbitrary.
+    // For now, let's assume oldGroupName must exist as a non-archived group to be renamed.
+    const oldGroupIsArchived = MOCK_GROUPS.some(g => g.groupName === oldGroupName && g.isArchived);
+    if (oldGroupIsArchived) {
+         return { success: false, message: `Cannot rename "${oldGroupName}" as it is an archived group.` };
+    }
+    return { success: false, message: `Old group name "${oldGroupName}" not found or is not an active group.` };
+  }
+
+  if (MOCK_GROUPS[oldGroupIndex].isArchived) {
+    // This check is redundant if oldGroupName is always sourced from non-archived groups, but good for safety.
+    return { success: false, message: `Archived group "${oldGroupName}" cannot be renamed.` };
+  }
+
+  const newGroupNameExistsAsActive = MOCK_GROUPS.some(g => g.groupName === trimmedNewGroupName && !g.isArchived);
+  if (newGroupNameExistsAsActive) {
+    return { success: false, message: `An active group named "${trimmedNewGroupName}" already exists. Please choose a different name.` };
+  }
+
+  const newGroupNameExistsAsArchived = MOCK_GROUPS.some(g => g.groupName === trimmedNewGroupName && g.isArchived);
+  if (newGroupNameExistsAsArchived) {
+     return { success: false, message: `A group named "${trimmedNewGroupName}" already exists in the archive. Please permanently delete or restore it first.` };
+  }
+
+  // Update in MOCK_GROUPS
+  MOCK_GROUPS[oldGroupIndex].groupName = trimmedNewGroupName;
+
+  // Update in MOCK_SCHEMES
+  let schemesUpdatedCount = 0;
   MOCK_SCHEMES.forEach(scheme => {
     if (scheme.customerGroupName === oldGroupName) {
-      scheme.customerGroupName = newGroupName.trim();
-      changed = true;
+      scheme.customerGroupName = trimmedNewGroupName;
+      schemesUpdatedCount++;
     }
   });
-  return changed;
+
+  return { success: true, message: `Group "${oldGroupName}" renamed to "${trimmedNewGroupName}". ${schemesUpdatedCount} schemes updated.` };
 };
 
+// Archives a group by marking it as archived in MOCK_GROUPS
 export const deleteMockGroup = (groupName: string): boolean => {
-  let changed = false;
-  MOCK_SCHEMES.forEach(scheme => {
-    if (scheme.customerGroupName === groupName) {
-      scheme.customerGroupName = undefined;
-      changed = true;
+  const groupIndex = MOCK_GROUPS.findIndex(g => g.groupName === groupName);
+  if (groupIndex !== -1) {
+    if (MOCK_GROUPS[groupIndex].isArchived) {
+      // console.warn(`Group "${groupName}" is already archived.`);
+      return false; // Or true, depending on desired idempotency behavior
     }
+    MOCK_GROUPS[groupIndex].isArchived = true;
+    MOCK_GROUPS[groupIndex].archivedDate = formatISO(new Date());
+    // console.log(`Group "${groupName}" archived successfully.`);
+    return true;
+  }
+  // console.warn(`Group "${groupName}" not found for archiving.`);
+  return false;
+};
+
+export const getArchivedGroups = (): MockGroup[] => {
+  return JSON.parse(JSON.stringify(MOCK_GROUPS.filter(g => g.isArchived)));
+};
+
+export const unarchiveMockGroup = (groupName: string): MockGroup | undefined => {
+  const groupIndex = MOCK_GROUPS.findIndex(g => g.groupName === groupName);
+  if (groupIndex !== -1 && MOCK_GROUPS[groupIndex].isArchived) {
+    MOCK_GROUPS[groupIndex].isArchived = false;
+    MOCK_GROUPS[groupIndex].archivedDate = undefined;
+    // console.log(`Group "${groupName}" unarchived successfully.`);
+    return JSON.parse(JSON.stringify(MOCK_GROUPS[groupIndex]));
+  }
+  // console.warn(`Group "${groupName}" not found or not archived.`);
+  return undefined;
+};
+
+export const deleteFullMockGroup = (groupName: string): boolean => {
+  const groupIndex = MOCK_GROUPS.findIndex(g => g.groupName === groupName);
+  if (groupIndex !== -1) {
+    // For safety, ensure it's an archived group, though not strictly necessary by plan
+    // if (!MOCK_GROUPS[groupIndex].isArchived) {
+    //   console.warn(`Group "${groupName}" is not archived. Archive it first before full deletion.`);
+    //   return false;
+    // }
+
+    MOCK_GROUPS.splice(groupIndex, 1); // Remove group from MOCK_GROUPS
+
+    // Remove group association from schemes
+    let schemesChanged = false;
+    MOCK_SCHEMES.forEach(scheme => {
+      if (scheme.customerGroupName === groupName) {
+        scheme.customerGroupName = undefined;
+        schemesChanged = true;
+      }
+    });
+    // if (schemesChanged) console.log(`Schemes updated for deleted group "${groupName}".`);
+    // console.log(`Group "${groupName}" permanently deleted.`);
+    return true;
+  }
+  // console.warn(`Group "${groupName}" not found for full deletion.`);
+  return false;
+};
+
+// --- Payment Archival Functions ---
+
+export type ArchivedPaymentAugmented = Payment & {
+  schemeId: string;
+  customerName: string;
+  schemeStatus?: SchemeStatus
+};
+
+export const getArchivedPaymentsForAllSchemes = (): ArchivedPaymentAugmented[] => {
+  const archivedPayments: ArchivedPaymentAugmented[] = [];
+  // Use a fresh call to getMockSchemes to ensure up-to-date scheme details, including status
+  const currentSchemes = getMockSchemes({ includeArchived: true });
+
+  currentSchemes.forEach(scheme => {
+    scheme.payments.forEach(payment => {
+      if (payment.isArchived) {
+        archivedPayments.push({
+          ...payment,
+          schemeId: scheme.id, // Augment with schemeId
+          customerName: scheme.customerName, // Augment with customerName
+          schemeStatus: scheme.status, // Augment with schemeStatus
+        });
+      }
+    });
   });
-  return changed;
+  return JSON.parse(JSON.stringify(archivedPayments));
+};
+
+export const unarchiveMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
+
+  if (paymentIndex === -1 || !scheme.payments[paymentIndex].isArchived) {
+    // console.warn(`Payment ${paymentId} in scheme ${schemeId} not found or not archived.`);
+    return undefined; // Or return scheme as is
+  }
+
+  scheme.payments[paymentIndex].isArchived = false;
+  scheme.payments[paymentIndex].archivedDate = undefined;
+
+  // Recalculate scheme status and totals
+  scheme.payments.forEach(p => {
+    // Re-evaluate status for the unarchived payment too
+    p.status = getPaymentStatus(p, scheme.startDate);
+  });
+  scheme.status = getSchemeStatus(scheme);
+  const totals = calculateSchemeTotals(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId);
+};
+
+export const deleteFullMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const initialPaymentCount = scheme.payments.length;
+  scheme.payments = scheme.payments.filter(p => p.id !== paymentId);
+
+  if (scheme.payments.length === initialPaymentCount) {
+    // console.warn(`Payment ${paymentId} not found in scheme ${schemeId} for full deletion.`);
+    return undefined; // Or return scheme as is if no change
+  }
+
+  // Recalculate scheme status and totals
+  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  scheme.status = getSchemeStatus(scheme);
+  const totals = calculateSchemeTotals(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId);
 };
