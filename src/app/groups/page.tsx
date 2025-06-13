@@ -131,13 +131,13 @@ export default function GroupsPage() {
                         animate="visible"
                         custom={index}
                       >
-                        <TableCell className="font-medium text-base">
+                        <TableCell className="font-medium text-base" data-label="Group Name">
                           <Link href={`/groups/${encodeURIComponent(group.groupName)}`} className="text-primary hover:underline">
                             {group.groupName}
                           </Link>
                         </TableCell>
-                        <TableCell className="text-center text-base text-muted-foreground">{group.customerNames.length}</TableCell>
-                        <TableCell className="text-center text-base text-muted-foreground">{group.totalSchemesInGroup}</TableCell>
+                        <TableCell className="text-center text-base text-muted-foreground" data-label="Customers">{group.customerNames.length}</TableCell>
+                        <TableCell className="text-center text-base text-muted-foreground" data-label="Total Schemes">{group.totalSchemesInGroup}</TableCell>
                       </motion.tr>
                     ))}
                   </TableBody>
