@@ -27,8 +27,8 @@ const navItems = [
 
 const utilityNavItems = [
     { id: 'settings', href: '/settings', label: 'Settings', icon: Settings },
-    { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true },
-    { id: 'profile', href: '#!', label: 'Profile', icon: User },
+    // { id: 'notifications', href: '#!', label: 'Notifications', icon: Bell, hasNotification: true }, // Removed
+    // { id: 'profile', href: '#!', label: 'Profile', icon: User }, // Removed
 ];
 
 function TopNavigationBar() {

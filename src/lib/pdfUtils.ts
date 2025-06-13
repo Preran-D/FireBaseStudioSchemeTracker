@@ -198,6 +198,7 @@ export const exportCustomerReportsToPdf = (
   const doc = new jsPDF();
   const pageHeight = doc.internal.pageSize.height;
   let currentY = 20; // Initial Y position
+  const initialCurrentY = currentY; // Store the initial Y for resetting if needed
 
   // Helper to add text and update currentY, also checks for page overflow
   const addTextWithOverflowCheck = (text: string, x: number, y: number, size = 10, style = 'normal', lineHeight?: number) => {
@@ -225,15 +226,54 @@ export const exportCustomerReportsToPdf = (
     currentY = y1 + heightAfterLine;
   };
 
+  if (exportType === 'condensed') {
+    // For condensed report, we prepare data here and draw table once after loop
+    const tableColumnsCondensed = [
+      'Customer Name',
+      'Phone',
+      'Address',
+      'Groups',
+      'Total Schemes',
+      'Active Schemes',
+      'Total Collected'
+    ];
+    const tableRowsCondensed = customers.map(c => [
+      c.customerName,
+      c.customerPhone || 'N/A',
+      c.customerAddress || 'N/A',
+      c.groups.join(', ') || 'N/A',
+      c.schemesSummary.totalSchemes,
+      c.schemesSummary.activeSchemes,
+      "Rs." + (c.schemesSummary.totalCollected),
+    ]);
 
-  customers.forEach((customer, customerIndex) => {
-    if (customerIndex > 0) { // Add new page for each customer after the first
-      doc.addPage();
-      currentY = 20;
-    }
+    // Add a title for the condensed report
+    doc.setFontSize(18);
+    doc.text('Condensed Customer Report', 14, currentY);
+    currentY += 10;
 
-    // Customer Title
-    addTextWithOverflowCheck(customer.customerName, 14, currentY, 16, 'bold', 8);
+    autoTable(doc, {
+      head: [tableColumnsCondensed],
+      body: tableRowsCondensed,
+      startY: currentY,
+      theme: 'striped',
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: 10 },
+      didDrawPage: (data) => { // Update currentY if page breaks occur
+        currentY = data.cursor?.y || initialCurrentY; // Reset to initial Y on new page or use cursor
+      }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 10;
+
+  } else if (exportType === 'detailed') {
+    customers.forEach((customer, customerIndex) => {
+      if (customerIndex > 0) { // Add new page for each customer after the first in detailed mode
+        doc.addPage();
+        currentY = initialCurrentY; // Reset Y for new page
+      }
+
+      // Customer Title
+      addTextWithOverflowCheck(customer.customerName, 14, currentY, 16, 'bold', 8);
 
     // Customer Contact Info
     if (customer.customerPhone) {
@@ -270,9 +310,19 @@ export const exportCustomerReportsToPdf = (
     summaryY = currentY;
     addTextWithOverflowCheck(`Total Collected: ${"Rs." + (customer.schemesSummary.totalCollected)}`, summaryX, summaryY, 10, 'normal', 10); // Add more space after this
 
-    if (exportType === 'detailed') {
-      if (customer.detailedSchemes.length > 0) {
-        customer.detailedSchemes.forEach((scheme, schemeIndex) => {
+    // REMOVED CONDENSED SECTION FROM INSIDE THE LOOP
+    // if (exportType === 'condensed') { ... }
+
+    // The detailed section remains largely the same, but ensure it's correctly scoped within the `else if`
+    // and customer loop for 'detailed' reports.
+    // Note: The 'if (customerIndex > 0 && exportType === 'detailed')' check for adding pages
+    // is now correctly placed at the beginning of the customer loop for detailed reports.
+
+    // The following is the original detailed export logic, now correctly within the customer loop
+    // and conditional block for 'detailed'
+    // if (exportType === 'detailed') { // This check is now part of the `else if` above
+    if (customer.detailedSchemes.length > 0) {
+      customer.detailedSchemes.forEach((scheme, schemeIndex) => {
           // Check for page overflow before drawing scheme table
           if (currentY + 30 > pageHeight - 20) { // Min height for a scheme block
             doc.addPage(); currentY = 20;

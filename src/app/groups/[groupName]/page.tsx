@@ -42,7 +42,7 @@ export default function GroupDetailsPage() {
   const [isSchemePeekPanelOpen, setIsSchemePeekPanelOpen] = useState(false);
   const [schemeForPeekPanel, setSchemeForPeekPanel] = useState<Scheme | null>(null);
   const [schemeSearchTerm, setSchemeSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'oldestFirst' | 'newestFirst' | 'statusPriority'>('customerNameAsc');
+  const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'statusPriority'>('customerNameAsc'); // Removed date-based sort options
 
   const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
   const [isDeletingScheme, setIsDeletingScheme] = useState(false);
@@ -134,12 +134,7 @@ export default function GroupDetailsPage() {
           return a.customerName.localeCompare(b.customerName);
         case 'customerNameDesc':
           return b.customerName.localeCompare(a.customerName);
-        case 'oldestFirst':
-          if (!a.firstSchemeStartDate || !b.firstSchemeStartDate) return 0;
-          return new Date(a.firstSchemeStartDate).getTime() - new Date(b.firstSchemeStartDate).getTime();
-        case 'newestFirst':
-          if (!a.firstSchemeStartDate || !b.firstSchemeStartDate) return 0;
-          return new Date(b.firstSchemeStartDate).getTime() - new Date(a.firstSchemeStartDate).getTime();
+        // Removed 'oldestFirst' and 'newestFirst' cases
         case 'statusPriority':
           return (a.representativeStatusPriority ?? 4) - (b.representativeStatusPriority ?? 4);
         default:
@@ -402,8 +397,7 @@ export default function GroupDetailsPage() {
                     <SelectContent>
                       <SelectItem value="customerNameAsc">Customer Name (A-Z)</SelectItem>
                       <SelectItem value="customerNameDesc">Customer Name (Z-A)</SelectItem>
-                      <SelectItem value="oldestFirst">Oldest Scheme First</SelectItem>
-                      <SelectItem value="newestFirst">Newest Scheme First</SelectItem>
+                      {/* Removed SelectItem for Oldest and Newest First */}
                       <SelectItem value="statusPriority">Scheme Status Priority</SelectItem>
                     </SelectContent>
                   </Select>
