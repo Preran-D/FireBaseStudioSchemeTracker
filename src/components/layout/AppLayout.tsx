@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from '@/hooks/useTheme';
+import NewBottomNavigationBar from '@/components/layout/BottomNavigationBar'; // Import the new component
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -185,38 +186,9 @@ function TopNavigationBar() {
         </div>
       </div>
     </header>
+
   );
 }
-
-function BottomNavigationBar() {
-  const pathname = usePathname();
-  const bottomNavItems = navItems.slice(0, Math.min(navItems.length, 4)); // Ensures we don't exceed 4 items if navItems is shorter
-
-  return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.05)] dark:shadow-[0_-2px_10px_-3px_rgba(255,255,255,0.03)]">
-      <div className="container mx-auto flex justify-around items-center h-16">
-        {bottomNavItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={`bottom-${item.href}`}
-              href={item.href}
-              className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-lg transition-colors w-1/4 h-full", // Ensure w-1/4 for 4 items
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground/80 hover:bg-muted/30"
-              )}
-              aria-current={isActive ? "page" : undefined}
-            >
-              <item.icon className="h-6 w-6" />
-              <span className="text-xs mt-0.5 truncate w-full text-center">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
 
 export default function AppLayout({ children }: PropsWithChildren) {
   return (
@@ -225,7 +197,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 container mx-auto md:pt-8 pb-20 md:pb-6">
         {children}
       </main>
-      <BottomNavigationBar />
+      <NewBottomNavigationBar /> {/* Use the new component */}
     </div>
   );
 }

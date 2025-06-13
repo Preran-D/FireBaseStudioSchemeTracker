@@ -558,8 +558,8 @@ export default function RecordPaymentPage() {
                       transition={{ duration: 0.3, ease: "easeInOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="mt-1 flex items-center justify-between gap-2 p-2.5 border-t border-primary/20">
-                        <span className="text-sm font-medium">Months to Pay:</span>
+                      <div className="mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2.5 border-t border-primary/20">
+                        <span className="text-sm font-medium shrink-0">Months to Pay:</span>
                         <div className="flex items-center gap-1.5">
                           <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-full flex-shrink-0" onClick={(e) => { e.stopPropagation(); handleMonthsToPayChange(scheme.id, -1);}} disabled={currentMonthsToPay <= 1 || processingPayment}>
                             <Minus className="h-3.5 w-3.5" />
@@ -569,7 +569,7 @@ export default function RecordPaymentPage() {
                             <Plus className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <span className="text-sm font-medium">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentMonthsToPay)}</span>
+                        <span className="text-sm font-medium sm:text-right">Total: {formatCurrency(scheme.monthlyPaymentAmount * currentMonthsToPay)}</span>
                       </div>
 
                       {currentMonthsToPay > 0 && (

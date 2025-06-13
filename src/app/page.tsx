@@ -125,7 +125,7 @@ export default function DashboardPage() {
         custom={0}
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground">Dashboard</h1>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap sm:flex-nowrap"> {/* Added flex-wrap and sm:flex-nowrap */}
  <Button size="lg" variant="default" asChild className="rounded-lg shadow-lg hover:shadow-xl transition-shadow"><Link href="/payments/record"><CreditCard className="mr-2 h-5 w-5" /> Record Payment(s)</Link></Button>
  <Button size="lg" variant="outline" asChild className="rounded-lg shadow-md hover:shadow-lg transition-shadow"><Link href="/schemes/new"><UserPlus className="mr-2 h-5 w-5" /> Add New Scheme
             </Link>
@@ -239,8 +239,8 @@ export default function DashboardPage() {
                   <TableBody>
                     {monthlyCollectionsData.filter(m => m.totalCollected > 0).reverse().map((item) => (
                       <TableRow key={item.month}>
-                        <TableCell className="font-medium py-2.5">{item.monthLabel}</TableCell>
-                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold">{formatCurrency(item.totalCollected)}</TableCell>
+                        <TableCell className="font-medium py-2.5" data-label="Month">{item.monthLabel}</TableCell>
+                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold" data-label="Collected">{formatCurrency(item.totalCollected)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -277,18 +277,18 @@ export default function DashboardPage() {
                   <TableBody>
                     {recentlyCompletedSchemes.map((scheme) => (
                       <TableRow key={scheme.id}>
-                        <TableCell className="font-medium py-2.5">
+                        <TableCell className="font-medium py-2.5" data-label="Customer">
                           <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">{scheme.customerName}</Link>
                           <p className="text-xs text-muted-foreground block sm:hidden">ID: {scheme.id.toUpperCase()}</p>
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell py-2.5">
+                        <TableCell className="hidden sm:table-cell py-2.5" data-label="Group">
                             {scheme.customerGroupName ? (
                                 <Link href={`/groups/${encodeURIComponent(scheme.customerGroupName)}`} className="hover:underline text-xs text-primary">
                                     {scheme.customerGroupName}
                                 </Link>
                             ): <span className="text-xs text-muted-foreground">N/A</span>}
                         </TableCell>
-                        <TableCell className="text-right py-2.5">{formatDate(scheme.closureDate)}</TableCell>
+                        <TableCell className="text-right py-2.5" data-label="Closed On">{formatDate(scheme.closureDate)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -325,7 +325,7 @@ export default function DashboardPage() {
                   <TableBody>
                     {recentTransactions.map((tx) => (
                       <TableRow key={tx.id}>
-                        <TableCell className="font-medium py-2.5">
+                        <TableCell className="font-medium py-2.5" data-label="Customer">
                           <Link href={`/schemes/${tx.schemeId}`} className="hover:underline text-primary">{tx.customerName}</Link>
                           <p className="text-xs text-muted-foreground block sm:hidden">Paid: {formatDate(tx.paymentDate)}</p>
                           {tx.customerGroupName && (
@@ -334,8 +334,8 @@ export default function DashboardPage() {
                             </p>
                           )}
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell py-2.5">{formatDate(tx.paymentDate)}</TableCell>
-                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold">{formatCurrency(tx.amountPaid)}</TableCell>
+                        <TableCell className="hidden sm:table-cell py-2.5" data-label="Date">{formatDate(tx.paymentDate)}</TableCell>
+                        <TableCell className="text-right py-2.5 text-[hsl(var(--positive-value))] font-semibold" data-label="Amount">{formatCurrency(tx.amountPaid)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

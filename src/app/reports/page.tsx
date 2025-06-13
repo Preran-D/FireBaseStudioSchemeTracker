@@ -180,9 +180,12 @@ export default function ReportsPage() {
           onClick={handleExportCustomerPdf} // This now opens the dialog
           disabled={selectedCustomerIds.length === 0 || isExportingPdf}
           size="lg"
+          className="w-full sm:w-auto" // Make button full width on mobile, auto on sm+
         >
           {isExportingPdf ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
-          Export Selected to PDF ({selectedCustomerIds.length})
+          <span className="hidden sm:inline">Export Selected to PDF</span>
+          <span className="sm:hidden">Export PDF</span>
+          &nbsp;({selectedCustomerIds.length})
         </Button>
       </div>
 
@@ -246,11 +249,11 @@ export default function ReportsPage() {
                           aria-label={`Select customer ${customer.customerName}`}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{customer.customerName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{customer.groups.join(', ') || 'N/A'}</TableCell>
-                      <TableCell className="text-center">{customer.schemesSummary.totalSchemes}</TableCell>
-                      <TableCell className="text-center">{customer.schemesSummary.activeSchemes}</TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className="font-medium" data-label="Customer Name">{customer.customerName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground" data-label="Groups">{customer.groups.join(', ') || 'N/A'}</TableCell>
+                      <TableCell className="text-center" data-label="Total Schemes">{customer.schemesSummary.totalSchemes}</TableCell>
+                      <TableCell className="text-center" data-label="Active Schemes">{customer.schemesSummary.activeSchemes}</TableCell>
+                      <TableCell className="text-right font-semibold" data-label="Total Collected">
                         {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(customer.schemesSummary.totalCollected)}
                       </TableCell>
                     </TableRow>

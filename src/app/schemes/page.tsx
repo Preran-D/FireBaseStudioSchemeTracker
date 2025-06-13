@@ -179,7 +179,7 @@ export default function SchemesPage() {
             <ListChecks className="mr-3 h-10 w-10 text-primary" />
             Scheme Management
           </h1>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap sm:flex-nowrap"> {/* Added flex-wrap */}
             {!isBulkAssignMode && (
               <Button variant="outline" onClick={handleToggleBulkAssignMode} className="rounded-lg shadow-md hover:shadow-lg transition-shadow h-11 px-5 text-base">
                 <Users2 className="mr-2 h-5 w-5" /> Bulk Assign Group
@@ -209,12 +209,13 @@ export default function SchemesPage() {
                  <Button 
                   onClick={() => setIsBulkAssignDialogOpen(true)} 
                   disabled={selectedSchemeIds.length === 0 || isProcessingBulkAssign}
-                  className="rounded-lg h-10 px-5 text-base"
+                  className="rounded-lg h-10 px-5 text-base w-full sm:w-auto" // Added responsive width
                 >
                   {isProcessingBulkAssign ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Users2 className="mr-2 h-5 w-5" />}
-                  Assign Group to {selectedSchemeIds.length} Selected
+                  <span className="hidden sm:inline">Assign Group to {selectedSchemeIds.length} Selected</span>
+                  <span className="sm:hidden">Assign ({selectedSchemeIds.length})</span>
                 </Button>
-                <Button variant="ghost" onClick={handleToggleBulkAssignMode} className="text-muted-foreground rounded-lg h-10 px-5 text-base">
+                <Button variant="ghost" onClick={handleToggleBulkAssignMode} className="text-muted-foreground rounded-lg h-10 px-5 text-base w-full sm:w-auto"> {/* Added responsive width */}
                   <XCircle className="mr-2 h-5 w-5" /> Cancel Bulk Mode
                 </Button>
               </CardContent>
@@ -321,17 +322,17 @@ export default function SchemesPage() {
                               />
                             </TableCell>
                           )}
-                          <TableCell className={`font-medium text-base ${isBulkAssignMode ? "pl-0" : ""}`}>
+                          <TableCell className={`font-medium text-base ${isBulkAssignMode ? "pl-0" : ""}`} data-label="Customer Name">
                             <Link href={`/schemes/${scheme.id}`} className="hover:underline text-primary">
                               {scheme.customerName}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-base text-muted-foreground">{scheme.id.toUpperCase()}</TableCell>
-                          <TableCell className="text-base text-muted-foreground">{scheme.customerGroupName || 'N/A'}</TableCell>
-                          <TableCell className="text-base text-muted-foreground">{formatDate(scheme.startDate)}</TableCell>
-                          <TableCell className="text-base font-semibold">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
-                          <TableCell className="text-base text-center text-muted-foreground">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-base text-muted-foreground" data-label="Scheme ID">{scheme.id.toUpperCase()}</TableCell>
+                          <TableCell className="text-base text-muted-foreground" data-label="Group Name">{scheme.customerGroupName || 'N/A'}</TableCell>
+                          <TableCell className="text-base text-muted-foreground" data-label="Start Date">{formatDate(scheme.startDate)}</TableCell>
+                          <TableCell className="text-base font-semibold" data-label="Monthly Amount">{formatCurrency(scheme.monthlyPaymentAmount)}</TableCell>
+                          <TableCell className="text-base text-center text-muted-foreground" data-label="Payments Made">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
+                          <TableCell data-label="Status">
                             <SchemeStatusBadge status={scheme.status} />
                           </TableCell>
                         </motion.tr>

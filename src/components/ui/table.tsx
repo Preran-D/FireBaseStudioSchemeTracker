@@ -13,7 +13,7 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (<thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />)
+  ({ className, ...props }, ref) => (<thead ref={ref} className={cn("[&_tr]:border-b hidden md:table-header-group", className)} {...props} />)
 );
 TableHeader.displayName = "TableHeader"
 
@@ -37,7 +37,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
   ({ className, ...props }, ref) => (
     <tr
       ref={ref}
-      className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)}
+      className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted block md:table-row", className)}
       {...props}
     />
   )
@@ -48,20 +48,27 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
-      className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)}
+      className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 hidden md:table-cell", className)}
       {...props}
     />
   )
 );
 TableHead.displayName = "TableHead"
 
-const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
+interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
+  "data-label"?: string;
+}
+
+const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
+  ({ className, children, "data-label": dataLabel, ...props }, ref) => (
     <td
       ref={ref}
-      className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+      className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0 block md:table-cell", className)}
       {...props}
-    />
+    >
+      {dataLabel && <span className="md:hidden font-semibold mr-2">{dataLabel}:</span>}
+      {children}
+    </td>
   )
 );
 TableCell.displayName = "TableCell"
