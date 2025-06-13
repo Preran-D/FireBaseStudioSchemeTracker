@@ -12,6 +12,8 @@ export interface Payment {
   amountPaid?: number;
   status: PaymentStatus;
   modeOfPayment?: PaymentMode[];
+  isArchived?: boolean;
+  archivedDate?: string; // ISO Date string
 }
 
 export type SchemeStatus = 'Active' | 'Fully Paid' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
@@ -43,3 +45,13 @@ export interface GroupDetail {
   recordableSchemeCount: number; // Number of schemes in this group with a next payment due
   hasOverdueSchemeInGroup: boolean; // Indicates if any scheme in the group is overdue
 }
+
+export type ArchivedGroupInfo = {
+  name: string;
+  archivedDate: string;
+  // Number of schemes associated at the time of archiving
+  originalSchemeCount?: number;
+  // IDs and names of schemes associated at the time of archiving
+  // This can be used to potentially restore associations or provide context
+  originalSchemeAssociations?: Array<{ schemeId: string; customerName: string }>;
+};

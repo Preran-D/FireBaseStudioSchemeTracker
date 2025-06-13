@@ -1,5 +1,5 @@
 
-import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus } from '@/types/scheme';
+import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus, ArchivedGroupInfo } from '@/types/scheme';
 import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId, formatDate } from '@/lib/utils';
 import { subMonths, addMonths, formatISO, parseISO, startOfDay } from 'date-fns';
 
@@ -528,11 +528,12 @@ export const recordNextDuePaymentsForCustomerGroup = (
 };
 
 export const getGroupDetails = (): GroupDetail[] => {
-  const currentSchemes = getMockSchemes(); 
+  const currentSchemes = getMockSchemes(); // Gets non-archived schemes by default
+  const archivedGroupNames = new Set(MOCK_ARCHIVED_GROUPS.map(ag => ag.name));
   const groupsMap = new Map<string, { schemes: Scheme[]; customerNames: Set<string>; recordableSchemeCount: number }>();
 
   currentSchemes.forEach(scheme => {
-    if (scheme.customerGroupName) {
+    if (scheme.customerGroupName && !archivedGroupNames.has(scheme.customerGroupName)) { // Ensure group is not archived
       const groupEntry = groupsMap.get(scheme.customerGroupName) || { schemes: [], customerNames: new Set(), recordableSchemeCount: 0 };
       groupEntry.schemes.push(scheme);
       groupEntry.customerNames.add(scheme.customerName);
@@ -577,9 +578,11 @@ export const getGroupDetails = (): GroupDetail[] => {
 
 export const getUniqueGroupNames = (): string[] => {
   const groupNames = new Set<string>();
-  const currentSchemes = getMockSchemes(); 
+  const currentSchemes = getMockSchemes(); // Gets non-archived schemes by default
+  const archivedGroupNames = new Set(MOCK_ARCHIVED_GROUPS.map(ag => ag.name));
+
   currentSchemes.forEach(scheme => {
-    if (scheme.customerGroupName) {
+    if (scheme.customerGroupName && !archivedGroupNames.has(scheme.customerGroupName)) { // Ensure group is not archived
       groupNames.add(scheme.customerGroupName);
     }
   });
@@ -763,6 +766,165 @@ export const updateMockGroupName = (oldGroupName: string, newGroupName: string):
     }
   });
   return changed;
+};
+
+// --- Archived Payment Management ---
+
+export const archiveMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
+
+  if (paymentIndex === -1) return undefined;
+
+  if (scheme.payments[paymentIndex].isArchived) {
+    // Already archived, perhaps update date or just return current state
+    scheme.payments[paymentIndex].archivedDate = formatISO(new Date());
+    MOCK_SCHEMES[schemeIndex] = { ...scheme };
+    return getMockSchemeById(schemeId); // Return fresh copy
+  }
+
+  scheme.payments[paymentIndex].isArchived = true;
+  scheme.payments[paymentIndex].archivedDate = formatISO(new Date());
+
+  // After archiving a payment, the scheme's totals and status might change
+  const totals = calculateSchemeTotals(scheme);
+  scheme.status = getSchemeStatus(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId); // Return fresh copy
+};
+
+export const unarchiveMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const paymentIndex = scheme.payments.findIndex(p => p.id === paymentId);
+
+  if (paymentIndex === -1 || !scheme.payments[paymentIndex].isArchived) {
+    return undefined; // Not found or not archived
+  }
+
+  scheme.payments[paymentIndex].isArchived = false;
+  scheme.payments[paymentIndex].archivedDate = undefined;
+
+  // After unarchiving, totals and status might change
+  const totals = calculateSchemeTotals(scheme);
+  scheme.status = getSchemeStatus(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId); // Return fresh copy
+};
+
+export const deleteArchivedMockPayment = (schemeId: string, paymentId: string): Scheme | undefined => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) return undefined;
+
+  const scheme = MOCK_SCHEMES[schemeIndex];
+  const paymentExists = scheme.payments.some(p => p.id === paymentId && p.isArchived);
+
+  if (!paymentExists) {
+    // Payment not found, or not archived, so do not delete
+    return getMockSchemeById(schemeId); // Return current state
+  }
+
+  scheme.payments = scheme.payments.filter(p => !(p.id === paymentId && p.isArchived));
+
+  // After deleting, totals and status might change
+  const totals = calculateSchemeTotals(scheme);
+  scheme.status = getSchemeStatus(scheme);
+  MOCK_SCHEMES[schemeIndex] = { ...scheme, ...totals };
+
+  return getMockSchemeById(schemeId); // Return fresh copy
+};
+
+export const getArchivedPaymentsForAllSchemes = (): Array<Payment & { schemeId: string; customerName: string; schemeStatus?: SchemeStatus }> => {
+  const allArchivedPayments: Array<Payment & { schemeId: string; customerName: string; schemeStatus?: SchemeStatus }> = [];
+  // Use includeArchived: true to process schemes that themselves might be archived but contain archived payments.
+  const allSchemes = getMockSchemes({ includeArchived: true });
+
+  allSchemes.forEach(scheme => {
+    scheme.payments.forEach(payment => {
+      if (payment.isArchived) {
+        allArchivedPayments.push({
+          ...payment, // All original payment properties
+          schemeId: scheme.id,
+          customerName: scheme.customerName,
+          schemeStatus: scheme.status, // Current status of the parent scheme
+        });
+      }
+    });
+  });
+  return allArchivedPayments;
+};
+
+// --- Archived Group Management ---
+export let MOCK_ARCHIVED_GROUPS: ArchivedGroupInfo[] = [];
+
+export const archiveMockGroup = (groupName: string): boolean => {
+  if (MOCK_ARCHIVED_GROUPS.some(ag => ag.name === groupName)) {
+    // Group is already archived. We can choose to update its archivedDate or just return.
+    // For this implementation, let's update the date and return true, signifying the state is "archived".
+    const existingArchivedGroup = MOCK_ARCHIVED_GROUPS.find(ag => ag.name === groupName)!;
+    existingArchivedGroup.archivedDate = formatISO(new Date());
+    // No change to originalSchemeAssociations or originalSchemeCount as this is an update to an existing archive entry.
+    return true;
+  }
+
+  const schemesInGroup = MOCK_SCHEMES.filter(s => s.customerGroupName === groupName);
+  const associatedSchemes = schemesInGroup.map(s => ({ schemeId: s.id, customerName: s.customerName }));
+
+  MOCK_ARCHIVED_GROUPS.push({
+    name: groupName,
+    archivedDate: formatISO(new Date()),
+    originalSchemeAssociations: associatedSchemes,
+    originalSchemeCount: associatedSchemes.length,
+  });
+
+  // Disassociate schemes from the group by setting their customerGroupName to undefined
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerGroupName === groupName) {
+      scheme.customerGroupName = undefined;
+    }
+  });
+
+  return true;
+};
+
+export const getArchivedGroupsMock = (): ArchivedGroupInfo[] => {
+  // Return a deep copy to prevent direct modification of the mock data.
+  // Map to include essential info, including originalSchemeCount.
+  return JSON.parse(JSON.stringify(MOCK_ARCHIVED_GROUPS.map(group => ({
+    name: group.name,
+    archivedDate: group.archivedDate,
+    originalSchemeCount: group.originalSchemeAssociations?.length ?? 0,
+    // originalSchemeAssociations are not included by default to keep the initial list light,
+    // but they are available in MOCK_ARCHIVED_GROUPS if needed for a detailed view.
+  }))));
+};
+
+export const unarchiveMockGroup = (groupName: string): boolean => {
+  const groupIndex = MOCK_ARCHIVED_GROUPS.findIndex(ag => ag.name === groupName);
+  if (groupIndex === -1) {
+    return false; // Group not found in archived list
+  }
+
+  // Remove the group from the archived list.
+  // Schemes are NOT automatically re-associated with the group name upon unarchiving.
+  // This allows for intentional re-association via the UI if desired.
+  MOCK_ARCHIVED_GROUPS.splice(groupIndex, 1);
+
+  return true;
+};
+
+export const deleteArchivedMockGroup = (groupName: string): boolean => {
+  const initialLength = MOCK_ARCHIVED_GROUPS.length;
+  MOCK_ARCHIVED_GROUPS = MOCK_ARCHIVED_GROUPS.filter(ag => ag.name !== groupName);
+  // Returns true if an element was removed, false otherwise.
+  return MOCK_ARCHIVED_GROUPS.length < initialLength;
 };
 
 export const deleteMockGroup = (groupName: string): boolean => {

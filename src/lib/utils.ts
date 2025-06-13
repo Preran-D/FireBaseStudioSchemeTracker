@@ -81,36 +81,57 @@ export function getSchemeStatus(scheme: Scheme): SchemeStatus {
     return 'Archived';
   }
 
-  // Ensure all individual payment statuses are up-to-date for accurate calculation
-  scheme.payments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
+  // Filter out archived payments for status calculation logic that depends on payment states
+  const nonArchivedPayments = scheme.payments.filter(p => !p.isArchived);
+
+  // Ensure all individual non-archived payment statuses are up-to-date for accurate calculation
+  nonArchivedPayments.forEach(p => p.status = getPaymentStatus(p, scheme.startDate));
   
   // If a scheme has a closureDate, it is considered 'Closed' by manual action.
   if (scheme.closureDate) {
     return 'Closed';
   }
   
-  const allPaymentsPaid = scheme.payments.every(p => p.status === 'Paid');
+  // Check conditions based on non-archived payments
+  const allPaymentsPaid = nonArchivedPayments.length > 0 && nonArchivedPayments.every(p => p.status === 'Paid');
   if (allPaymentsPaid) {
-    return 'Fully Paid'; // All payments made, but not yet manually 'Closed'.
+    return 'Fully Paid'; // All non-archived payments made, but not yet manually 'Closed'.
   }
 
   const schemeStartDate = startOfDay(parseISO(scheme.startDate));
-  if (isFuture(schemeStartDate)) return 'Upcoming';
+  if (isFuture(schemeStartDate) && nonArchivedPayments.every(p => p.status === 'Upcoming')) {
+    // If scheme start date is in future, and all non-archived payments are upcoming
+    return 'Upcoming';
+  }
 
-  const hasOverduePayment = scheme.payments.some(p => p.status === 'Overdue');
+  const hasOverduePayment = nonArchivedPayments.some(p => p.status === 'Overdue');
   if (hasOverduePayment) return 'Overdue';
   
+  // If there are no non-archived payments (e.g., all payments were archived)
+  // and the scheme is not closed or fully paid based on original intent,
+  // its status might be ambiguous or default to 'Active' if start date is past.
+  // Or, it could be a new status like 'AttentionNeeded' or similar if all payments archived.
+  // For now, if not 'Upcoming', 'Overdue', 'Fully Paid', 'Closed', 'Archived', it's 'Active'.
+  if (isPast(schemeStartDate)) return 'Active';
+
+  // Default fallback, though scenarios like all payments being upcoming but scheme start date is past
+  // should be handled by 'Active' or specific logic.
   return 'Active';
 }
 
 
 export function calculateSchemeTotals(scheme: Scheme): Partial<Scheme> {
-  const totalCollected = scheme.payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+  const nonArchivedPayments = scheme.payments.filter(p => !p.isArchived);
+
+  const totalCollected = nonArchivedPayments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+  // Total expected should consider all original payments unless explicitly stated otherwise.
+  // If archiving a payment means it's no longer expected, then filter here too.
+  // For now, assuming totalExpected is based on the original full scheme value.
   const totalExpected = scheme.payments.reduce((sum, p) => sum + p.amountExpected, 0);
-  const paymentsMadeCount = scheme.payments.filter(p => p.status === 'Paid').length;
+  const paymentsMadeCount = nonArchivedPayments.filter(p => p.status === 'Paid').length;
   return {
     totalCollected,
-    totalRemaining: totalExpected - totalCollected,
+    totalRemaining: totalExpected - totalCollected, // This might need refinement based on how archived payments affect expectation
     paymentsMadeCount,
   };
 }

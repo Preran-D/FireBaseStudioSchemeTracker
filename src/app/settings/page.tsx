@@ -5,7 +5,7 @@ import { useState, type ReactNode, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive } from 'lucide-react'; // Added Archive
+import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive, ArchiveIcon } from 'lucide-react'; // Added ArchiveIcon
 import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
 import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
 import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
@@ -1102,6 +1102,26 @@ function DataManagementTabContent() {
           ) : (
             <p className="text-muted-foreground text-center py-4">No archived schemes found.</p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Advanced Archive Management Link Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <ArchiveIcon className="h-5 w-5 text-primary" /> {/* Choose an icon */}
+            Advanced Archive Management
+          </CardTitle>
+          <CardDescription>
+            Access a dedicated page to manage archived schemes, groups, and transactions with more options.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/settings/archive-management" passHref>
+            <Button variant="outline" className="w-full sm:w-auto">
+              Go to Archive Management
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 
