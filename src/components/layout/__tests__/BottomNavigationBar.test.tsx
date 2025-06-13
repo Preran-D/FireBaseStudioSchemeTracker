@@ -76,4 +76,14 @@ describe('BottomNavigationBar', () => {
     expect(screen.getByTestId('icon-dashboard')).toBeInTheDocument();
   });
 
+  it('applies floating styles with margins and fully rounded corners', () => {
+    render(<BottomNavigationBar />);
+    const navElement = screen.getByRole('navigation');
+    expect(navElement).toHaveClass('mx-4'); // As applied in previous step
+    expect(navElement).toHaveClass('mb-4'); // As applied in previous step
+    expect(navElement).toHaveClass('rounded-full'); // As applied in previous step
+    expect(navElement).toHaveClass('md:hidden'); // Ensure it's mobile only
+    expect(navElement).toHaveClass('z-50'); // Check z-index
+    expect(navElement).toHaveClass('p-3'); // Check padding
+  });
 });

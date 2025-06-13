@@ -786,9 +786,30 @@ export const reopenMockScheme = (schemeId: string): Scheme | undefined => {
 };
 
 export const deleteFullMockScheme = (schemeId: string): boolean => {
-  const initialLength = MOCK_SCHEMES.length;
-  MOCK_SCHEMES = MOCK_SCHEMES.filter(s => s.id !== schemeId);
-  return MOCK_SCHEMES.length < initialLength;
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+
+  if (schemeIndex === -1) {
+    // Scheme not found
+    return false;
+  }
+
+  const schemeToDelete = MOCK_SCHEMES[schemeIndex];
+
+  // Ensure status is calculated based on the most up-to-date payment info before checking
+  // This requires a temporary recalculation if the global MOCK_SCHEMES might not be perfectly up-to-date
+  // For simplicity here, we assume the status on schemeToDelete is sufficiently current
+  // or that getMockSchemeById could be used if deeper refresh is needed:
+  // const currentSchemeState = getMockSchemeById(schemeId); // This would be more robust
+  // if (currentSchemeState && currentSchemeState.status !== 'Closed' && currentSchemeState.status !== 'Archived') { ... }
+
+  if (schemeToDelete.status !== 'Closed' && schemeToDelete.status !== 'Archived') {
+    console.warn(`Scheme ${schemeId} cannot be fully deleted as its status is '${schemeToDelete.status}'. It must be 'Closed' or 'Archived'.`);
+    return false; // Indicate deletion was prevented
+  }
+
+  // If status is 'Closed' or 'Archived', proceed with deletion
+  MOCK_SCHEMES.splice(schemeIndex, 1);
+  return true; // Indicate successful deletion
 };
 
 // Note for getSchemeStatus in utils.ts:
