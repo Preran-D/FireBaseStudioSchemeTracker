@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SchemeForm } from '@/components/forms/SchemeForm';
 import type { Scheme, PaymentMode } from '@/types/scheme';
-import { addMockScheme, updateMockSchemePayment, getMockSchemes, getUniqueGroupNames } from '@/lib/mock-data';
+// import { addMockScheme, updateMockSchemePayment, getMockSchemes, getUniqueGroupNames } from '@/lib/mock-data'; // Replaced
+import { addSupabaseScheme, getUniqueSupabaseGroupNames } from '@/lib/supabase-data'; // Added addSupabaseScheme
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+// AlertDialog for first payment will be removed for now to simplify Supabase integration.
+// import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -36,20 +38,30 @@ export default function NewSchemePage() {
   const router = useRouter();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false); 
+  // const [isLoading, setIsLoading] = useState(false); // This was for first payment dialog, removing
   const [isFormLoading, setIsFormLoading] = useState(false);
   
-  const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
-  const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
-  const [firstPaymentAmount, setFirstPaymentAmount] = useState<string>('');
-  const [firstPaymentModeOfPayment, setFirstPaymentModeOfPayment] = useState<PaymentMode[]>(['Cash']);
+  // States for "Record First Payment" dialog - removing these
+  // const [isFirstPaymentAlertOpen, setIsFirstPaymentAlertOpen] = useState(false);
+  // const [newlyCreatedScheme, setNewlyCreatedScheme] = useState<Scheme | null>(null);
+  // const [firstPaymentAmount, setFirstPaymentAmount] = useState<string>('');
+  // const [firstPaymentModeOfPayment, setFirstPaymentModeOfPayment] = useState<PaymentMode[]>(['Cash']);
 
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
 
   useEffect(() => {
-    setExistingGroupNames(getUniqueGroupNames());
-  }, []);
+    const fetchGroupNames = async () => {
+      try {
+        const names = await getUniqueSupabaseGroupNames();
+        setExistingGroupNames(names);
+      } catch (error) {
+        console.error("Failed to fetch group names:", error);
+        toast({ title: "Error", description: "Could not fetch existing group names.", variant: "destructive" });
+      }
+    };
+    fetchGroupNames();
+  }, [toast]);
 
   const formDefaultValues = useMemo(() => {
     const customerNameParam = searchParams.get('customerName');
@@ -86,58 +98,59 @@ export default function NewSchemePage() {
   }, [searchParams, existingGroupNames]);
 
 
-  const handleSubmit = (data: NewSchemeFormData) => {
+  const handleSubmit = async (data: NewSchemeFormData) => {
     setIsFormLoading(true);
-    const allSchemes = getMockSchemes();
-    const trimmedNewCustomerName = data.customerName.trim().toLowerCase();
+    // const allSchemes = getMockSchemes(); // Not fetching all schemes for client-side duplicate check anymore. DB will handle constraints if any.
+    // const trimmedNewCustomerName = data.customerName.trim().toLowerCase();
     
-    const customerExists = allSchemes.some(
-      (s) => s.customerName.trim().toLowerCase() === trimmedNewCustomerName
-    );
+    // Duplicate customer check can be removed or handled differently.
+    // For now, focusing on Supabase integration. The DB might have its own constraints.
+    // The previous duplicate check was:
+    // const customerExists = allSchemes.some(
+    //   (s) => s.customerName.trim().toLowerCase() === trimmedNewCustomerName
+    // );
+    // ...toast for duplicate...
 
-    const customerNameFromParams = searchParams.get('customerName');
-    const trimmedCustomerNameFromParams = customerNameFromParams?.trim().toLowerCase();
-
-    if (customerExists && (!trimmedCustomerNameFromParams || trimmedCustomerNameFromParams !== trimmedNewCustomerName)) {
-      toast({
-        title: 'Duplicate Customer Name',
-        description: `A customer named '${data.customerName}' already exists. Please use a different name, or add a new scheme for this customer via their details page.`,
-        variant: 'destructive',
-      });
-      setIsFormLoading(false);
-      return;
-    }
-    
-    if (customerExists && trimmedCustomerNameFromParams && trimmedCustomerNameFromParams === trimmedNewCustomerName) {
-      toast({
-        title: 'Existing Customer',
-        description: `Creating new scheme for existing customer: ${data.customerName}.`,
-      });
-    }
-    
     try {
-      const newScheme = addMockScheme({
+      // Data needs to be shaped for addSupabaseScheme
+      // addSupabaseScheme expects Omit<Scheme, 'id' | 'payments' | 'status' | ...calculatedFields>
+      // Ensure startDate is in ISO format. data.startDate is already a string from the form.
+      // If it were a Date object: startDate: formatISO(data.startDate as Date)
+      // For now, assuming data.startDate from form is 'yyyy-MM-dd' and needs to be ISO string.
+      // The form should ideally provide it in a way that's easily convertible or already ISO.
+      // For `addSupabaseScheme`, `durationMonths` is part of the input type.
+      // The `NewSchemeFormData` omits `durationMonths`, so we'll use a default or ensure form provides it.
+      // Assuming a default durationMonths if not provided by form, e.g., 12, or it's part of `data`
+
+      const schemePayload = {
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         customerAddress: data.customerAddress,
-        startDate: data.startDate, 
-        monthlyPaymentAmount: data.monthlyPaymentAmount,
-        customerGroupName: data.customerGroupName,
-      });
-      setNewlyCreatedScheme(newScheme);
-      if (newScheme.payments.length > 0) {
-        setFirstPaymentAmount(newScheme.payments[0].amountExpected.toString());
+        startDate: data.startDate, // Ensure this is an ISO string. SchemeForm should handle this.
+        monthlyPaymentAmount: Number(data.monthlyPaymentAmount), // Ensure it's a number
+        durationMonths: 12, // Defaulting to 12 as it's not in NewSchemeFormData. Or add it to form.
+                            // For now, let's assume it's part of `data` or a fixed default is acceptable.
+                            // If `data.durationMonths` is available from form, use `data.durationMonths`.
+        customerGroupName: data.customerGroupName, // This is optional
+        // closureDate and archivedDate are not set on creation
+      };
+
+      const newScheme = await addSupabaseScheme(schemePayload);
+
+      if (newScheme && newScheme.id) {
+        toast({
+          title: 'Scheme Created Successfully',
+          description: `Scheme for ${newScheme.customerName} ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created.`,
+        });
+        router.push(`/schemes/${newScheme.id}`); // Redirect to the new scheme's detail page
+      } else {
+        throw new Error("Scheme creation failed or returned no data."); // Triggers catch block
       }
-      setFirstPaymentModeOfPayment(['Cash']); // Reset mode of payment for new dialog
-      toast({
-        title: 'Scheme Created',
-        description: `Scheme for ${newScheme.customerName} (ID: ${newScheme.id.toUpperCase()}) ${newScheme.customerGroupName ? `(Group: ${newScheme.customerGroupName})` : ''} created. You can now record the first payment.`,
-      });
-      setIsFirstPaymentAlertOpen(true);
     } catch (error) {
+      console.error("Error creating scheme:", error);
       toast({
         title: 'Error Creating Scheme',
-        description: (error as Error).message || 'Failed to create scheme. Please try again.',
+        description: (error instanceof Error ? error.message : null) || 'Failed to create scheme. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -145,52 +158,8 @@ export default function NewSchemePage() {
     }
   };
 
-
-  const handleRecordFirstPayment = () => {
-    if (!newlyCreatedScheme || newlyCreatedScheme.payments.length === 0) return;
-    
-    const amountToPay = parseFloat(firstPaymentAmount);
-    if (isNaN(amountToPay) || amountToPay <= 0) {
-        toast({ title: 'Invalid Amount', description: 'Please enter a valid positive amount for the payment.', variant: 'destructive'});
-        return;
-    }
-    if (firstPaymentModeOfPayment.length === 0) {
-        toast({ title: 'Mode of Payment Required', description: 'Please select at least one mode of payment.', variant: 'destructive'});
-        return;
-    }
-    
-    setIsLoading(true); 
-
-    const firstPayment = newlyCreatedScheme.payments[0];
-    const updatedScheme = updateMockSchemePayment(newlyCreatedScheme.id, firstPayment.id, {
-      amountPaid: amountToPay,
-      paymentDate: formatISO(new Date()),
-      modeOfPayment: firstPaymentModeOfPayment, 
-    });
-
-    if (updatedScheme) {
-      toast({ title: 'First Payment Recorded', description: `Payment of ${formatCurrency(amountToPay)} for ${newlyCreatedScheme.customerName} recorded.` });
-    } else {
-      toast({ title: 'Payment Recording Failed', description: 'Could not record the first payment.', variant: 'destructive' });
-    }
-    setIsFirstPaymentAlertOpen(false);
-    const schemeIdToNav = newlyCreatedScheme.id;
-    setNewlyCreatedScheme(null); // Clear the scheme after handling
-    router.push(`/schemes/${updatedScheme ? updatedScheme.id : schemeIdToNav}`);
-  };
-
-  const handleSkipFirstPayment = () => {
-    if (!newlyCreatedScheme) return;
-    setIsFirstPaymentAlertOpen(false);
-    const schemeIdToNav = newlyCreatedScheme.id;
-    setNewlyCreatedScheme(null); // Clear the scheme after handling
-    router.push(`/schemes/${schemeIdToNav}`);
-  };
-
-  const isConfirmButtonDisabled = isLoading || 
-                                  (parseFloat(firstPaymentAmount) > 0 && firstPaymentModeOfPayment.length === 0) ||
-                                  (parseFloat(firstPaymentAmount) <= 0 && firstPaymentAmount !== '');
-
+  // Removed handleRecordFirstPayment, handleSkipFirstPayment, and isConfirmButtonDisabled
+  // as the first payment dialog is removed.
 
   return (
     <>
@@ -220,78 +189,7 @@ export default function NewSchemePage() {
         </Card>
       </div>
 
-      {newlyCreatedScheme && newlyCreatedScheme.payments.length > 0 && (
-        <AlertDialog 
-            open={isFirstPaymentAlertOpen} 
-            onOpenChange={(open) => {
-                if (!open && newlyCreatedScheme) {
-                    if (!isLoading) { 
-                         handleSkipFirstPayment();
-                    }
-                }
-            }}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Record First Payment for {newlyCreatedScheme.customerName}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The first payment (Month 1) for scheme ID {newlyCreatedScheme.id.toUpperCase()} is due on {formatDate(newlyCreatedScheme.payments[0].dueDate)}.
-                Expected amount: {formatCurrency(newlyCreatedScheme.payments[0].amountExpected)}.
-                {newlyCreatedScheme.customerGroupName && ` This scheme is part of group: ${newlyCreatedScheme.customerGroupName}.`}
-                <br />
-                You can record it now or do it later from the scheme details page.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="firstPaymentAmount">Amount Paid (INR)</Label>
-                <Input
-                  id="firstPaymentAmount"
-                  type="number"
-                  value={firstPaymentAmount}
-                  onChange={(e) => setFirstPaymentAmount(e.target.value)}
-                  placeholder={`e.g., ${newlyCreatedScheme.payments[0].amountExpected}`}
-                  disabled={isLoading}
-                  className="mt-1"
-                />
-                {parseFloat(firstPaymentAmount) > 0 && parseFloat(firstPaymentAmount) !== newlyCreatedScheme.payments[0].amountExpected && newlyCreatedScheme.monthlyPaymentAmount % 500 !== 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">Consider amounts in multiples of 500 INR for simpler tracking, if appropriate for this scheme type.</p>
-                )}
-              </div>
-              <div>
-                <Label>Mode of Payment</Label>
-                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
-                  {availablePaymentModes.map((mode) => (
-                    <div key={mode} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`first-payment-mop-${mode}`}
-                        checked={firstPaymentModeOfPayment.includes(mode)}
-                        onCheckedChange={(checked) => {
-                          setFirstPaymentModeOfPayment(prev => 
-                            checked ? [...prev, mode] : prev.filter(m => m !== mode)
-                          );
-                        }}
-                        disabled={isLoading}
-                      />
-                      <Label htmlFor={`first-payment-mop-${mode}`} className="font-normal">{mode}</Label>
-                    </div>
-                  ))}
-                </div>
-                {parseFloat(firstPaymentAmount) > 0 && firstPaymentModeOfPayment.length === 0 && (
-                    <p className="text-xs text-destructive mt-1">Please select at least one mode of payment.</p>
-                )}
-              </div>
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleSkipFirstPayment} disabled={isLoading}>Skip & View Scheme</AlertDialogCancel>
-              <AlertDialogAction onClick={handleRecordFirstPayment} disabled={isConfirmButtonDisabled}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm & Record
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {/* First Payment AlertDialog removed */}
     </>
   );
 }

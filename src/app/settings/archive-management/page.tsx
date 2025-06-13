@@ -12,12 +12,25 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import type { Scheme, ArchivedGroupInfo } from '@/types/scheme'; // Added ArchivedGroupInfo
+import type { Scheme } from '@/types/scheme'; // ArchivedGroupInfo might be replaced by SupabaseArchivedGroup
+// import { ArchivedGroupInfo } from '@/types/scheme'; // Potentially remove if SupabaseArchivedGroup is sufficient
 import {
-  getArchivedMockSchemes, unarchiveMockScheme, deleteFullMockScheme,
-  getArchivedGroupsMock, unarchiveMockGroup, deleteArchivedMockGroup,
-  getArchivedPaymentsForAllSchemes, unarchiveMockPayment, deleteArchivedMockPayment
-} from '@/lib/mock-data'; // Added payment functions
+  // getArchivedMockSchemes, unarchiveMockScheme, deleteFullMockScheme, // Replaced for schemes
+  // getArchivedGroupsMock, unarchiveMockGroup, deleteArchivedMockGroup, // Replaced for groups
+  // getArchivedPaymentsForAllSchemes, unarchiveMockPayment, deleteArchivedMockPayment // To be replaced for payments
+} from '@/lib/mock-data';
+import {
+  getArchivedSupabaseSchemes,
+  unarchiveSupabaseScheme,
+  deleteSupabaseScheme,
+  getSupabaseArchivedGroups,
+  unarchiveSupabaseGroup,
+  deleteSupabaseArchivedGroup,
+  getSupabaseArchivedPayments,  // Added
+  unarchiveSupabasePayment,     // Added
+  deleteSupabaseArchivedPayment // Added
+} from '@/lib/supabase-data';
+import type { SupabaseArchivedGroup, SupabaseArchivedPayment } from '@/lib/supabase-data'; // Import new types
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { parseISO } from 'date-fns';
 import type { Payment, SchemeStatus } from '@/types/scheme'; // Ensure Payment and SchemeStatus are imported
@@ -41,38 +54,38 @@ export default function ArchiveManagementPage() {
   const [archivedSchemesPendingDeletion, setArchivedSchemesPendingDeletion] = useState<Scheme[]>([]);
 
   // State for Archived Groups tab
-  const [archivedGroups, setArchivedGroups] = useState<ArchivedGroupInfo[]>([]);
-  const [selectedArchivedGroupNames, setSelectedArchivedGroupNames] = useState<string[]>([]);
+  const [archivedGroups, setArchivedGroups] = useState<SupabaseArchivedGroup[]>([]); // Use new type
+  const [selectedArchivedGroupIds, setSelectedArchivedGroupIds] = useState<string[]>([]); // Store IDs now
   const [isLoadingArchivedGroups, setIsLoadingArchivedGroups] = useState<boolean>(true);
   const [archivedGroupsSearchTerm, setArchivedGroupsSearchTerm] = useState<string>("");
-  type SortableGroupKeys = keyof ArchivedGroupInfo;
+  type SortableGroupKeys = keyof SupabaseArchivedGroup; // Use new type
   const [archivedGroupsSortColumn, setArchivedGroupsSortColumn] = useState<SortableGroupKeys>("name");
   const [archivedGroupsSortDirection, setArchivedGroupsSortDirection] = useState<'asc' | 'desc'>("asc");
   const [showDeleteArchivedGroupDialog, setShowDeleteArchivedGroupDialog] = useState<boolean>(false);
   // Storing full group info for pending deletion to display details in dialog
-  const [archivedGroupsPendingDeletion, setArchivedGroupsPendingDeletion] = useState<ArchivedGroupInfo[]>([]);
+  const [archivedGroupsPendingDeletion, setArchivedGroupsPendingDeletion] = useState<SupabaseArchivedGroup[]>([]); // Use new type
 
   // State for Archived Transactions tab
-  type ArchivedPaymentEntry = Payment & { schemeId: string; customerName: string; schemeStatus?: SchemeStatus };
-  type SelectedTransactionType = { paymentId: string; schemeId: string };
-  const [archivedTransactions, setArchivedTransactions] = useState<ArchivedPaymentEntry[]>([]);
-  const [selectedArchivedTransactions, setSelectedArchivedTransactions] = useState<SelectedTransactionType[]>([]);
+  // type ArchivedPaymentEntry = Payment & { schemeId: string; customerName: string; schemeStatus?: SchemeStatus }; // Replaced by SupabaseArchivedPayment
+  // type SelectedTransactionType = { paymentId: string; schemeId: string }; // Will become string[] for payment IDs
+  const [archivedTransactions, setArchivedTransactions] = useState<SupabaseArchivedPayment[]>([]); // Use new type
+  const [selectedArchivedPaymentIds, setSelectedArchivedPaymentIds] = useState<string[]>([]); // Store only payment IDs
   const [isLoadingArchivedTransactions, setIsLoadingArchivedTransactions] = useState<boolean>(true);
   const [archivedTransactionsSearchTerm, setArchivedTransactionsSearchTerm] = useState<string>("");
-  // Define sortable keys for transactions carefully, including potentially nested properties if needed for direct access
-  type SortableTransactionKeys = keyof ArchivedPaymentEntry | 'customerName' | 'schemeId';
+  type SortableTransactionKeys = keyof SupabaseArchivedPayment | 'customerName' | 'schemeId'; // Adjusted for new type
   const [archivedTransactionsSortColumn, setArchivedTransactionsSortColumn] = useState<SortableTransactionKeys>("archivedDate");
   const [archivedTransactionsSortDirection, setArchivedTransactionsSortDirection] = useState<'asc' | 'desc'>("desc");
   const [showDeleteArchivedTransactionDialog, setShowDeleteArchivedTransactionDialog] = useState<boolean>(false);
-  const [archivedTransactionsPendingDeletion, setArchivedTransactionsPendingDeletion] = useState<ArchivedPaymentEntry[]>([]);
+  const [archivedTransactionsPendingDeletion, setArchivedTransactionsPendingDeletion] = useState<SupabaseArchivedPayment[]>([]); // Use new type
 
-  const loadArchivedTransactions = useCallback(() => {
+  const loadArchivedTransactions = useCallback(async () => {
     setIsLoadingArchivedTransactions(true);
     try {
-      const transactions = getArchivedPaymentsForAllSchemes();
+      const transactions = await getSupabaseArchivedPayments();
       setArchivedTransactions(transactions);
     } catch (error) {
-      toast({ title: "Error loading archived transactions", description: "Could not fetch archived transactions.", variant: "destructive" });
+      console.error("Error loading archived transactions from Supabase:", error);
+      toast({ title: "Error loading archived transactions", description: "Could not fetch archived transactions. Please try again.", variant: "destructive" });
       setArchivedTransactions([]);
     } finally {
       setIsLoadingArchivedTransactions(false);
@@ -119,45 +132,50 @@ export default function ArchiveManagementPage() {
     }
   };
 
-  const handleSelectArchivedTransaction = (paymentId: string, schemeId: string, checked: boolean) => {
-    const selectionObject = { paymentId, schemeId };
-    setSelectedArchivedTransactions(prev =>
+  const handleSelectArchivedTransaction = (paymentId: string, checked: boolean) => {
+    setSelectedArchivedPaymentIds(prev =>
       checked
-        ? [...prev, selectionObject]
-        : prev.filter(t => !(t.paymentId === paymentId && t.schemeId === schemeId))
+        ? [...prev, paymentId]
+        : prev.filter(id => id !== paymentId)
     );
   };
 
   const handleSelectAllArchivedTransactions = (checked: boolean) => {
     if (checked) {
-      setSelectedArchivedTransactions(
-        filteredAndSortedArchivedTransactions.map(t => ({ paymentId: t.id, schemeId: t.schemeId }))
+      setSelectedArchivedPaymentIds(
+        filteredAndSortedArchivedTransactions.map(t => t.id) // t.id is paymentId
       );
     } else {
-      setSelectedArchivedTransactions([]);
+      setSelectedArchivedPaymentIds([]);
     }
   };
 
   const isAllArchivedTransactionsSelected =
     filteredAndSortedArchivedTransactions.length > 0 &&
-    selectedArchivedTransactions.length === filteredAndSortedArchivedTransactions.length;
+    selectedArchivedPaymentIds.length === filteredAndSortedArchivedTransactions.length;
 
   const handleRestoreSelectedArchivedTransactions = async () => {
-    if (selectedArchivedTransactions.length === 0) {
+    if (selectedArchivedPaymentIds.length === 0) {
       toast({ title: "No Transactions Selected", description: "Please select transactions to restore.", variant: "destructive" });
       return;
     }
     setIsLoadingArchivedTransactions(true);
     let successCount = 0;
     let errorCount = 0;
-    for (const { schemeId, paymentId } of selectedArchivedTransactions) {
-      const restoredScheme = unarchiveMockPayment(schemeId, paymentId);
-      if (restoredScheme) {
-        successCount++;
-      } else {
+    for (const paymentId of selectedArchivedPaymentIds) {
+      try {
+        const restored = await unarchiveSupabasePayment(paymentId);
+        if (restored) {
+          successCount++;
+        } else {
+          errorCount++;
+          const currentTransaction = archivedTransactions.find(t => t.id === paymentId);
+          toast({ title: "Restore Error", description: `Could not restore transaction for ${currentTransaction?.customerName || paymentId}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        }
+      } catch (err) {
         errorCount++;
-        const currentTransaction = archivedTransactions.find(t => t.id === paymentId && t.schemeId === schemeId);
-        toast({ title: "Restore Error", description: `Could not restore transaction for ${currentTransaction?.customerName || schemeId.toUpperCase()}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        const currentTransaction = archivedTransactions.find(t => t.id === paymentId);
+        toast({ title: "Restore Error", description: `Error restoring transaction for ${currentTransaction?.customerName || paymentId}: ${(err as Error).message}`, variant: "destructive" });
       }
     }
     if (successCount > 0) {
@@ -169,18 +187,17 @@ export default function ArchiveManagementPage() {
        toast({ title: "Partial Restore", description: `${successCount} restored, ${errorCount} errors.`, variant: "default" });
     }
 
-    setSelectedArchivedTransactions([]);
-    loadArchivedTransactions(); // Refreshes list
+    setSelectedArchivedPaymentIds([]);
+    await loadArchivedTransactions();
   };
 
   const handleInitiateDeleteArchivedTransactions = () => {
-    if (selectedArchivedTransactions.length === 0) {
+    if (selectedArchivedPaymentIds.length === 0) {
       toast({ title: "No Transactions Selected", description: "Please select transactions to delete.", variant: "destructive" });
       return;
     }
-    // Find full transaction objects for display in dialog
     const transactionsToDelete = filteredAndSortedArchivedTransactions.filter(t =>
-      selectedArchivedTransactions.some(sel => sel.paymentId === t.id && sel.schemeId === t.schemeId)
+      selectedArchivedPaymentIds.includes(t.id)
     );
     setArchivedTransactionsPendingDeletion(transactionsToDelete);
     setShowDeleteArchivedTransactionDialog(true);
@@ -192,14 +209,20 @@ export default function ArchiveManagementPage() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const { schemeId, paymentId } of selectedArchivedTransactions) {
-      const deletedScheme = deleteArchivedMockPayment(schemeId, paymentId);
-      if (deletedScheme) { // deleteArchivedMockPayment returns the updated scheme or undefined
-        successCount++;
-      } else {
+    for (const paymentId of selectedArchivedPaymentIds) {
+      try {
+        const deleted = await deleteSupabaseArchivedPayment(paymentId);
+        if (deleted) {
+          successCount++;
+        } else {
+          errorCount++;
+          const currentTransaction = archivedTransactions.find(t => t.id === paymentId);
+          toast({ title: "Deletion Error", description: `Could not delete transaction for ${currentTransaction?.customerName || paymentId}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+        }
+      } catch(err) {
         errorCount++;
-        const currentTransaction = archivedTransactions.find(t => t.id === paymentId && t.schemeId === schemeId);
-        toast({ title: "Deletion Error", description: `Could not delete transaction for ${currentTransaction?.customerName || schemeId.toUpperCase()}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+        const currentTransaction = archivedTransactions.find(t => t.id === paymentId);
+        toast({ title: "Deletion Error", description: `Error deleting transaction for ${currentTransaction?.customerName || paymentId}: ${(err as Error).message}`, variant: "destructive" });
       }
     }
 
@@ -213,20 +236,18 @@ export default function ArchiveManagementPage() {
     }
 
     setArchivedTransactionsPendingDeletion([]);
-    setSelectedArchivedTransactions([]);
-    loadArchivedTransactions(); // Refreshes list
+    setSelectedArchivedPaymentIds([]);
+    await loadArchivedTransactions();
   };
 
-  const loadArchivedGroups = useCallback(() => {
+  const loadArchivedGroups = useCallback(async () => {
     setIsLoadingArchivedGroups(true);
     try {
-      // Directly use the mock function, assuming it returns what's needed.
-      // No complex client-side sorting/filtering applied here yet for simplicity,
-      // but will be added in filteredAndSortedArchivedGroups.
-      const groups = getArchivedGroupsMock();
+      const groups = await getSupabaseArchivedGroups();
       setArchivedGroups(groups);
     } catch (error) {
-      toast({ title: "Error loading archived groups", description: "Could not fetch archived groups.", variant: "destructive" });
+      console.error("Error loading archived groups from Supabase:", error);
+      toast({ title: "Error loading archived groups", description: "Could not fetch archived groups. Please try again.", variant: "destructive" });
       setArchivedGroups([]);
     } finally {
       setIsLoadingArchivedGroups(false);
@@ -272,59 +293,66 @@ export default function ArchiveManagementPage() {
     }
   };
 
-  const handleSelectArchivedGroup = (groupName: string, checked: boolean) => {
-    setSelectedArchivedGroupNames(prev =>
-      checked ? [...prev, groupName] : prev.filter(name => name !== groupName)
+  const handleSelectArchivedGroup = (groupId: string, checked: boolean) => {
+    setSelectedArchivedGroupIds(prev =>
+      checked ? [...prev, groupId] : prev.filter(id => id !== groupId)
     );
   };
 
   const handleSelectAllArchivedGroups = (checked: boolean) => {
     if (checked) {
-      setSelectedArchivedGroupNames(filteredAndSortedArchivedGroups.map(g => g.name));
+      setSelectedArchivedGroupIds(filteredAndSortedArchivedGroups.map(g => g.id));
     } else {
-      setSelectedArchivedGroupNames([]);
+      setSelectedArchivedGroupIds([]);
     }
   };
 
-  const isAllArchivedGroupsSelected = filteredAndSortedArchivedGroups.length > 0 && selectedArchivedGroupNames.length === filteredAndSortedArchivedGroups.length;
+  const isAllArchivedGroupsSelected = filteredAndSortedArchivedGroups.length > 0 && selectedArchivedGroupIds.length === filteredAndSortedArchivedGroups.length;
 
   const handleRestoreSelectedArchivedGroups = async () => {
-    if (selectedArchivedGroupNames.length === 0) {
+    if (selectedArchivedGroupIds.length === 0) {
       toast({ title: "No Groups Selected", description: "Please select groups to restore.", variant: "destructive" });
       return;
     }
     setIsLoadingArchivedGroups(true);
     let successCount = 0;
     let errorCount = 0;
-    for (const groupName of selectedArchivedGroupNames) {
-      const restored = unarchiveMockGroup(groupName);
-      if (restored) {
-        successCount++;
-      } else {
+    for (const groupId of selectedArchivedGroupIds) {
+      try {
+        const restored = await unarchiveSupabaseGroup(groupId);
+        if (restored) {
+          successCount++;
+        } else {
+          errorCount++;
+          const group = archivedGroups.find(g => g.id === groupId);
+          toast({ title: "Restore Error", description: `Could not restore group ${group?.name || groupId}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        }
+      } catch (err) {
         errorCount++;
-        toast({ title: "Restore Error", description: `Could not restore group ${groupName}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        const group = archivedGroups.find(g => g.id === groupId);
+        toast({ title: "Restore Error", description: `Error restoring group ${group?.name || groupId}: ${(err as Error).message}`, variant: "destructive" });
       }
     }
     if (successCount > 0) {
-      toast({ title: "Groups Restored", description: `${successCount} group(s) successfully restored. Schemes need to be manually re-associated if desired.` });
+      toast({ title: "Groups Restored", description: `${successCount} group(s) successfully restored. Group names are now available for reuse.` });
     }
      if (errorCount > 0 && successCount === 0) {
        toast({ title: "No Groups Restored", description: `No groups were restored. See previous error messages.`, variant: "default" });
     } else if (errorCount > 0 && successCount > 0) {
-       toast({ title: "Partial Restore", description: `${successCount} restored, ${errorCount} errors. Schemes need manual re-association.`, variant: "default" });
+       toast({ title: "Partial Restore", description: `${successCount} restored, ${errorCount} errors.`, variant: "default" });
     }
 
-    setSelectedArchivedGroupNames([]);
-    loadArchivedGroups();
+    setSelectedArchivedGroupIds([]);
+    await loadArchivedGroups();
   };
 
   const handleInitiateDeleteArchivedGroups = () => {
-    if (selectedArchivedGroupNames.length === 0) {
+    if (selectedArchivedGroupIds.length === 0) {
       toast({ title: "No Groups Selected", description: "Please select groups to delete.", variant: "destructive" });
       return;
     }
-    const groupsToDelete = filteredAndSortedArchivedGroups.filter(g => selectedArchivedGroupNames.includes(g.name));
-    setArchivedGroupsPendingDeletion(groupsToDelete); // Store full info for dialog
+    const groupsToDelete = filteredAndSortedArchivedGroups.filter(g => selectedArchivedGroupIds.includes(g.id));
+    setArchivedGroupsPendingDeletion(groupsToDelete);
     setShowDeleteArchivedGroupDialog(true);
   };
 
@@ -334,13 +362,20 @@ export default function ArchiveManagementPage() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const groupName of selectedArchivedGroupNames) { // Iterate over names stored in selection
-      const deleted = deleteArchivedMockGroup(groupName);
-      if (deleted) {
-        successCount++;
-      } else {
-        errorCount++;
-         toast({ title: "Deletion Error", description: `Could not delete group ${groupName}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+    for (const groupId of selectedArchivedGroupIds) {
+      try {
+        const deleted = await deleteSupabaseArchivedGroup(groupId);
+        if (deleted) {
+          successCount++;
+        } else {
+          errorCount++;
+          const group = archivedGroups.find(g => g.id === groupId);
+          toast({ title: "Deletion Error", description: `Could not delete group ${group?.name || groupId}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+        }
+      } catch (err) {
+         errorCount++;
+         const group = archivedGroups.find(g => g.id === groupId);
+         toast({ title: "Deletion Error", description: `Error deleting group ${group?.name || groupId}: ${(err as Error).message}`, variant: "destructive" });
       }
     }
 
@@ -354,18 +389,19 @@ export default function ArchiveManagementPage() {
     }
 
     setArchivedGroupsPendingDeletion([]);
-    setSelectedArchivedGroupNames([]);
-    loadArchivedGroups();
+    setSelectedArchivedGroupIds([]);
+    await loadArchivedGroups();
   };
 
 
-  const loadArchivedSchemes = useCallback(() => {
+  const loadArchivedSchemes = useCallback(async () => {
     setIsLoadingArchivedSchemes(true);
     try {
-      const schemes = getArchivedMockSchemes();
+      const schemes = await getArchivedSupabaseSchemes();
       setArchivedSchemes(schemes);
     } catch (error) {
-      toast({ title: "Error loading archived schemes", description: "Could not fetch archived schemes.", variant: "destructive" });
+      console.error("Error loading archived schemes from Supabase:", error);
+      toast({ title: "Error loading archived schemes", description: "Could not fetch archived schemes. Please try again.", variant: "destructive" });
       setArchivedSchemes([]);
     } finally {
       setIsLoadingArchivedSchemes(false);
@@ -435,18 +471,23 @@ export default function ArchiveManagementPage() {
       toast({ title: "No Schemes Selected", description: "Please select schemes to restore.", variant: "destructive" });
       return;
     }
-    setIsLoadingArchivedSchemes(true); // Use main loader for simplicity
+    setIsLoadingArchivedSchemes(true);
     let successCount = 0;
     let errorCount = 0;
     for (const schemeId of selectedArchivedSchemeIds) {
-      const restoredScheme = unarchiveMockScheme(schemeId);
-      if (restoredScheme) {
-        successCount++;
-      } else {
+      try {
+        const restoredScheme = await unarchiveSupabaseScheme(schemeId);
+        if (restoredScheme) {
+          successCount++;
+        } else {
+          errorCount++;
+          const currentScheme = archivedSchemes.find(s => s.id === schemeId);
+          toast({ title: "Restore Error", description: `Could not restore scheme ${currentScheme?.customerName || schemeId.toUpperCase()}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        }
+      } catch (error) {
         errorCount++;
-        // It's possible the scheme was already unarchived or an issue occurred
         const currentScheme = archivedSchemes.find(s => s.id === schemeId);
-        toast({ title: "Restore Error", description: `Could not restore scheme ${currentScheme?.customerName || schemeId.toUpperCase()}. It might have been already restored or an issue occurred.`, variant: "destructive" });
+        toast({ title: "Restore Error", description: `Error restoring scheme ${currentScheme?.customerName || schemeId.toUpperCase()}: ${(error as Error).message}`, variant: "destructive" });
       }
     }
     if (successCount > 0) {
@@ -459,7 +500,7 @@ export default function ArchiveManagementPage() {
     }
 
     setSelectedArchivedSchemeIds([]);
-    loadArchivedSchemes(); // Refreshes list and sets loading to false
+    await loadArchivedSchemes(); // Refreshes list and sets loading to false
   };
 
   const handleInitiateDeleteArchivedSchemes = () => {
@@ -478,14 +519,20 @@ export default function ArchiveManagementPage() {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const schemeId of selectedArchivedSchemeIds) { // Use selected IDs directly
-      const deleted = deleteFullMockScheme(schemeId); // This function is for any scheme, including archived
-      if (deleted) {
-        successCount++;
-      } else {
+    for (const schemeId of selectedArchivedSchemeIds) {
+      try {
+        const deleted = await deleteSupabaseScheme(schemeId);
+        if (deleted) { // deleteSupabaseScheme returns true on success
+          successCount++;
+        } else {
+          errorCount++;
+          const currentScheme = archivedSchemes.find(s => s.id === schemeId);
+          toast({ title: "Deletion Error", description: `Could not delete scheme ${currentScheme?.customerName || schemeId.toUpperCase()}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+        }
+      } catch (error) {
         errorCount++;
-        const currentScheme = archivedSchemes.find(s => s.id === schemeId); // Find from original list for name
-        toast({ title: "Deletion Error", description: `Could not delete scheme ${currentScheme?.customerName || schemeId.toUpperCase()}. It might have been already deleted or an issue occurred.`, variant: "destructive" });
+        const currentScheme = archivedSchemes.find(s => s.id === schemeId);
+        toast({ title: "Deletion Error", description: `Error deleting scheme ${currentScheme?.customerName || schemeId.toUpperCase()}: ${(error as Error).message}`, variant: "destructive" });
       }
     }
 
@@ -500,7 +547,7 @@ export default function ArchiveManagementPage() {
 
     setArchivedSchemesPendingDeletion([]);
     setSelectedArchivedSchemeIds([]);
-    loadArchivedSchemes(); // Refreshes list and sets loading to false
+    await loadArchivedSchemes(); // Refreshes list and sets loading to false
   };
 
   return (
@@ -690,16 +737,16 @@ export default function ArchiveManagementPage() {
                   <Button
                     variant="outline"
                     onClick={handleRestoreSelectedArchivedGroups}
-                    disabled={selectedArchivedGroupNames.length === 0 || isLoadingArchivedGroups}
+                    disabled={selectedArchivedGroupIds.length === 0 || isLoadingArchivedGroups}
                   >
-                    <ArchiveRestore className="mr-2 h-4 w-4" /> Restore ({selectedArchivedGroupNames.length})
+                    <ArchiveRestore className="mr-2 h-4 w-4" /> Restore ({selectedArchivedGroupIds.length})
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={handleInitiateDeleteArchivedGroups}
-                    disabled={selectedArchivedGroupNames.length === 0 || isLoadingArchivedGroups}
+                    disabled={selectedArchivedGroupIds.length === 0 || isLoadingArchivedGroups}
                   >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedArchivedGroupNames.length})
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedArchivedGroupIds.length})
                   </Button>
                 </div>
               </div>
@@ -746,11 +793,11 @@ export default function ArchiveManagementPage() {
                   </TableHeader>
                   <TableBody>
                     {!isLoadingArchivedGroups && filteredAndSortedArchivedGroups.map((group) => (
-                      <TableRow key={group.name} data-state={selectedArchivedGroupNames.includes(group.name) ? "selected" : ""}>
+                      <TableRow key={group.id} data-state={selectedArchivedGroupIds.includes(group.id) ? "selected" : ""}>
                         <TableCell>
                           <Checkbox
-                            checked={selectedArchivedGroupNames.includes(group.name)}
-                            onCheckedChange={(checked) => handleSelectArchivedGroup(group.name, !!checked)}
+                            checked={selectedArchivedGroupIds.includes(group.id)}
+                            onCheckedChange={(checked) => handleSelectArchivedGroup(group.id, !!checked)}
                             aria-label={`Select group ${group.name}`}
                           />
                         </TableCell>
@@ -781,7 +828,7 @@ export default function ArchiveManagementPage() {
                     You are about to permanently delete {archivedGroupsPendingDeletion.length} archived group(s):
                     <ScrollArea className="max-h-40 mt-2">
                       <ul className="list-disc pl-5 text-sm">
-                        {archivedGroupsPendingDeletion.map(g => <li key={g.name}>{g.name} (Originally {g.originalSchemeCount} schemes)</li>)}
+                        {archivedGroupsPendingDeletion.map(g => <li key={g.id}>{g.name} (Originally {g.originalSchemeCount} schemes)</li>)}
                       </ul>
                     </ScrollArea>
                     This action cannot be undone. Schemes previously in these groups will remain ungrouped.
@@ -822,16 +869,16 @@ export default function ArchiveManagementPage() {
                   <Button
                     variant="outline"
                     onClick={handleRestoreSelectedArchivedTransactions}
-                    disabled={selectedArchivedTransactions.length === 0 || isLoadingArchivedTransactions}
+                    disabled={selectedArchivedPaymentIds.length === 0 || isLoadingArchivedTransactions}
                   >
-                    <ArchiveRestore className="mr-2 h-4 w-4" /> Restore ({selectedArchivedTransactions.length})
+                    <ArchiveRestore className="mr-2 h-4 w-4" /> Restore ({selectedArchivedPaymentIds.length})
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={handleInitiateDeleteArchivedTransactions}
-                    disabled={selectedArchivedTransactions.length === 0 || isLoadingArchivedTransactions}
+                    disabled={selectedArchivedPaymentIds.length === 0 || isLoadingArchivedTransactions}
                   >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedArchivedTransactions.length})
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedArchivedPaymentIds.length})
                   </Button>
                 </div>
               </div>
@@ -869,12 +916,12 @@ export default function ArchiveManagementPage() {
                   </TableHeader>
                   <TableBody>
                     {!isLoadingArchivedTransactions && filteredAndSortedArchivedTransactions.map((transaction) => (
-                      <TableRow key={`${transaction.schemeId}-${transaction.id}`} data-state={selectedArchivedTransactions.some(t => t.paymentId === transaction.id && t.schemeId === transaction.schemeId) ? "selected" : ""}>
+                      <TableRow key={transaction.id} data-state={selectedArchivedPaymentIds.includes(transaction.id) ? "selected" : ""}>
                         <TableCell>
                           <Checkbox
-                            checked={selectedArchivedTransactions.some(t => t.paymentId === transaction.id && t.schemeId === transaction.schemeId)}
-                            onCheckedChange={(checked) => handleSelectArchivedTransaction(transaction.id, transaction.schemeId, !!checked)}
-                            aria-label={`Select transaction ${transaction.id} for scheme ${transaction.schemeId}`}
+                            checked={selectedArchivedPaymentIds.includes(transaction.id)}
+                            onCheckedChange={(checked) => handleSelectArchivedTransaction(transaction.id, !!checked)}
+                            aria-label={`Select transaction ${transaction.id}`}
                           />
                         </TableCell>
                         <TableCell className="font-medium">
@@ -884,7 +931,7 @@ export default function ArchiveManagementPage() {
                             </Button>
                           </Link>
                         </TableCell>
-                        <TableCell>{transaction.schemeId.toUpperCase()}</TableCell>
+                        <TableCell>{transaction.schemeId?.toUpperCase()}</TableCell>
                         <TableCell>{transaction.monthNumber}</TableCell>
                         <TableCell className="text-right">{formatCurrency(transaction.amountPaid)}</TableCell>
                         <TableCell>{formatDate(transaction.paymentDate)}</TableCell>
@@ -914,8 +961,8 @@ export default function ArchiveManagementPage() {
                     <ScrollArea className="max-h-40 mt-2">
                       <ul className="list-disc pl-5 text-sm">
                         {archivedTransactionsPendingDeletion.map(t => (
-                          <li key={`${t.schemeId}-${t.id}`}>
-                            Payment for {t.customerName} (Scheme: {t.schemeId.toUpperCase()}, Month: {t.monthNumber}, Amount: {formatCurrency(t.amountPaid)})
+                          <li key={t.id}> {/* Use payment id as key */}
+                            Payment for {t.customerName} (Scheme: {t.schemeId?.toUpperCase()}, Month: {t.monthNumber}, Amount: {formatCurrency(t.amountPaid)})
                           </li>
                         ))}
                       </ul>

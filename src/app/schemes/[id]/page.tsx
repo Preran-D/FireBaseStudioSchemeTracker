@@ -9,7 +9,18 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2, Archive } from 'lucide-react'; // Added Archive
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
+// import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Replaced
+import {
+  getSupabaseSchemeById,
+  getSupabaseSchemes,
+  getUniqueSupabaseGroupNames,
+  updateSupabasePayment,
+  closeSupabaseScheme,
+  updateSupabaseScheme,
+  updateSupabaseSchemeGroup,
+  archiveSupabaseScheme // Added archiveSupabaseScheme
+  /* other Supabase functions will be imported later */
+} from '@/lib/supabase-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
@@ -86,37 +97,54 @@ export default function SchemeDetailsPage() {
     mode: 'onTouched',
   });
 
-  const loadSchemeData = useCallback((currentSchemeIdToLoad?: string) => {
+  const loadSchemeData = useCallback(async (currentSchemeIdToLoad?: string) => {
     const idToLoad = currentSchemeIdToLoad || schemeIdFromUrl;
     if (idToLoad) {
       setIsLoading(true);
-      const fetchedScheme = getMockSchemeById(idToLoad);
-      
-      if (fetchedScheme) {
-        setScheme(fetchedScheme);
-        const initialMonths = (fetchedScheme.durationMonths - (fetchedScheme.paymentsMadeCount || 0)) > 0 ? 1 : 0;
-        setInlineMonthsToPay(initialMonths);
-        setInlinePaymentModes(['Cash']);
-        inlinePaymentForm.reset({ paymentDate: new Date() });
+      try {
+        const fetchedScheme = await getSupabaseSchemeById(idToLoad);
 
-        const allSystemSchemes = getMockSchemes();
-        const schemesForThisCustomer = allSystemSchemes
-          .filter(s => s.customerName === fetchedScheme.customerName)
-          .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
-        setOtherCustomerSchemes(schemesForThisCustomer);
+        if (fetchedScheme) {
+          setScheme(fetchedScheme);
+          const initialMonths = (fetchedScheme.durationMonths - (fetchedScheme.paymentsMadeCount || 0)) > 0 ? 1 : 0;
+          setInlineMonthsToPay(initialMonths);
+          setInlinePaymentModes(['Cash']); // Default, consider persisting user choice if needed
+          inlinePaymentForm.reset({ paymentDate: new Date() });
 
-      } else {
-        setScheme(null);
+          // Fetch other schemes by the same customer (if customerName is present)
+          if (fetchedScheme.customerName) {
+            const allSystemSchemes = await getSupabaseSchemes({ includeArchived: true }); // Fetch all, including archived for this view
+            const schemesForThisCustomer = allSystemSchemes
+              .filter(s => s.customerName === fetchedScheme.customerName)
+              .sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+            setOtherCustomerSchemes(schemesForThisCustomer);
+          } else {
+            setOtherCustomerSchemes([]);
+          }
+
+          const groupNames = await getUniqueSupabaseGroupNames();
+          setExistingGroupNames(groupNames);
+
+        } else {
+          setScheme(null);
+          setOtherCustomerSchemes([]);
+          toast({ title: "Scheme Not Found", description: `Scheme with ID ${idToLoad} could not be found.`, variant: "destructive" });
+          // Optionally redirect: router.push('/schemes');
+        }
+      } catch (error) {
+        console.error("Error fetching scheme data:", error);
+        toast({ title: "Error", description: "Failed to load scheme details. Please try again.", variant: "destructive" });
+        setScheme(null); // Clear scheme on error
         setOtherCustomerSchemes([]);
+      } finally {
+        setIsLoading(false);
       }
-      setExistingGroupNames(getUniqueGroupNames());
-      setIsLoading(false);
     }
-  }, [schemeIdFromUrl, inlinePaymentForm]);
+  }, [schemeIdFromUrl, inlinePaymentForm, toast]); // Added toast to dependencies
 
   useEffect(() => {
     loadSchemeData();
-  }, [loadSchemeData, schemeIdFromUrl]);
+  }, [loadSchemeData]); // schemeIdFromUrl is already a dependency of loadSchemeData
 
   const openManualCloseDialog = (targetScheme: Scheme) => {
     if (targetScheme.status === 'Closed') return;
@@ -137,56 +165,105 @@ export default function SchemeDetailsPage() {
       type: 'partial_closure' as 'partial_closure', 
     };
 
-    const closedSchemeResult = closeMockScheme(schemeForManualCloseDialog.id, closureOptions);
-    if (closedSchemeResult) {
-      toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
-      loadSchemeData(closedSchemeResult.id); 
-    } else {
-      toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
+    try {
+      const closedSchemeResult = await closeSupabaseScheme(schemeForManualCloseDialog.id, closureOptions.closureDate);
+      if (closedSchemeResult) {
+        toast({ title: 'Scheme Manually Closed', description: `${closedSchemeResult.customerName}'s scheme (ID: ${closedSchemeResult.id.toUpperCase()}) has been marked as 'Closed'.` });
+        await loadSchemeData(closedSchemeResult.id); // Reloads data
+      } else {
+        toast({ title: 'Error', description: 'Failed to manually close scheme.', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error("Error manually closing scheme:", error);
+      toast({ title: 'Error', description: 'An unexpected error occurred while closing the scheme.', variant: 'destructive' });
+    } finally {
+      setIsManualCloseDialogOpen(false);
+      setIsProcessingManualClose(false);
+      setSchemeForManualCloseDialog(null);
     }
-    setIsManualCloseDialogOpen(false);
+  };
     setIsProcessingManualClose(false);
     setSchemeForManualCloseDialog(null);
   };
 
-  const handleAssignGroupSubmit = (updatedSchemeId: string, groupName?: string) => {
+  const handleAssignGroupSubmit = async (updatedSchemeId: string, groupName?: string) => {
     setIsUpdatingGroup(true);
-    const updatedSchemeFromMock = updateSchemeGroup(updatedSchemeId, groupName);
-    if (updatedSchemeFromMock) {
-      toast({
-        title: "Group Updated",
-        description: `Scheme for ${updatedSchemeFromMock.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
-      });
-      loadSchemeData(updatedSchemeFromMock.id); 
-    } else {
-      toast({ title: "Error", description: "Failed to update scheme group.", variant: "destructive" });
+    try {
+      const updatedScheme = await updateSupabaseSchemeGroup(updatedSchemeId, groupName);
+      if (updatedScheme) {
+        toast({
+          title: "Group Updated",
+          description: `Scheme for ${updatedScheme.customerName} has been ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
+        });
+        await loadSchemeData(updatedScheme.id); // Reloads data
+      } else {
+        toast({ title: "Error", description: "Failed to update scheme group.", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("Error updating scheme group:", error);
+      toast({ title: "Error", description: "An unexpected error occurred while updating group.", variant: "destructive" });
+    } finally {
+      setIsAssignGroupDialogOpen(false);
+      setIsUpdatingGroup(false);
     }
-    setIsAssignGroupDialogOpen(false);
-    setIsUpdatingGroup(false);
   };
   
-  const handleEditCustomerDetailsSubmit = (
-    originalName: string,
-    newDetails: EditCustomerDetailsFormValues
+  // Updated to handle more general scheme edits, not just customer details
+  const handleEditSchemeDetailsSubmit = async (
+    // originalName: string, // No longer needed if scheme.id is used as primary key
+    updatedDetails: EditCustomerDetailsFormValues // This type will be expanded in EditCustomerDetailsDialog.tsx
   ) => {
-    setIsUpdatingCustomerDetails(true);
-    const result = updateMockCustomerDetails(originalName, newDetails);
+    if (!scheme) return;
+    setIsUpdatingCustomerDetails(true); // Keep this state name for now, or rename to isUpdatingSchemeDetails
 
-    if (result.success && result.updatedSchemes) {
-      toast({
-        title: 'Customer Details Updated',
-        description: `Details for ${newDetails.customerName} have been updated. All associated schemes reflect this change.`,
-      });
-      loadSchemeData(scheme?.id); 
-    } else {
-      toast({
+    // Prepare the payload for updateSupabaseScheme
+    // EditCustomerDetailsFormValues will now include more fields
+    const schemeUpdates: Partial<Omit<Scheme, 'id' | 'payments' | 'totalAmountExpected' | 'totalAmountPaid' | 'totalBalance' | 'paymentsMadeCount' | 'paymentsPendingCount' | 'nextDueDate' | 'isOverdue' | 'daysOverdue'>> = {
+      customerName: updatedDetails.customerName,
+      customerPhone: updatedDetails.customerPhone,
+      customerAddress: updatedDetails.customerAddress,
+      customerGroupName: updatedDetails.customerGroupName,
+      // Ensure startDate is correctly formatted if changed. The form should provide Date object.
+      startDate: updatedDetails.startDate ? formatISO(updatedDetails.startDate, { representation: 'date' }) : undefined,
+      monthlyPaymentAmount: updatedDetails.monthlyPaymentAmount,
+      durationMonths: updatedDetails.durationMonths,
+      // 'status' might be updatable too if the form allows it, but typically it's derived or set by other actions.
+    };
+
+    // Filter out undefined values to only send actual changes
+    Object.keys(schemeUpdates).forEach(key => {
+        if ((schemeUpdates as any)[key] === undefined) {
+            delete (schemeUpdates as any)[key];
+        }
+    });
+
+
+    try {
+      const result = await updateSupabaseScheme(scheme.id, schemeUpdates);
+      if (result) {
+        toast({
+          title: 'Scheme Details Updated',
+          description: `Details for scheme ${result.customerName} (ID: ${result.id.toUpperCase()}) have been updated.`,
+        });
+        await loadSchemeData(scheme.id); // Reloads data
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to update scheme details.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+       console.error("Error updating scheme details:", error);
+       toast({
         title: 'Error',
-        description: result.message || 'Failed to update customer details.',
+        description: 'An unexpected error occurred while updating scheme details.',
         variant: 'destructive',
       });
+    } finally {
+      setIsEditCustomerDetailsDialogOpen(false);
+      setIsUpdatingCustomerDetails(false);
     }
-    setIsEditCustomerDetailsDialogOpen(false);
-    setIsUpdatingCustomerDetails(false);
   };
 
   const handleAddNewSchemeForCustomer = () => {
@@ -240,41 +317,57 @@ export default function SchemeDetailsPage() {
     setIsInlinePaymentProcessing(true);
     let successCount = 0;
     let errorCount = 0;
-    let currentSchemeStateForLoop: Scheme | undefined = JSON.parse(JSON.stringify(scheme));
 
-    for (let i = 0; i < inlineMonthsToPay; i++) {
-      if (!currentSchemeStateForLoop) {
-        errorCount++;
-        break;
-      }
-      const nextPaymentToRecord = currentSchemeStateForLoop.payments.find(p => getPaymentStatus(p, currentSchemeStateForLoop!.startDate) !== 'Paid');
-      
-      if (!nextPaymentToRecord) {
-        errorCount++;
-        break; 
-      }
+    // Identify target payments upfront
+    const pendingPayments = scheme.payments
+      .filter(p => getPaymentStatus(p, scheme.startDate) !== 'Paid')
+      .sort((a, b) => a.monthNumber - b.monthNumber);
 
-      const paymentData = {
-        paymentDate: formatISO(formData.paymentDate),
-        amountPaid: currentSchemeStateForLoop.monthlyPaymentAmount,
+    const paymentsToUpdate = pendingPayments.slice(0, inlineMonthsToPay);
+
+    if (paymentsToUpdate.length === 0 && inlineMonthsToPay > 0) {
+        toast({ title: "No Payments Due", description: "All due payments seem to be paid already.", variant: "info" });
+        setIsInlinePaymentProcessing(false);
+        return;
+    }
+    if (paymentsToUpdate.length < inlineMonthsToPay) {
+        toast({ title: "Attention", description: `Only ${paymentsToUpdate.length} payment(s) are pending, less than ${inlineMonthsToPay} selected.`, variant: "info" });
+    }
+
+
+    for (const payment of paymentsToUpdate) {
+      const paymentDataForSupabase = {
+        amountPaid: scheme.monthlyPaymentAmount, // Assuming full payment for each installment
+        paymentDate: formatISO(formData.paymentDate), // Ensure ISO string
         modeOfPayment: inlinePaymentModes,
       };
 
-      const result = updateMockSchemePayment(currentSchemeStateForLoop.id, nextPaymentToRecord.id, paymentData);
-      if (result) {
-        successCount++;
-        currentSchemeStateForLoop = result; 
-      } else {
+      try {
+        const updatedPayment = await updateSupabasePayment(payment.id, paymentDataForSupabase);
+        if (updatedPayment) {
+          successCount++;
+        } else {
+          errorCount++;
+          // Decide if we should break or continue trying other payments
+          // For now, let's continue to give feedback on each if possible,
+          // but a single failure might indicate a larger issue.
+        }
+      } catch (err) {
+        console.error(`Error updating payment ID ${payment.id} via Supabase:`, err);
         errorCount++;
-        break; 
       }
     }
     
     if (successCount > 0) {
-      toast({ title: "Payments Recorded", description: `${successCount} payment installment(s) recorded for ${scheme.customerName}.` });
-      loadSchemeData(scheme.id); 
-    } else if (errorCount > 0) {
-      toast({ title: "Error Recording Payments", description: `Could not record ${errorCount} payment installments.`, variant: "destructive" });
+      toast({ title: "Payments Recorded", description: `${successCount} payment installment(s) successfully recorded for ${scheme.customerName}.` });
+    }
+    if (errorCount > 0) {
+      toast({ title: "Payment Recording Issues", description: `${errorCount} payment installment(s) could not be recorded. Please check details or try again.`, variant: "destructive" });
+    }
+
+    // Always reload data if any attempt was made, to reflect partial successes or to get latest state.
+    if (paymentsToUpdate.length > 0) {
+        await loadSchemeData(scheme.id);
     }
     
     setIsInlinePaymentProcessing(false);
@@ -311,39 +404,55 @@ export default function SchemeDetailsPage() {
     // The button's disabled state (scheme.status === 'Archived') and handleOpenArchiveSchemeDialog prevent re-archiving.
 
     setIsArchivingScheme(true);
-    const archivedScheme = archiveMockScheme(scheme.id);
+    try {
+      const archivedSchemeResult = await archiveSupabaseScheme(scheme.id);
 
-    if (archivedScheme) {
-      toast({
-        title: "Scheme Moved to Trash",
-        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been moved to trash.`,
-      });
+      if (archivedSchemeResult) {
+        toast({
+          title: "Scheme Moved to Trash",
+          description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been moved to trash.`,
+        });
 
-      const allSchemes = getMockSchemes({ includeArchived: false });
-      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName && s.id !== scheme.id);
+        // After archiving, try to fetch remaining schemes to decide navigation
+        // This logic can remain, as getSupabaseSchemes is already used.
+        const allSchemesFromSupabase = await getSupabaseSchemes({ includeArchived: false });
+        const remainingSchemesForCustomer = allSchemesFromSupabase.filter(s => s.customerName === scheme.customerName && s.id !== scheme.id);
 
-      if (remainingSchemesForCustomer.length > 0) {
-        router.push(`/schemes/${remainingSchemesForCustomer[0].id}`);
-      } else if (scheme.customerGroupName) {
-        const groupStillExists = allSchemes.some(s => s.customerGroupName === scheme.customerGroupName);
-        if (groupStillExists) {
-          router.push(`/groups/${encodeURIComponent(scheme.customerGroupName)}`);
+        if (remainingSchemesForCustomer.length > 0) {
+          router.push(`/schemes/${remainingSchemesForCustomer[0].id}`);
+        } else if (scheme.customerGroupName) {
+          const groupStillExists = allSchemesFromSupabase.some(s => s.customerGroupName === scheme.customerGroupName);
+          if (groupStillExists) {
+            router.push(`/groups/${encodeURIComponent(scheme.customerGroupName)}`);
+          } else {
+            router.push('/schemes');
+          }
         } else {
           router.push('/schemes');
         }
       } else {
-        router.push('/schemes');
+        toast({
+          title: "Error Moving to Trash",
+          description: `Could not move scheme ID ${scheme.id.toUpperCase()} to trash.`,
+          variant: "destructive",
+        });
+        setIsArchivingScheme(false); // Only set to false on error, success leads to navigation
       }
-    } else {
-      // This case would be rare now, e.g. if scheme ID became invalid between opening dialog and confirming.
+    } catch (error) {
+      console.error("Error archiving scheme:", error);
       toast({
         title: "Error Moving to Trash",
-        description: `Could not move scheme ID ${scheme.id.toUpperCase()} to trash. An unexpected error occurred.`,
+        description: "An unexpected error occurred.",
         variant: "destructive",
       });
       setIsArchivingScheme(false);
+    } finally {
+      setIsConfirmingArchiveScheme(false); // Close dialog regardless
+      // No need to setIsArchivingScheme(false) on success if navigation occurs, but good for robustness if nav fails.
+      // If navigation is guaranteed on success, this might not be strictly needed.
+      // However, if staying on page (e.g. error during nav decision), ensure state is clean.
+      if (!archivedScheme) setIsArchivingScheme(false); // If not navigated away due to error in nav logic.
     }
-    setIsConfirmingArchiveScheme(false);
   };
 
 

@@ -7,33 +7,61 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Users2, Loader2 } from 'lucide-react';
 import type { GroupDetail, Scheme } from '@/types/scheme';
-import { getGroupDetails, getMockSchemes } from '@/lib/mock-data';
+// import { getGroupDetails, getMockSchemes } from '@/lib/mock-data'; // Replaced
+import { getSupabaseSchemes } from '@/lib/supabase-data';
 import Link from 'next/link';
-import { getPaymentStatus, calculateSchemeTotals, getSchemeStatus } from '@/lib/utils';
+// import { getPaymentStatus, calculateSchemeTotals, getSchemeStatus } from '@/lib/utils'; // Kept if needed for any specific client logic, but getSupabaseSchemes should provide processed schemes
 import { Input } from '@/components/ui/input';
 import { motion } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast'; // Added for error feedback
 
 export default function GroupsPage() {
-  const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
+  // const [allSchemes, setAllSchemes] = useState<Scheme[]>([]); // No longer needed as state, schemes processed within loadData
   const [groups, setGroups] = useState<GroupDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const { toast } = useToast(); // Added
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
-    const loadedSchemesRaw = getMockSchemes();
-    const processedSchemes = loadedSchemesRaw.map(s => {
-        const tempS = { ...s };
-        tempS.payments.forEach(p => p.status = getPaymentStatus(p, tempS.startDate));
-        const totals = calculateSchemeTotals(tempS);
-        const status = getSchemeStatus(tempS);
-        return { ...tempS, ...totals, status };
+    try {
+      const loadedSchemes = await getSupabaseSchemes(); // Fetches all schemes, already processed
+
+      const groupsMap = new Map<string, {
+        customerNames: Set<string>;
+        schemesInGroup: Scheme[];
+      }>();
+
+      loadedSchemes.forEach(scheme => {
+        if (scheme.customerGroupName && scheme.status !== 'Archived') { // Consider only non-archived schemes for active groups
+          const groupEntry = groupsMap.get(scheme.customerGroupName) || {
+            customerNames: new Set(),
+            schemesInGroup: []
+          };
+
+          groupEntry.customerNames.add(scheme.customerName);
+          groupEntry.schemesInGroup.push(scheme);
+          groupsMap.set(scheme.customerGroupName, groupEntry);
+        }
       });
-    setAllSchemes(processedSchemes);
-    const details = getGroupDetails(); // This function now includes hasOverdueSchemeInGroup
-    setGroups(details);
-    setIsLoading(false);
-  }, []);
+
+      const derivedGroupDetails: GroupDetail[] = Array.from(groupsMap.entries()).map(([groupName, data]) => ({
+        groupName,
+        customerNames: Array.from(data.customerNames).sort((a,b) => a.localeCompare(b)),
+        totalSchemesInGroup: data.schemesInGroup.length,
+        // Note: `hasOverdueSchemeInGroup` and `recordableSchemeCount` are not in the current file's GroupDetail or UI
+        // If needed later, they would be calculated here using data.schemesInGroup
+      })).sort((a,b) => a.groupName.localeCompare(b.groupName)); // Sort groups by name
+
+      setGroups(derivedGroupDetails);
+    } catch (error) {
+      console.error("Error loading group data:", error);
+      toast({ title: "Error Loading Data", description: "Could not fetch group details. Please try again.", variant: "destructive" });
+      setGroups([]); // Set to empty on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]); // Added toast
 
   useEffect(() => {
     loadData();
@@ -66,7 +94,7 @@ export default function GroupsPage() {
       >
         <h1 className="text-4xl font-headline font-semibold text-foreground flex items-center">
           <Users2 className="mr-3 h-10 w-10 text-primary" />
-          Customer Groups
+          Customer Groups ({filteredGroups.length})
         </h1>
       </motion.div>
 

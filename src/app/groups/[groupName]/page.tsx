@@ -9,7 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil, Archive, MoreVertical } from 'lucide-react'; // Added Archive, MoreVertical
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup, archiveMockGroup, archiveAllSchemesForCustomer } from '@/lib/mock-data'; // Added archiveAllSchemesForCustomer
+import {
+  // getMockSchemes, // Replaced
+  deleteFullMockScheme,
+  updateMockGroupName,
+  deleteMockGroup,
+  archiveMockGroup,
+  archiveAllSchemesForCustomer
+} from '@/lib/mock-data'; // Mock functions for actions not yet migrated
+import {
+  getSupabaseSchemesByGroup, // Added
+  recordSupabaseBatchPaymentsForGroup // Added
+} from '@/lib/supabase-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
@@ -21,12 +32,13 @@ import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ExportPdfDialog from '@/components/dialogs/ExportPdfDialog';
+import { BatchRecordPaymentDialog } from '@/components/dialogs/BatchRecordPaymentDialog'; // Added
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Added DropdownMenu components
+} from "@/components/ui/dropdown-menu";
 
 const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
@@ -51,42 +63,47 @@ export default function GroupDetailsPage() {
   const [sortBy, setSortBy] = useState<'customerNameAsc' | 'customerNameDesc' | 'oldestFirst' | 'newestFirst' | 'statusPriority'>('customerNameAsc');
 
   const [schemeToDelete, setSchemeToDelete] = useState<Scheme | null>(null);
-  const [isDeletingScheme, setIsDeletingScheme] = useState(false);
+  // const [isDeletingScheme, setIsDeletingScheme] = useState(false); // Already part of other dialogs/logic not touched
   const [isExporting, setIsExporting] = useState(false);
-  const [isExportPdfDialogOpen, setIsExportPdfDialogOpen] = useState(false); // State for the export dialog
+  const [isExportPdfDialogOpen, setIsExportPdfDialogOpen] = useState(false);
 
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState(groupName);
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
   const [isConfirmingDeleteGroup, setIsConfirmingDeleteGroup] = useState(false);
-  const [isDeletingGroupState, setIsDeletingGroupState] = useState(false); // Renamed to avoid conflict with scheme deletion
+  const [isDeletingGroupState, setIsDeletingGroupState] = useState(false);
 
-  // State for archiving all schemes for a customer
   const [customerToArchiveSchemes, setCustomerToArchiveSchemes] = useState<string | null>(null);
   const [isArchiveCustomerSchemesDialogOpen, setIsArchiveCustomerSchemesDialogOpen] = useState(false);
   const [isArchivingCustomerSchemes, setIsArchivingCustomerSchemes] = useState(false);
 
-  const loadGroupSchemes = () => {
+  const [isBatchPaymentDialogOpen, setIsBatchPaymentDialogOpen] = useState(false);
+  const [isProcessingBatchPayment, setIsProcessingBatchPayment] = useState(false);
+
+  const loadGroupSchemes = async () => {
     if (groupName) {
       setIsLoading(true);
-      const allSchemes = getMockSchemes();
-      const schemesForThisGroup = allSchemes
-        .filter(s => s.customerGroupName === groupName)
-        .sort((a, b) => {
-          const nameCompare = a.customerName.localeCompare(b.customerName);
-          if (nameCompare !== 0) return nameCompare;
-          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-        });
-      setAllSchemesInGroup(schemesForThisGroup);
-      setIsLoading(false);
+      try {
+        const schemesForThisGroup = await getSupabaseSchemesByGroup(groupName);
+        // Sorting is now done client-side by `groupedSchemes` useMemo if needed,
+        // or could be part of the Supabase query if consistent sorting is desired.
+        setAllSchemesInGroup(schemesForThisGroup);
+      } catch (error) {
+        console.error(`Error fetching schemes for group ${groupName}:`, error);
+        toast({ title: "Error", description: `Could not load schemes for group ${groupName}.`, variant: "destructive" });
+        setAllSchemesInGroup([]);
+      } finally {
+        setIsLoading(false);
+      }
     } else {
-      setIsLoading(false);
+      setIsLoading(false); // Should not happen if groupName is from URL param and page rendered
+      setAllSchemesInGroup([]);
     }
   };
 
   useEffect(() => {
     loadGroupSchemes();
-  }, [groupName]);
+  }, [groupName, toast]); // Added toast
 
   const groupedSchemes = useMemo(() => {
     let filteredForSearch = [...allSchemesInGroup];
@@ -394,8 +411,19 @@ export default function GroupDetailsPage() {
           className="w-full sm:w-auto rounded-lg shadow-lg hover:shadow-xl transition-shadow"
           disabled={groupSummaryStats.activeSchemesCount === 0}>
           <Link href={`/payments/record?group=${encodeURIComponent(groupName)}`}>
-            <CreditCard className="mr-2.5 h-5 w-5" /> Record Payment for Group
+            {/* This button's navigation is kept as is. A new button will trigger the dialog. */}
+            <CreditCard className="mr-2.5 h-5 w-5" /> Record Payment for Group (Legacy Nav)
           </Link>
+        </Button>
+        {/* New Button to trigger BatchRecordPaymentDialog */}
+        <Button
+          onClick={() => setIsBatchPaymentDialogOpen(true)}
+          size="lg"
+          className="w-full sm:w-auto rounded-lg shadow-lg hover:shadow-xl transition-shadow bg-green-600 hover:bg-green-700 text-white"
+          disabled={groupSummaryStats.activeSchemesCount === 0 || isProcessingBatchPayment}
+        >
+          {isProcessingBatchPayment ? <Loader2 className="mr-2.5 h-5 w-5 animate-spin" /> : <DollarSign className="mr-2.5 h-5 w-5" />}
+           Record Batch Payment (Dialog)
         </Button>
       </motion.div>
 
@@ -652,7 +680,36 @@ export default function GroupDetailsPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog></>
+      </Dialog>
 
+      {/* Batch Payment Dialog */}
+      <BatchRecordPaymentDialog
+        isOpen={isBatchPaymentDialogOpen}
+        onClose={() => setIsBatchPaymentDialogOpen(false)}
+        groupName={groupName}
+        recordableSchemesCount={groupSummaryStats.activeSchemesCount} // Pass count of schemes that could be paid
+        onSubmitBatch={async (paymentDate, modeOfPayment) => {
+          setIsProcessingBatchPayment(true);
+          try {
+            const result = await recordSupabaseBatchPaymentsForGroup(groupName, paymentDate, modeOfPayment);
+            toast({
+              title: "Batch Payment Processed",
+              description: `${result.successCount} payment(s) recorded successfully. ${result.errorCount} error(s). Check details in console if any.`,
+              variant: result.errorCount > 0 ? "warning" : "success",
+            });
+            if (result.successCount > 0) {
+              await loadGroupSchemes(); // Refresh data
+            }
+          } catch (error) {
+            console.error("Failed to record batch payments:", error);
+            toast({ title: "Error", description: "An unexpected error occurred during batch payment.", variant: "destructive" });
+          } finally {
+            setIsProcessingBatchPayment(false);
+            setIsBatchPaymentDialogOpen(false);
+          }
+        }}
+        isLoading={isProcessingBatchPayment}
+      />
+      </>
   );
 }

@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle, ListChecks, ArrowUpDown } from 'lucide-react';
 import type { Scheme, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
+// import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data'; // Replaced
+import { getSupabaseSchemes, getUniqueSupabaseGroupNames, updateSupabaseSchemeGroup } from '@/lib/supabase-data';
 import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { BulkAssignGroupDialog } from '@/components/dialogs/BulkAssignGroupDialog';
@@ -48,17 +49,27 @@ export default function SchemesPage() {
   const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   const [isProcessingBulkAssign, setIsProcessingBulkAssign] = useState(false);
 
+  const [isLoadingSchemes, setIsLoadingSchemes] = useState(true);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
 
-  const loadSchemesAndGroups = useCallback(() => {
-    const loadedSchemes = getMockSchemes().map(s => {
-      const totals = calculateSchemeTotals(s);
-      s.payments.forEach(p => p.status = getPaymentStatus(p, s.startDate));
-      const status = getSchemeStatus(s);
-      return { ...s, ...totals, status };
-    });
-    setAllSchemes(loadedSchemes);
-    setExistingGroupNames(getUniqueGroupNames());
-  }, []);
+
+  const loadSchemesAndGroups = useCallback(async () => {
+    setIsLoadingSchemes(true);
+    setIsLoadingGroups(true);
+    try {
+      const loadedSchemes = await getSupabaseSchemes();
+      setAllSchemes(loadedSchemes);
+
+      const groupNames = await getUniqueSupabaseGroupNames();
+      setExistingGroupNames(groupNames);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast({ title: "Error loading data", description: "Could not fetch schemes or groups. Please try again.", variant: "destructive" });
+    } finally {
+      setIsLoadingSchemes(false);
+      setIsLoadingGroups(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     loadSchemesAndGroups();
@@ -142,21 +153,37 @@ export default function SchemesPage() {
     let updatedCount = 0;
     let errorCount = 0;
 
-    selectedSchemeIds.forEach(schemeId => {
-      const updated = updateSchemeGroup(schemeId, groupName);
-      if (updated) {
-        updatedCount++;
-      } else {
+    for (const schemeId of selectedSchemeIds) { // Use for...of for async iteration
+      try {
+        const updatedScheme = await updateSupabaseSchemeGroup(schemeId, groupName);
+        if (updatedScheme) {
+          updatedCount++;
+        } else {
+          // This case might occur if the scheme was deleted or some other specific failure
+          console.warn(`Failed to update group for scheme ${schemeId} - scheme not found or no change.`);
+          // errorCount++; // Or handle as a partial success if needed
+        }
+      } catch (error) {
+        console.error(`Error updating group for scheme ${schemeId}:`, error);
         errorCount++;
       }
-    });
+    }
 
-    toast({
-      title: "Bulk Group Assignment Complete",
-      description: `${updatedCount} scheme(s) ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`,
-    });
-    
-    loadSchemesAndGroups();
+    if (updatedCount > 0) {
+      toast({
+        title: "Bulk Assign Complete",
+        description: `${updatedCount} scheme(s) successfully ${groupName ? `assigned to group "${groupName}"` : 'removed from group'}.`,
+      });
+    }
+    if (errorCount > 0) {
+      toast({
+        title: "Bulk Assign Errors",
+        description: `${errorCount} scheme(s) could not be updated. Check console for details.`,
+        variant: "destructive",
+      });
+    }
+
+    await loadSchemesAndGroups(); // Reload data
     setIsBulkAssignDialogOpen(false);
     setIsBulkAssignMode(false);
     setSelectedSchemeIds([]);
@@ -168,6 +195,14 @@ export default function SchemesPage() {
 
   return (
     <>
+    {isLoadingSchemes || isLoadingGroups ? (
+      <div className="container mx-auto p-4 flex justify-center items-center min-h-[calc(100vh-200px)]">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg text-muted-foreground">Loading schemes data...</p>
+        </div>
+      </div>
+    ) : (
       <div className="flex flex-col gap-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -177,16 +212,16 @@ export default function SchemesPage() {
         >
           <h1 className="text-4xl font-headline font-semibold text-foreground flex items-center">
             <ListChecks className="mr-3 h-10 w-10 text-primary" />
-            Scheme Management
+            Scheme Management ({allSchemes.length})
           </h1>
           <div className="flex gap-3">
             {!isBulkAssignMode && (
-              <Button variant="outline" onClick={handleToggleBulkAssignMode} className="rounded-lg shadow-md hover:shadow-lg transition-shadow h-11 px-5 text-base">
+              <Button variant="outline" onClick={handleToggleBulkAssignMode} className="rounded-lg shadow-md hover:shadow-lg transition-shadow h-11 px-5 text-base" disabled={isProcessingBulkAssign}>
                 <Users2 className="mr-2 h-5 w-5" /> Bulk Assign Group
               </Button>
             )}
             <Link href="/schemes/new">
-              <Button className="rounded-lg shadow-lg hover:shadow-xl transition-shadow h-11 px-5 text-base">
+              <Button className="rounded-lg shadow-lg hover:shadow-xl transition-shadow h-11 px-5 text-base" disabled={isProcessingBulkAssign}>
                 <PlusCircle className="mr-2 h-5 w-5" /> Add New Scheme
               </Button>
             </Link>
@@ -364,7 +399,8 @@ export default function SchemesPage() {
           isLoading={isProcessingBulkAssign}
         />
       )}
+      </div>
+    )}
     </>
   );
 }
-    
