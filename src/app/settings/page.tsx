@@ -74,7 +74,7 @@ function DataManagementTabContent() {
     const allSchemes = getMockSchemes();
     // Filter for both 'Fully Paid' and 'Closed' statuses
     const completedAndClosed = allSchemes
-      .filter(s => s.status === 'Fully Paid' || s.status === 'Closed')
+      .filter(s => s.status === 'Closed')
       .sort((a, b) => {
         // Prioritize sorting by closureDate if available, then by startDate or some other criteria
         const dateA = a.closureDate ? parseISO(a.closureDate) : (a.startDate ? parseISO(a.startDate) : new Date(0));
@@ -989,10 +989,10 @@ function DataManagementTabContent() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <ArchiveRestore className="h-5 w-5 text-primary" />
-            Fully Paid & Closed Scheme Management
+            Closed Scheme Management
           </CardTitle>
           <CardDescription>
-            Manage schemes that are 'Fully Paid' (all payments made) or 'Closed' (manually by an admin). You can reopen or permanently delete them.
+            Manage schemes that are 'Closed' (manually by an admin). You can reopen, archive, or permanently delete them.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
