@@ -2,8 +2,8 @@ import React from 'react';
 
 const BottomNavigationBar = () => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/30 backdrop-blur-md rounded-t-xl border border-gray-200/50 shadow-lg">
-      <div className="flex justify-around items-center h-16">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 mx-4 mb-4 p-3 rounded-full shadow-lg bg-white/30 backdrop-blur-md border border-gray-200/50">
+      <div className="flex justify-around items-center h-16"> {/* Assuming h-16 is desired height for items, p-3 on nav is for spacing from edge */}
         {/* Placeholder navigation items */}
         <div className="flex flex-col items-center">
           {/* Placeholder icon */}
