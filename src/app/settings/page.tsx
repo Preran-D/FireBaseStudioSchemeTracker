@@ -858,7 +858,7 @@ function DataManagementTabContent() {
     if (selectedArchivedPaymentIds.length === 0) return;
     const info = selectedArchivedPaymentIds.map(id => {
       const t = archivedTransactionsList.find(txn => txn.id === id);
-      return t || { paymentId: id, schemeId: 'Unknown', customerName: 'Unknown', monthNumber: 0 }; // Fallback for safety
+      return t || { id, schemeId: 'Unknown', customerName: 'Unknown', monthNumber: 0, archivedDate: undefined, amountExpected: 0 }; // Fallback for safety, ensure 'id' exists
     }).map(t => ({ paymentId: t.id, schemeId: t.schemeId, customerName: t.customerName, monthNumber: t.monthNumber }));
     setArchivedTransactionsPendingDeletionInfo(info as any); // Cast needed if fallback is used and type is strict
     setShowDeleteArchivedTransactionsConfirmDialog(true);
@@ -1556,7 +1556,7 @@ function DataManagementTabContent() {
                 <ScrollArea className="max-h-40 mt-2 border rounded-md p-2">
                   <ul className="list-disc pl-5 text-sm ">
                     {archivedTransactionsPendingDeletionInfo.map(t => (
-                      <li key={t.paymentId}>
+                      <li key={t.id}>
                         {t.customerName} (Scheme: {t.schemeId.toUpperCase()}, Month: {t.monthNumber})
                       </li>
                     ))}
