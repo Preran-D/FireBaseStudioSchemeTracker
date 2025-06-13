@@ -76,7 +76,13 @@ export function generatePaymentsForScheme(scheme: Omit<Scheme, 'payments' | 'sta
 }
 
 export function getSchemeStatus(scheme: Scheme): SchemeStatus {
+  // If scheme is trashed, its status is 'Trashed'
+  if (scheme.isTrashed === true) {
+    return 'Trashed';
+  }
+
   // If the scheme is already marked as 'Archived', its status should remain 'Archived'.
+  // This check should come after 'Trashed' because a trashed scheme might have been archived prior.
   if (scheme.status === 'Archived') {
     return 'Archived';
   }

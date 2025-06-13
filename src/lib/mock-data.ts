@@ -132,10 +132,12 @@ if (fionaSchemeIdx !== -1) {
 
 export const getMockSchemes = (options?: { includeArchived?: boolean }): Scheme[] => {
   const includeArchived = options?.includeArchived || false;
-  let schemesToProcess = MOCK_SCHEMES;
+  // Start with all schemes, then filter out trashed ones first.
+  let schemesToProcess = MOCK_SCHEMES.filter(s => !s.isTrashed);
 
   if (!includeArchived) {
-    schemesToProcess = MOCK_SCHEMES.filter(s => s.status !== 'Archived');
+    // Further filter out archived schemes if not requested
+    schemesToProcess = schemesToProcess.filter(s => s.status !== 'Archived');
   }
 
   return JSON.parse(JSON.stringify(schemesToProcess.map(s => {
@@ -635,6 +637,36 @@ export const updateSchemeGroup = (schemeId: string, newGroupName?: string): Sche
   MOCK_SCHEMES[schemeIndex].customerGroupName = newGroupName ? newGroupName.trim() : undefined;
   
   return getMockSchemeById(schemeId);
+};
+
+export const trashScheme = (schemeId: string): boolean => {
+  const schemeIndex = MOCK_SCHEMES.findIndex(s => s.id === schemeId);
+  if (schemeIndex === -1) {
+    return false; // Scheme not found
+  }
+
+  // Check if the scheme is already trashed
+  if (MOCK_SCHEMES[schemeIndex].isTrashed) {
+    return true; // Already trashed, consider it a success
+  }
+
+  MOCK_SCHEMES[schemeIndex].isTrashed = true;
+  // Optionally, update other properties like status or archivedDate if needed
+  // For example, if trashing implies archiving:
+  // MOCK_SCHEMES[schemeIndex].status = 'Archived';
+  // MOCK_SCHEMES[schemeIndex].archivedDate = formatISO(new Date());
+
+  // If totals or status need recalculation based on isTrashed, ensure that happens.
+  // For now, just setting the flag. If getMockSchemeById or other functions
+  // need to be aware of isTrashed, they would need updates.
+  // const totals = calculateSchemeTotals(MOCK_SCHEMES[schemeIndex]);
+  // MOCK_SCHEMES[schemeIndex] = { ...MOCK_SCHEMES[schemeIndex], ...totals };
+
+
+  // It's important to consider if getMockSchemeById should reflect this change immediately
+  // or if isTrashed is handled by a separate flow (e.g. getTrashedSchemes).
+  // For now, directly mutating MOCK_SCHEMES is the core requirement.
+  return true; // Scheme found and updated
 };
 
 interface SchemeClosureImportRow {

@@ -1,4 +1,3 @@
-
 export type PaymentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Upcoming';
 export type PaymentMode = 'Card' | 'Cash' | 'UPI' | 'System Closure' | 'Imported';
 
@@ -16,7 +15,7 @@ export interface Payment {
   archivedDate?: string; // ISO Date string
 }
 
-export type SchemeStatus = 'Active' | 'Fully Paid' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived';
+export type SchemeStatus = 'Active' | 'Fully Paid' | 'Overdue' | 'Upcoming' | 'Closed' | 'Archived' | 'Trashed';
 
 export interface Scheme {
   id: string;
@@ -30,6 +29,7 @@ export interface Scheme {
   status: SchemeStatus;
   closureDate?: string; // ISO Date string, set when scheme is manually closed
   archivedDate?: string; // ISO Date string, set when scheme is archived
+  isTrashed?: boolean; // Added for soft delete functionality
   payments: Payment[];
   // Calculated fields (optional, can be derived)
   totalCollected?: number;

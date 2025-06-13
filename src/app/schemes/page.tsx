@@ -10,8 +10,19 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PlusCircle, Filter, Users2, Loader2, Trash2, XCircle, ListChecks, ArrowUpDown } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Scheme, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup } from '@/lib/mock-data';
+import { getMockSchemes, getUniqueGroupNames, updateSchemeGroup, trashScheme } from '@/lib/mock-data';
 import { formatCurrency, formatDate, calculateSchemeTotals, getSchemeStatus, getPaymentStatus } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { BulkAssignGroupDialog } from '@/components/dialogs/BulkAssignGroupDialog';
@@ -42,6 +53,8 @@ export default function SchemesPage() {
   const { toast } = useToast();
 
   const [existingGroupNames, setExistingGroupNames] = useState<string[]>([]);
+  const [schemeToTrash, setSchemeToTrash] = useState<Scheme | null>(null);
+  const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false);
   
   const [isBulkAssignMode, setIsBulkAssignMode] = useState(false);
   const [selectedSchemeIds, setSelectedSchemeIds] = useState<string[]>([]);
@@ -300,12 +313,13 @@ export default function SchemesPage() {
                         <TableHead className="text-base font-semibold">Monthly Amount</TableHead>
                         <TableHead className="text-base font-semibold text-center">Payments Made</TableHead>
                         <TableHead className="text-base font-semibold">Status</TableHead>
+                        <TableHead className="text-base font-semibold text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredSchemes.map((scheme, index) => (
                         <motion.tr 
-                          key={scheme.id} 
+                          key={scheme.id}
                           data-state={selectedSchemeIds.includes(scheme.id) ? 'selected' : ''}
                           className="border-b border-border/50 hover:bg-muted/20 transition-colors data-[state=selected]:bg-primary/10"
                           initial={{ opacity: 0, y: 10 }}
@@ -334,6 +348,20 @@ export default function SchemesPage() {
                           <TableCell className="text-base text-center text-muted-foreground" data-label="Payments Made">{scheme.paymentsMadeCount || 0} / {scheme.durationMonths}</TableCell>
                           <TableCell data-label="Status">
                             <SchemeStatusBadge status={scheme.status} />
+                          </TableCell>
+                          <TableCell className="text-center" data-label="Actions">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setSchemeToTrash(scheme);
+                                setIsTrashDialogOpen(true);
+                              }}
+                              className="text-red-500 hover:text-red-700"
+                              aria-label="Move to Trash"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </Button>
                           </TableCell>
                         </motion.tr>
                       ))}
@@ -365,7 +393,49 @@ export default function SchemesPage() {
           isLoading={isProcessingBulkAssign}
         />
       )}
+
+      <AlertDialog open={isTrashDialogOpen} onOpenChange={setIsTrashDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the scheme for &quot;{schemeToTrash?.customerName}&quot; (ID: {schemeToTrash?.id.toUpperCase()}) to trash.
+              You can recover it later if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsTrashDialogOpen(false);
+              setSchemeToTrash(null);
+            }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (schemeToTrash) {
+                  const success = trashScheme(schemeToTrash.id);
+                  if (success) {
+                    toast({
+                      title: 'Scheme Moved to Trash',
+                      description: `Scheme for "${schemeToTrash.customerName}" has been moved to trash.`,
+                    });
+                    loadSchemesAndGroups(); // Refresh the list
+                  } else {
+                    toast({
+                      title: 'Error',
+                      description: `Could not move scheme for "${schemeToTrash.customerName}" to trash. It might have already been deleted or an error occurred.`,
+                      variant: 'destructive',
+                    });
+                  }
+                  setIsTrashDialogOpen(false);
+                  setSchemeToTrash(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Move to Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
-    
