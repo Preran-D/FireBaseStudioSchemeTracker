@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { formatISO, format as formatDateFns, parseISO, isValid as isValidDate, isBefore, subDays, } from 'date-fns'; // Added comma
+import Link from 'next/link';
 
 interface ImportUIRow {
   id: string;
@@ -52,10 +53,7 @@ function DataManagementTabContent() {
   const [completedSchemes, setCompletedSchemes] = useState<Scheme[]>([]);
   const [selectedClosedSchemeIds, setSelectedClosedSchemeIds] = useState<string[]>([]);
   const [isReopeningClosedSchemes, setIsReopeningClosedSchemes] = useState(false);
-  const [isDeletingClosedSchemes, setIsDeletingClosedSchemes] = useState(false);
   const [isArchivingSelectedSchemes, setIsArchivingSelectedSchemes] = useState(false); // New state
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
-  const [schemesPendingDeletionInfo, setSchemesPendingDeletionInfo] = useState<{ id: string; customerName: string; schemeId: string }[]>([]);
 
   // State for Archived Scheme Management
   const [archivedSchemesList, setArchivedSchemesList] = useState<Scheme[]>([]);
@@ -603,41 +601,6 @@ function DataManagementTabContent() {
     // setSelectedClosedSchemeIds([]); // Clear selection after action
   };
 
-  const handleInitiateDeleteSelectedSchemes = () => {
-    if (selectedClosedSchemeIds.length === 0) return;
-    const info = selectedClosedSchemeIds.map(id => {
-      const scheme = completedSchemes.find(s => s.id === id);
-      return { id, customerName: scheme?.customerName || 'Unknown', schemeId: scheme?.id.toUpperCase() || 'Unknown ID' };
-    });
-    setSchemesPendingDeletionInfo(info);
-    setShowDeleteConfirmDialog(true);
-  };
-
-  const handleConfirmDeleteSelectedSchemes = async () => {
-    if (selectedClosedSchemeIds.length === 0) return;
-    setIsDeletingClosedSchemes(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const schemeId of selectedClosedSchemeIds) {
-      const deleted = deleteFullMockScheme(schemeId);
-      if (deleted) {
-        successCount++;
-      } else {
-        errorCount++;
-      }
-    }
-    toast({
-      title: "Deletion Operation Complete",
-      description: `${successCount} scheme(s) permanently deleted. ${errorCount > 0 ? `${errorCount} error(s).` : ''}`,
-      variant: successCount > 0 && errorCount > 0 ? 'default' : (errorCount > 0 ? 'destructive' : 'default')
-    });
-    loadAllData(); // Refresh the list of completed schemes
-    setShowDeleteConfirmDialog(false);
-    setSchemesPendingDeletionInfo([]);
-    setIsDeletingClosedSchemes(false);
-  };
-
   const isAllCompletedSelected = completedSchemes.length > 0 && selectedClosedSchemeIds.length === completedSchemes.length;
   const isAllArchivedSelected = archivedSchemesList.length > 0 && selectedArchivedSchemeIds.length === archivedSchemesList.length;
 
@@ -999,7 +962,7 @@ function DataManagementTabContent() {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <Button
               onClick={handleReopenSelectedSchemes}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isArchivingSelectedSchemes}
             >
               {isReopeningClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
               Reopen Selected ({selectedClosedSchemeIds.length})
@@ -1007,18 +970,10 @@ function DataManagementTabContent() {
             <Button
               variant="outline"
               onClick={() => handleArchiveSelectedSchemes()}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
+              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isArchivingSelectedSchemes}
             >
               {isArchivingSelectedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
               Archive Selected ({selectedClosedSchemeIds.length})
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleInitiateDeleteSelectedSchemes}
-              disabled={selectedClosedSchemeIds.length === 0 || isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
-            >
-              {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Delete Selected ({selectedClosedSchemeIds.length})
             </Button>
           </div>
           {completedSchemes.length > 0 ? (
@@ -1031,7 +986,7 @@ function DataManagementTabContent() {
                         checked={isAllCompletedSelected}
                         onCheckedChange={handleSelectAllClosedSchemes}
                         aria-label="Select all completed schemes"
-                        disabled={isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
+                        disabled={isReopeningClosedSchemes || isArchivingSelectedSchemes}
                       />
                     </TableHead>
                     <TableHead>Customer Name</TableHead>
@@ -1048,10 +1003,16 @@ function DataManagementTabContent() {
                           checked={selectedClosedSchemeIds.includes(scheme.id)}
                           onCheckedChange={(checked) => handleSelectClosedScheme(scheme.id, !!checked)}
                           aria-label={`Select scheme ${scheme.id.toUpperCase()}`}
-                          disabled={isReopeningClosedSchemes || isDeletingClosedSchemes || isArchivingSelectedSchemes}
+                          disabled={isReopeningClosedSchemes || isArchivingSelectedSchemes}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{scheme.customerName}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link href={`/schemes/${scheme.id}`} passHref>
+                          <Button variant="link" className="p-0 h-auto text-left">
+                            {scheme.customerName}
+                          </Button>
+                        </Link>
+                      </TableCell>
                       <TableCell>{scheme.id.toUpperCase()}</TableCell>
                       <TableCell>{formatDate(scheme.closureDate)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(scheme.totalCollected)}</TableCell>
@@ -1065,39 +1026,6 @@ function DataManagementTabContent() {
           )}
         </CardContent>
       </Card>
-
-      {showDeleteConfirmDialog && (
-        <AlertDialog open={showDeleteConfirmDialog} onOpenChange={(open) => !open && setShowDeleteConfirmDialog(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangleIcon className="h-6 w-6 text-destructive" />
-                Confirm Permanent Deletion
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                You are about to permanently delete {schemesPendingDeletionInfo.length} scheme(s):
-                <ul className="list-disc pl-5 mt-2 text-sm max-h-40 overflow-y-auto">
-                  {schemesPendingDeletionInfo.map(s => <li key={s.id}>{s.customerName} (ID: {s.schemeId})</li>)}
-                </ul>
-                This action cannot be undone. Associated payments and history will also be removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setShowDeleteConfirmDialog(false)} disabled={isDeletingClosedSchemes}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmDeleteSelectedSchemes}
-                disabled={isDeletingClosedSchemes}
-                className="bg-destructive hover:bg-destructive/90"
-              >
-                {isDeletingClosedSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Permanently
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
 
       {/* Archived Scheme Management Card */}
       <Card>

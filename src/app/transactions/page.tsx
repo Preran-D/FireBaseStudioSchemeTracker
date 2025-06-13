@@ -220,7 +220,13 @@ export default function TransactionsPage() {
       <TableBody>
         {transactions.map((transaction) => (
           <TableRow key={transaction.id}>
-            <TableCell className="font-medium">{transaction.customerName}</TableCell>
+            <TableCell className="font-medium">
+              <Link href={`/schemes/${transaction.schemeId}`} passHref>
+                <Button variant="link" className="p-0 h-auto text-left">
+                  {transaction.customerName}
+                </Button>
+              </Link>
+            </TableCell>
             <TableCell>
               <Button variant="link" asChild className="p-0 h-auto">
                   <Link href={`/schemes/${transaction.schemeId}`} className="truncate max-w-[100px] sm:max-w-xs block">
