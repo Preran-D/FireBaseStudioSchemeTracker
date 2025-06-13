@@ -194,32 +194,6 @@ export default function GroupDetailsPage() {
     setIsSchemePeekPanelOpen(true);
   };
 
-  const handleDeleteScheme = (scheme: Scheme) => {
-    setSchemeToDelete(scheme);
-  };
-
-  const confirmDeleteScheme = () => {
-    if (schemeToDelete) {
-      setIsDeletingScheme(true);
-      const success = deleteFullMockScheme(schemeToDelete.id);
-      if (success) {
-        toast({
-          title: "Scheme Deleted",
-          description: `Scheme ID ${schemeToDelete.id.toUpperCase()} for ${schemeToDelete.customerName} has been deleted.`,
-        });
-        loadGroupSchemes(); 
-      } else {
-        toast({
-          title: "Error Deleting Scheme",
-          description: `Could not delete scheme ID ${schemeToDelete.id.toUpperCase()}.`,
-          variant: "destructive",
-        });
-      }
-      setSchemeToDelete(null);
-      setIsDeletingScheme(false);
-    }
-  };
-
   const handleEditGroupName = () => {
     setNewGroupName(groupName);
     setIsEditingGroup(true);
@@ -452,7 +426,7 @@ export default function GroupDetailsPage() {
                       <TableHead className="text-base font-semibold text-right">Total Paid</TableHead>
                       <TableHead className="text-base font-semibold text-center min-w-[100px]">Payments</TableHead>
                       <TableHead className="text-base font-semibold min-w-[100px]">Status</TableHead>
-                      <TableHead className="text-base font-semibold text-center min-w-[120px]">Actions</TableHead>
+                      <TableHead className="text-base font-semibold text-center min-w-[120px]">Transaction History</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -496,10 +470,6 @@ export default function GroupDetailsPage() {
                                 <Button variant="ghost" size="icon" onClick={() => handleShowSchemePeek(scheme)} className="h-8 w-8">
                                   <History className="h-4 w-4 text-primary" />
                                   <span className="sr-only">View History for {scheme.id}</span>
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteScheme(scheme)} className="h-8 w-8" disabled={isDeletingScheme}>
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                  <span className="sr-only">Delete Scheme {scheme.id}</span>
                                 </Button>
                               </TableCell>
                             </motion.tr>

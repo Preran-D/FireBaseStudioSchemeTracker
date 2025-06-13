@@ -42,7 +42,7 @@ export default function DashboardPage() {
 
   const recentlyCompletedSchemes = useMemo(() => {
     const schemes = allSchemes
-      .filter(s => s.status === 'Completed' && s.closureDate)
+      .filter(s => s.status === 'Fully Paid' && s.closureDate)
       .sort((a, b) => parseISO(b.closureDate!).getTime() - parseISO(a.closureDate!).getTime());
     // Removed searchTerm filtering
     return schemes.slice(0, 10);

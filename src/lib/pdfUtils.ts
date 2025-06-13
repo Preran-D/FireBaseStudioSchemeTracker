@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Scheme, Payment } from '@/types/scheme'; // Assuming Scheme type is available
-import { calculateSchemeTotals, getSchemeStatus, formatDate, formatCurrency } from '@/lib/utils'; // Assuming these utils are available
+import { calculateSchemeTotals, getSchemeStatus, formatDate} from '@/lib/utils'; // Assuming these utils are available
 
 export const exportGroupSchemesToPdf = (
   groupName: string,
@@ -27,13 +27,13 @@ export const exportGroupSchemesToPdf = (
   // Add Group Summary Statistics
   doc.setFontSize(11);
   doc.text(`Total Customers: ${groupSummaryStats.totalCustomers}`, 14, currentY);
-  doc.text(`Total Collected: ${formatCurrency(groupSummaryStats.totalPaid)}`, 100, currentY);
+  doc.text(`Total Paid: ${"Rs." + (groupSummaryStats.totalPaid)}`, 100, currentY);
   currentY += 6;
   doc.text(`Total Schemes: ${groupSummaryStats.totalSchemes}`, 14, currentY);
-  doc.text(`Total Pending: ${formatCurrency(groupSummaryStats.totalPending)}`, 100, currentY);
+  // doc.text(`Total Pending: ${"Rs." + (groupSummaryStats.totalPending)}`, 100, currentY);
   currentY += 6;
-  doc.text(`Active Schemes: ${groupSummaryStats.activeSchemesCount}`, 14, currentY);
-  doc.text(`Total Overdue: ${formatCurrency(groupSummaryStats.totalOverdueAmount)}`, 100, currentY);
+  // doc.text(`Active Schemes: ${groupSummaryStats.activeSchemesCount}`, 14, currentY);
+  // doc.text(`Total Overdue: ${"Rs." + (groupSummaryStats.totalOverdueAmount)}`, 100, currentY);
   currentY += 8;
 
   doc.line(14, currentY, doc.internal.pageSize.width - 14, currentY); // Horizontal line separator
@@ -56,7 +56,7 @@ export const exportGroupSchemesToPdf = (
         scheme.id.toUpperCase(),
         formatDate(scheme.startDate),
         status,
-        formatCurrency(schemeTotals.totalCollected),
+        "Rs." + (schemeTotals.totalCollected),
       ];
     });
     autoTable(doc, {
@@ -80,8 +80,8 @@ export const exportGroupSchemesToPdf = (
         scheme.customerName,
         scheme.id.toUpperCase(),
         formatDate(scheme.startDate),
-        formatCurrency(scheme.monthlyPaymentAmount),
-        formatCurrency(schemeTotals.totalCollected),
+        "Rs." + (scheme.monthlyPaymentAmount),
+        "Rs." + (schemeTotals.totalCollected),
         `${schemeTotals.paymentsMadeCount || 0} / ${scheme.durationMonths}`,
         status,
       ];
@@ -100,7 +100,7 @@ export const exportGroupSchemesToPdf = (
         didDrawCell: (data) => {
           // This ensures currentY is updated after each main scheme row for subsequent tables
           if (data.row.index === 0 && data.cell.section === 'body') {
-             // Type assertion to access internal autoTable properties
+            // Type assertion to access internal autoTable properties
             currentY = (data.cursor as any)?.y + data.row.height + 2 || currentY;
           }
         }
@@ -114,7 +114,7 @@ export const exportGroupSchemesToPdf = (
           p.monthNumber,
           formatDate(p.dueDate),
           p.paymentDate ? formatDate(p.paymentDate) : 'N/A',
-          p.amountPaid ? formatCurrency(p.amountPaid) : 'N/A',
+          p.amountPaid ? "Rs." + (p.amountPaid) : 'N/A',
           p.modeOfPayment && p.modeOfPayment.length > 0 ? p.modeOfPayment.join(', ') : 'N/A',
           p.status,
         ]);
@@ -134,13 +134,13 @@ export const exportGroupSchemesToPdf = (
           },
           margin: { left: 20, right: 14, top: 0, bottom: 5 }, // Indent sub-table
           pageBreak: 'auto',
-           didDrawPage: (data) => {
+          didDrawPage: (data) => {
             currentY = data.cursor?.y || currentY;
           },
-           didParseCell: function (data) {
+          didParseCell: function (data) {
             // Check if it's the "No payment history" row
             if (data.cell.raw === "No payment history available.") {
-                if(data.cell.styles) data.cell.styles.halign = 'center';
+              if (data.cell.styles) data.cell.styles.halign = 'center';
             }
           },
         });
@@ -148,20 +148,20 @@ export const exportGroupSchemesToPdf = (
       } else {
         // Display "No payment history available."
         // This needs to be drawn carefully to fit within the table structure or as text
-         autoTable(doc, {
-            body: [[{content: "No payment history available.", colSpan: 6, styles: { halign: 'center', fontStyle: 'italic', textColor: [100,100,100] } }]],
-            startY: currentY,
-            theme: 'plain',
-            margin: { left: 20, right: 14, top: 0, bottom: 5 },
-            pageBreak: 'auto',
-            didDrawPage: (data) => {
-                currentY = data.cursor?.y || currentY;
-            }
+        autoTable(doc, {
+          body: [[{ content: "No payment history available.", colSpan: 6, styles: { halign: 'center', fontStyle: 'italic', textColor: [100, 100, 100] } }]],
+          startY: currentY,
+          theme: 'plain',
+          margin: { left: 20, right: 14, top: 0, bottom: 5 },
+          pageBreak: 'auto',
+          didDrawPage: (data) => {
+            currentY = data.cursor?.y || currentY;
+          }
         });
         currentY = (doc as any).lastAutoTable.finalY + 5;
       }
       currentY += 2; // Add a small gap before the next scheme entry
-       // Check for page overflow before drawing the next scheme
+      // Check for page overflow before drawing the next scheme
       if (currentY > doc.internal.pageSize.height - 30) { // 30 as a buffer for footer/margin
         doc.addPage();
         currentY = 20; // Reset Y for new page
@@ -203,9 +203,9 @@ export const exportCustomerReportsToPdf = (
   const addTextWithOverflowCheck = (text: string, x: number, y: number, size = 10, style = 'normal', lineHeight?: number) => {
     const textLineHeight = lineHeight || (size / 2) + 2; // Approximate line height
     if (y + textLineHeight > pageHeight - 15) { // 15 for bottom margin
-        doc.addPage();
-        currentY = 20;
-        y = currentY; // Reset y to new currentY
+      doc.addPage();
+      currentY = 20;
+      y = currentY; // Reset y to new currentY
     }
     doc.setFontSize(size);
     doc.setFont('helvetica', style);
@@ -216,10 +216,10 @@ export const exportCustomerReportsToPdf = (
   // Helper to add a line and update currentY
   const addLineWithOverflowCheck = (x1: number, y1: number, x2: number, y2: number, heightAfterLine: number = 5) => {
     if (y1 + heightAfterLine > pageHeight - 15) {
-        doc.addPage();
-        currentY = 20;
-        y1 = currentY; // Reset y1 to new currentY
-        y2 = currentY; // Reset y2 to new currentY
+      doc.addPage();
+      currentY = 20;
+      y1 = currentY; // Reset y1 to new currentY
+      y2 = currentY; // Reset y2 to new currentY
     }
     doc.line(x1, y1, x2, y2);
     currentY = y1 + heightAfterLine;
@@ -268,14 +268,14 @@ export const exportCustomerReportsToPdf = (
     currentY = summaryY + 5; // Move to next line for total collected
     summaryX = 14;
     summaryY = currentY;
-    addTextWithOverflowCheck(`Total Collected: ${formatCurrency(customer.schemesSummary.totalCollected)}`, summaryX, summaryY, 10, 'normal', 10); // Add more space after this
+    addTextWithOverflowCheck(`Total Collected: ${"Rs." + (customer.schemesSummary.totalCollected)}`, summaryX, summaryY, 10, 'normal', 10); // Add more space after this
 
     if (exportType === 'detailed') {
       if (customer.detailedSchemes.length > 0) {
         customer.detailedSchemes.forEach((scheme, schemeIndex) => {
           // Check for page overflow before drawing scheme table
           if (currentY + 30 > pageHeight - 20) { // Min height for a scheme block
-             doc.addPage(); currentY = 20;
+            doc.addPage(); currentY = 20;
           }
 
           const schemeTableColumns = ['Scheme ID', 'Start Date', 'Monthly Amt.', 'Status', 'Payments (Made/Total)', 'Total Paid'];
@@ -284,10 +284,10 @@ export const exportCustomerReportsToPdf = (
           const schemeTableRow = [
             scheme.id.toUpperCase(),
             formatDate(scheme.startDate),
-            formatCurrency(scheme.monthlyPaymentAmount),
+            "Rs." + (scheme.monthlyPaymentAmount),
             status,
             `${schemeTotals.paymentsMadeCount || 0}/${scheme.durationMonths}`,
-            formatCurrency(schemeTotals.totalCollected),
+            "Rs." + (schemeTotals.totalCollected),
           ];
 
           autoTable(doc, {
@@ -309,14 +309,14 @@ export const exportCustomerReportsToPdf = (
           // Payment History Sub-table for this scheme
           if (scheme.payments && scheme.payments.length > 0) {
             if (currentY + 25 > pageHeight - 20) { // Min height for payment history header + one row
-                doc.addPage(); currentY = 20;
+              doc.addPage(); currentY = 20;
             }
             const paymentHistoryColumns = ['Month #', 'Due Date', 'Payment Date', 'Amount Paid', 'Mode(s)', 'Status'];
             const paymentHistoryRows = scheme.payments.map((p: Payment) => [
               p.monthNumber,
               formatDate(p.dueDate),
               p.paymentDate ? formatDate(p.paymentDate) : 'N/A',
-              p.amountPaid ? formatCurrency(p.amountPaid) : 'N/A',
+              p.amountPaid ? "Rs." + (p.amountPaid) : 'N/A',
               p.modeOfPayment && p.modeOfPayment.length > 0 ? p.modeOfPayment.join(', ') : 'N/A',
               p.status,
             ]);
@@ -336,13 +336,13 @@ export const exportCustomerReportsToPdf = (
             });
             currentY = (doc as any).lastAutoTable.finalY + 3;
           } else {
-             if (currentY + 10 > pageHeight - 20) { doc.addPage(); currentY = 20; }
-             autoTable(doc, {
-                body: [[{content: "No payment history available.", colSpan: 6, styles: { halign: 'center', fontStyle: 'italic', textColor: [100,100,100] } }]],
-                startY: currentY,
-                theme: 'plain',
-                margin: { left: 18, right: 14, top: 0, bottom: 3 },
-                didDrawPage: (data) => { currentY = data.cursor?.y || currentY; }
+            if (currentY + 10 > pageHeight - 20) { doc.addPage(); currentY = 20; }
+            autoTable(doc, {
+              body: [[{ content: "No payment history available.", colSpan: 6, styles: { halign: 'center', fontStyle: 'italic', textColor: [100, 100, 100] } }]],
+              startY: currentY,
+              theme: 'plain',
+              margin: { left: 18, right: 14, top: 0, bottom: 3 },
+              didDrawPage: (data) => { currentY = data.cursor?.y || currentY; }
             });
             currentY = (doc as any).lastAutoTable.finalY + 3;
           }
@@ -356,13 +356,13 @@ export const exportCustomerReportsToPdf = (
 
     // Add a larger gap or a line before the next customer if it's not the last one
     if (customerIndex < customers.length - 1) {
-        currentY += 10; // Add some space
-        if (currentY > pageHeight - 20) { // If space pushes to overflow, new page will be added by next customer
-            // currentY will be reset by the next customer's addPage call.
-        } else {
-            // Optionally add a separator line if not overflowing
-            // addLineWithOverflowCheck(14, currentY, doc.internal.pageSize.width - 14, currentY, 5);
-        }
+      currentY += 10; // Add some space
+      if (currentY > pageHeight - 20) { // If space pushes to overflow, new page will be added by next customer
+        // currentY will be reset by the next customer's addPage call.
+      } else {
+        // Optionally add a separator line if not overflowing
+        // addLineWithOverflowCheck(14, currentY, doc.internal.pageSize.width - 14, currentY, 5);
+      }
     }
   });
 
