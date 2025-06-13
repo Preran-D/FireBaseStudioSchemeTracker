@@ -7,9 +7,9 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2 } from 'lucide-react';
+import { Edit, DollarSign, Loader2, CalendarIcon as CalendarIconLucide, Users2, PlusCircle, FileWarning, ListOrdered, Info, Pencil, ArrowLeft, CheckCircle, Plus, Minus, CreditCard, Landmark, Smartphone, History, UserCircle, Home, Phone, Trash2, Archive } from 'lucide-react'; // Added Archive
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme } from '@/lib/mock-data';
+import { getMockSchemeById, updateMockSchemePayment, closeMockScheme, getMockSchemes, getUniqueGroupNames, updateSchemeGroup, updateMockCustomerDetails, deleteFullMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { useToast } from '@/hooks/use-toast';
@@ -74,8 +74,9 @@ export default function SchemeDetailsPage() {
   const [inlinePaymentModes, setInlinePaymentModes] = useState<PaymentMode[]>(['Cash']);
   const [isInlinePaymentProcessing, setIsInlinePaymentProcessing] = useState(false);
 
-  const [isConfirmingDeleteScheme, setIsConfirmingDeleteScheme] = useState(false);
-  const [isDeletingScheme, setIsDeletingScheme] = useState(false);
+  // Renamed state variables for archiving
+  const [isConfirmingArchiveScheme, setIsConfirmingArchiveScheme] = useState(false);
+  const [isArchivingScheme, setIsArchivingScheme] = useState(false);
 
   const inlinePaymentForm = useForm<InlinePaymentFormValues>({
     resolver: zodResolver(inlinePaymentFormSchema),
@@ -284,45 +285,65 @@ export default function SchemeDetailsPage() {
     return scheme.status !== 'Closed' && scheme.status !== 'Completed' && maxInlineMonthsToPay > 0;
   }, [scheme, maxInlineMonthsToPay]);
 
-  const handleOpenDeleteSchemeDialog = () => {
-    setIsConfirmingDeleteScheme(true);
+  // Renamed handler for opening archive dialog
+  const handleOpenArchiveSchemeDialog = () => {
+    // Allow opening dialog for any status except 'Archived'
+    if (scheme && scheme.status === 'Archived') {
+        toast({
+            title: "Already Archived",
+            description: "This scheme is already in the trash.",
+            variant: "default"
+        });
+        return;
+    }
+    if (scheme) { // Check if scheme exists before opening dialog
+        setIsConfirmingArchiveScheme(true);
+    }
   };
 
-  const handleConfirmDeleteScheme = async () => {
-    if (!scheme) return;
-    setIsDeletingScheme(true);
-    const success = deleteFullMockScheme(scheme.id);
-    if (success) {
+  // Renamed handler for confirming archive
+  const handleConfirmArchiveScheme = async () => {
+    if (!scheme) { // Basic guard
+        setIsConfirmingArchiveScheme(false);
+        return;
+    }
+    // No longer need to check for 'Closed' status here, archiveMockScheme handles it.
+    // The button's disabled state (scheme.status === 'Archived') and handleOpenArchiveSchemeDialog prevent re-archiving.
+
+    setIsArchivingScheme(true);
+    const archivedScheme = archiveMockScheme(scheme.id);
+
+    if (archivedScheme) {
       toast({
-        title: "Scheme Deleted",
-        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been deleted.`,
+        title: "Scheme Moved to Trash",
+        description: `Scheme ID ${scheme.id.toUpperCase()} for ${scheme.customerName} has been moved to trash.`,
       });
-      // Navigate away
-      const allSchemes = getMockSchemes(); // Get fresh list after deletion
-      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName);
+
+      const allSchemes = getMockSchemes({ includeArchived: false });
+      const remainingSchemesForCustomer = allSchemes.filter(s => s.customerName === scheme.customerName && s.id !== scheme.id);
 
       if (remainingSchemesForCustomer.length > 0) {
         router.push(`/schemes/${remainingSchemesForCustomer[0].id}`);
       } else if (scheme.customerGroupName) {
-        // Check if group still exists (has other schemes)
         const groupStillExists = allSchemes.some(s => s.customerGroupName === scheme.customerGroupName);
         if (groupStillExists) {
           router.push(`/groups/${encodeURIComponent(scheme.customerGroupName)}`);
         } else {
-          router.push('/groups'); // Group is now empty, go to groups list
+          router.push('/schemes');
         }
       } else {
         router.push('/schemes');
       }
     } else {
+      // This case would be rare now, e.g. if scheme ID became invalid between opening dialog and confirming.
       toast({
-        title: "Error Deleting Scheme",
-        description: `Could not delete scheme ID ${scheme.id.toUpperCase()}.`,
+        title: "Error Moving to Trash",
+        description: `Could not move scheme ID ${scheme.id.toUpperCase()} to trash. An unexpected error occurred.`,
         variant: "destructive",
       });
-      setIsDeletingScheme(false);
+      setIsArchivingScheme(false);
     }
-    setIsConfirmingDeleteScheme(false); // Close dialog regardless of outcome, unless navigation happens first
+    setIsConfirmingArchiveScheme(false);
   };
 
 
@@ -376,7 +397,7 @@ export default function SchemeDetailsPage() {
               onClick={() => setIsEditCustomerDetailsDialogOpen(true)}
               variant="outline"
               size="sm"
-              disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme}
+              disabled={isUpdatingGroup || isUpdatingCustomerDetails || isProcessingManualClose || isInlinePaymentProcessing || isArchivingScheme}
             >
               <Pencil className="mr-2 h-4 w-4" /> Edit Details
             </Button>
@@ -457,7 +478,7 @@ export default function SchemeDetailsPage() {
                 onClick={() => setIsHistoryPanelOpen(true)}
                 variant="outline"
                 size="sm"
-                disabled={isInlinePaymentProcessing || isDeletingScheme}
+                disabled={isInlinePaymentProcessing || isArchivingScheme}
               >
                 <History className="mr-2 h-4 w-4" /> View History
             </Button>
@@ -668,7 +689,7 @@ export default function SchemeDetailsPage() {
                 variant="outline" // Changed from destructive to outline for less prominence than delete
                 className="w-full"
                 onClick={() => openManualCloseDialog(scheme)}
-                disabled={scheme.status === 'Closed' || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme || isUpdatingCustomerDetails}
+                disabled={scheme.status === 'Closed' || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isArchivingScheme || isUpdatingCustomerDetails}
             >
                 <FileWarning className="mr-2 h-4 w-4" /> Close Manually
             </Button>
@@ -678,15 +699,17 @@ export default function SchemeDetailsPage() {
             <Button
                 size="lg"
                 variant="destructive"
-                className="w-full mt-3" // Added margin top
-                onClick={handleOpenDeleteSchemeDialog}
-                disabled={isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isDeletingScheme || isUpdatingCustomerDetails}
+                className="w-full mt-3"
+                onClick={handleOpenArchiveSchemeDialog}
+                disabled={isLoading || scheme.status === 'Archived' || isArchivingScheme || isUpdatingGroup || isProcessingManualClose || isInlinePaymentProcessing || isUpdatingCustomerDetails}
             >
-                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Scheme
+                {isArchivingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Move to Trash
             </Button>
-             <p className="text-xs text-muted-foreground px-1">
-                Permanently delete this scheme and all its associated payment records. This action cannot be undone.
+            <p className="text-xs text-muted-foreground px-1">
+                {scheme.status === 'Archived'
+                    ? "This scheme is already in the trash."
+                    : "Move this scheme to the archive. It can be restored or permanently deleted from Archive Management."}
             </p>
           </CardContent>
         </Card>
@@ -782,22 +805,24 @@ export default function SchemeDetailsPage() {
         scheme={scheme}
       />
 
-      {isConfirmingDeleteScheme && scheme && (
-        <AlertDialog open={isConfirmingDeleteScheme} onOpenChange={(open) => { if(!isDeletingScheme) setIsConfirmingDeleteScheme(open);}}>
+      {/* Archive Scheme Confirmation Dialog */}
+      {isConfirmingArchiveScheme && scheme && (
+        <AlertDialog open={isConfirmingArchiveScheme} onOpenChange={(open) => { if(!isArchivingScheme) setIsConfirmingArchiveScheme(open);}}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Confirm Scheme Deletion</AlertDialogTitle>
+              <AlertDialogTitle>Confirm Move to Trash</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to permanently delete scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span>? All associated payment records will also be removed. This action cannot be undone.
+                Are you sure you want to move scheme <span className="font-semibold text-foreground">{scheme.id.toUpperCase()}</span> for <span className="font-semibold text-foreground">{scheme.customerName}</span> to trash?
+                It can be restored or permanently deleted from Archive Management.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setIsConfirmingDeleteScheme(false)} disabled={isDeletingScheme}>
+              <AlertDialogCancel onClick={() => setIsConfirmingArchiveScheme(false)} disabled={isArchivingScheme}>
                 Cancel
               </AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDeleteScheme} disabled={isDeletingScheme} className="bg-destructive hover:bg-destructive/80">
-                {isDeletingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm Delete
+              <AlertDialogAction onClick={handleConfirmArchiveScheme} disabled={isArchivingScheme || scheme.status === 'Archived'} className="bg-destructive hover:bg-destructive/80">
+                {isArchivingScheme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Move to Trash
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1,7 +1,7 @@
 
 import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus, ArchivedGroupInfo } from '@/types/scheme';
 import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId, formatDate } from '@/lib/utils';
-import { subMonths, addMonths, formatISO, parseISO, startOfDay } from 'date-fns';
+import { subMonths, addMonths, formatISO, parseISO, startOfDay, subDays, isBefore } from 'date-fns'; // Added subDays, isBefore
 
 const createScheme = (
   customerName: string, 
@@ -148,13 +148,19 @@ export const archiveMockScheme = (schemeId: string): Scheme | undefined => {
 
   const scheme = MOCK_SCHEMES[schemeIndex];
 
-  if (scheme.status === 'Closed') {
+  // If already archived, update the archivedDate. Otherwise, set to archived.
+  if (scheme.status !== 'Archived') {
     scheme.status = 'Archived';
     scheme.archivedDate = formatISO(new Date());
-    MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
-    return getMockSchemeById(schemeId); // Return a fresh copy with calculated fields
+  } else {
+    // Optionally, update archivedDate even if already archived, as per subtask description
+    scheme.archivedDate = formatISO(new Date());
   }
-  return undefined;
+
+  MOCK_SCHEMES[schemeIndex] = { ...scheme }; // Update the scheme in the main array
+  // Return a fresh copy with calculated fields, which also re-evaluates status.
+  // getMockSchemeById will ensure the status is 'Archived' if it was set here.
+  return getMockSchemeById(schemeId);
 };
 
 export const unarchiveMockScheme = (schemeId: string): Scheme | undefined => {
@@ -183,18 +189,20 @@ export const archiveAllSchemesForCustomer = (customerName: string): { archivedCo
   MOCK_SCHEMES.forEach(scheme => {
     if (scheme.customerName === customerName) {
       foundCustomerSchemes = true;
-      if (scheme.status === 'Closed') {
-        // archiveMockScheme returns the archived scheme if successful, or undefined
-        const archivedScheme = archiveMockScheme(scheme.id);
-        if (archivedScheme) {
-          archivedCount++;
-        } else {
-          // This case should ideally not happen if the status is 'Closed'
-          // but good to be aware of if archiveMockScheme has other failure conditions
-          console.warn(`Scheme ${scheme.id} was 'Closed' but failed to archive.`);
-          skippedCount++; // Or handle as a different type of error/count
-        }
+      // Call archiveMockScheme directly. It will handle if the scheme is already archived or not.
+      // archiveMockScheme now archives regardless of status (unless already archived).
+      const archivedScheme = archiveMockScheme(scheme.id);
+      if (archivedScheme) {
+        // Check if the status actually changed to 'Archived' or was already 'Archived' and date updated.
+        // For simplicity, we count it as "archived in this operation" if archiveMockScheme returns a scheme.
+        // A more nuanced check could compare previous status if needed.
+        archivedCount++;
       } else {
+        // This implies archiveMockScheme failed to find the scheme, which is unlikely here.
+        // Or, if archiveMockScheme were to return undefined for other reasons (e.g., a pre-archive check it might do).
+        // Since archiveMockScheme was modified to archive any non-archived scheme,
+        // a falsy return here would be unexpected if the scheme exists.
+        console.warn(`Failed to process scheme ${scheme.id} for customer ${customerName} during archive all operation.`);
         skippedCount++;
       }
     }
@@ -205,6 +213,33 @@ export const archiveAllSchemesForCustomer = (customerName: string): { archivedCo
     skippedCount,
     notFound: !foundCustomerSchemes,
   };
+};
+
+export const autoArchiveClosedSchemesByGracePeriod = (graceDays: number): { archivedCount: number } => {
+  let archivedCount = 0;
+  const schemesToConsider = getMockSchemes({ includeArchived: true }); // Consider all, including already archived to avoid processing them again if logic changes
+  const thresholdDate = subDays(new Date(), graceDays);
+
+  schemesToConsider.forEach(scheme => {
+    if (scheme.status === 'Closed' && scheme.closureDate) {
+      try {
+        const closureDateTime = parseISO(scheme.closureDate);
+        if (isBefore(closureDateTime, thresholdDate)) {
+          // Scheme is 'Closed' and its closureDate is older than the grace period
+          const archivedScheme = archiveMockScheme(scheme.id); // archiveMockScheme already checks if it's 'Closed'
+          if (archivedScheme) {
+            console.log(`Auto-archived scheme ${scheme.id} closed on ${scheme.closureDate}`);
+            archivedCount++;
+          }
+        }
+      } catch (e) {
+        // Log error if closureDate is invalid, though getMockSchemes should provide valid dates
+        console.error(`Error parsing closure date for scheme ${scheme.id}: ${scheme.closureDate}`, e);
+      }
+    }
+  });
+
+  return { archivedCount };
 };
 
 export const getMockSchemeById = (id: string): Scheme | undefined => {
