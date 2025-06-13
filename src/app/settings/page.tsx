@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Loader2, Settings as SettingsIcon, SlidersHorizontal, Info, DatabaseZap, FileSpreadsheet, UploadCloud, FileText, AlertCircle, Trash2, PlusCircle, CalendarIcon, FileUp, RefreshCcw, ArchiveRestore, AlertTriangle as AlertTriangleIcon, Archive, ArchiveIcon } from 'lucide-react'; // Added ArchiveIcon
-import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme } from '@/lib/mock-data'; // Added archiveMockScheme
+import { getMockSchemes, getGroupDetails, addMockScheme, updateMockSchemePayment, getUniqueGroupNames, reopenMockScheme, deleteFullMockScheme, getArchivedMockSchemes, unarchiveMockScheme, archiveMockScheme, autoArchiveClosedSchemesByGracePeriod } from '@/lib/mock-data'; // Added autoArchiveClosedSchemesByGracePeriod
 import type { Scheme, PaymentMode, GroupDetail, Payment, SchemeStatus } from '@/types/scheme'; // Added SchemeStatus
 import { formatDate, formatCurrency, getPaymentStatus, generateId, getSchemeStatus } from '@/lib/utils'; // Added getSchemeStatus
 // import { exportToExcel } from '@/lib/excelUtils'; // This was removed in a previous task
@@ -1176,37 +1176,22 @@ function RecommendedSettingsTabContent() {
 
   const handleRunArchiving = async () => {
     setIsProcessingArchive(true);
-    let archivedCount = 0;
     try {
-      const allSchemes = getMockSchemes({ includeArchived: true }); // Fetch all, including already archived
-      const schemesToArchive = allSchemes.filter(scheme => {
-        if (scheme.status === 'Closed' && scheme.closureDate) {
-          const closureDate = parseISO(scheme.closureDate);
-          const daysAgo = subDays(new Date(), archiveDays);
-          return isBefore(closureDate, daysAgo);
-        }
-        return false;
-      });
+      // Call the new centralized function
+      const result = autoArchiveClosedSchemesByGracePeriod(archiveDays);
 
-      for (const scheme of schemesToArchive) {
-        const result = archiveMockScheme(scheme.id);
-        if (result) {
-          archivedCount++;
-        }
-      }
-
-      if (archivedCount > 0) {
-        toast({ title: "Archiving Complete", description: `${archivedCount} scheme(s) were archived.` });
+      if (result.archivedCount > 0) {
+        toast({ title: "Archiving Complete", description: `${result.archivedCount} scheme(s) were automatically archived.` });
       } else {
-        toast({ title: "Archiving Complete", description: "No schemes were eligible for archiving at this time." });
+        toast({ title: "Archiving Complete", description: "No schemes were eligible for auto-archiving at this time." });
       }
     } catch (error) {
-      console.error("Error during archiving:", error);
-      toast({ title: "Archiving Error", description: "An error occurred while trying to archive schemes.", variant: "destructive" });
+      console.error("Error during auto-archiving:", error);
+      toast({ title: "Archiving Error", description: "An error occurred during the auto-archiving process.", variant: "destructive" });
     }
     setIsProcessingArchive(false);
-    // Potentially call loadAllData() here if it's in the same component and needs to refresh a list
-    // that might now exclude these archived schemes, but DataManagementTabContent handles its own loadAllData.
+    // If DataManagementTabContent is visible and needs refresh, it should have its own way to reload or be re-triggered.
+    // For now, this component doesn't directly manage DataManagementTabContent's data.
   };
 
   return (

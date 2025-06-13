@@ -313,20 +313,20 @@ export default function GroupDetailsPage() {
       if (result.archivedCount > 0) {
         toast({
           title: "Schemes Archived",
-          description: `Successfully archived ${result.archivedCount} closed scheme(s) for "${customerToArchiveSchemes}".`,
+          description: `Successfully archived ${result.archivedCount} scheme(s) for "${customerToArchiveSchemes}".`, // Removed "closed"
         });
       }
       if (result.skippedCount > 0) {
         toast({
           title: "Some Schemes Skipped",
-          description: `${result.skippedCount} scheme(s) for "${customerToArchiveSchemes}" were not 'Closed' and were not archived.`,
+          description: `${result.skippedCount} scheme(s) for "${customerToArchiveSchemes}" could not be archived (they may have been already archived or an error occurred).`, // Updated message
           variant: "default",
         });
       }
-      if (result.archivedCount === 0 && result.skippedCount === 0) {
+      if (result.archivedCount === 0 && result.skippedCount === 0 && !result.notFound) { // Added !result.notFound to be more specific
          toast({
           title: "No Action Taken",
-          description: `No 'Closed' schemes found to archive for "${customerToArchiveSchemes}".`,
+          description: `No schemes were archived for "${customerToArchiveSchemes}". They might have been already archived or none exist.`, // Updated message
           variant: "default",
         });
       }
@@ -513,7 +513,7 @@ export default function GroupDetailsPage() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => handleInitiateArchiveCustomerSchemes(customerGroup.customerName)}>
                                   <Archive className="mr-2 h-4 w-4 text-orange-600" />
-                                  <span className="text-orange-600">Archive Closed Schemes</span>
+                                  <span className="text-orange-600">Archive All Schemes</span>
                                 </DropdownMenuItem>
                                 {/* Add other customer-level actions here if needed in the future */}
                               </DropdownMenuContent>
@@ -603,10 +603,10 @@ export default function GroupDetailsPage() {
       <AlertDialog open={isArchiveCustomerSchemesDialogOpen} onOpenChange={setIsArchiveCustomerSchemesDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Archive Customer&apos;s Closed Schemes</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Archive All Customer&apos;s Schemes</AlertDialogTitle> {/* Updated title */}
             <AlertDialogDescription>
-              Are you sure you want to move all &apos;Closed&apos; schemes for customer &quot;{customerToArchiveSchemes}&quot; to the trash?
-              Other schemes (Active, Overdue, etc.) will not be affected. This action can be undone from the archive management page.
+              Are you sure you want to move all schemes for customer &quot;{customerToArchiveSchemes}&quot; to the trash?
+              This action can be undone from the archive management page. {/* Updated description */}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -615,7 +615,7 @@ export default function GroupDetailsPage() {
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmArchiveCustomerSchemes} disabled={isArchivingCustomerSchemes} className="bg-orange-600 hover:bg-orange-700">
               {isArchivingCustomerSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
-              Archive Closed Schemes
+              Archive All Schemes {/* Updated button text */}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
