@@ -1,6 +1,6 @@
 
 import type { Scheme, Payment, PaymentMode, GroupDetail, SchemeStatus } from '@/types/scheme';
-import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId } from '@/lib/utils';
+import { generatePaymentsForScheme, getSchemeStatus, calculateSchemeTotals, calculateDueDate, getPaymentStatus, generateId, formatDate } from '@/lib/utils';
 import { subMonths, addMonths, formatISO, parseISO, startOfDay } from 'date-fns';
 
 const createScheme = (
@@ -570,6 +570,7 @@ export const getGroupDetails = (): GroupDetail[] => {
     customerNames: Array.from(data.customerNames).sort(),
     totalSchemesInGroup: data.schemes.length,
     recordableSchemeCount: data.recordableSchemeCount,
+    hasOverdueSchemeInGroup: data.schemes.some(scheme => scheme.status === 'Overdue'),
   })).sort((a,b) => a.groupName.localeCompare(b.groupName));
 };
 
