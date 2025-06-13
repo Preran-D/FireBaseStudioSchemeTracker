@@ -67,6 +67,7 @@ export const exportGroupSchemesToPdf = (
       headStyles: { fillColor: [22, 160, 133] },
       margin: { top: 10 },
     });
+    currentY = (doc as any).lastAutoTable.finalY + 10;
   } else { // Detailed export
     schemes.forEach((scheme, index) => {
       const schemeTotals = calculateSchemeTotals(scheme);

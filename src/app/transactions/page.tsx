@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Edit, Trash2, Filter, MoreHorizontal, Eye, Loader2, CalendarIcon, X } from 'lucide-react';
+import { Edit, Trash2, Filter, MoreHorizontal, Eye, Loader2, X } from 'lucide-react';
 import type { Scheme, Payment, PaymentMode } from '@/types/scheme';
 import { getMockSchemes, editMockPaymentDetails, deleteMockPayment } from '@/lib/mock-data';
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, getPaymentStatus, cn } from '@/lib/utils';
@@ -22,9 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { formatISO, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { parseISO } from 'date-fns'; // formatISO, isWithinInterval, startOfDay, endOfDay removed
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
@@ -49,17 +47,13 @@ interface GroupedTransactionDisplay {
   customerNames: string[]; // All unique customer names in the group for the filtered range
 }
 
-interface DateRange {
-  from: Date | undefined;
-  to: Date | undefined;
-}
-
+// DateRange interface removed
 
 export default function TransactionsPage() {
   const [allSchemes, setAllSchemes] = useState<Scheme[]>([]);
   const [allFlatTransactions, setAllFlatTransactions] = useState<TransactionRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  // dateRange state removed
   const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState<TransactionRow | null>(null);
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<TransactionRow | null>(null);
@@ -101,25 +95,7 @@ export default function TransactionsPage() {
   } = useMemo(() => {
     let currentFilteredTransactions = allFlatTransactions;
 
-    if (dateRange.from || dateRange.to) {
-      currentFilteredTransactions = currentFilteredTransactions.filter(transaction => {
-        if (!transaction.paymentDate) return false;
-        const paymentDateTime = parseISO(transaction.paymentDate);
-        const fromDate = dateRange.from ? startOfDay(dateRange.from) : null;
-        const toDate = dateRange.to ? endOfDay(dateRange.to) : null;
-
-        if (fromDate && toDate) {
-          return isWithinInterval(paymentDateTime, { start: fromDate, end: toDate });
-        }
-        if (fromDate) {
-          return paymentDateTime >= fromDate;
-        }
-        if (toDate) {
-          return paymentDateTime <= toDate;
-        }
-        return true;
-      });
-    }
+    // Date range filtering block removed
 
     if (searchTerm) {
       currentFilteredTransactions = currentFilteredTransactions.filter(transaction =>
@@ -152,7 +128,7 @@ export default function TransactionsPage() {
         groupEntry.allCustomerNamesInGroup.add(transaction.customerName);
         groupEntry.totalAmountInGroup += transaction.amountPaid || 0;
 
-        const paymentDateKey = transaction.paymentDate ? formatISO(parseISO(transaction.paymentDate), { representation: 'date' }) : 'UnknownDate';
+        const paymentDateKey = transaction.paymentDate ? parseISO(transaction.paymentDate).toISOString().split('T')[0] : 'UnknownDate'; // formatISO removed
         let dateEntry = groupEntry.transactionsByDateMap.get(paymentDateKey);
         if (!dateEntry) {
           dateEntry = { transactionsOnDate: [], totalAmountOnDate: 0, distinctCustomersOnDate: new Set() };
@@ -193,7 +169,7 @@ export default function TransactionsPage() {
       groupedDisplayData: finalGroupedDisplayData,
       individualDisplayData: individualsForGroupedView.sort((a,b) => parseISO(b.paymentDate!).getTime() - parseISO(a.paymentDate!).getTime())
     };
-  }, [allFlatTransactions, searchTerm, dateRange]);
+  }, [allFlatTransactions, searchTerm]); // dateRange removed from dependency array
 
   const handleEditPaymentSubmit = (data: { paymentDate: string; amountPaid: number; modeOfPayment: PaymentMode[] }) => {
     if (!selectedPaymentForEdit) return;
@@ -225,7 +201,7 @@ export default function TransactionsPage() {
 
   const clearAllFilters = () => {
     setSearchTerm('');
-    setDateRange({ from: undefined, to: undefined });
+    // setDateRange call removed
   };
 
   const renderTransactionTable = (transactions: TransactionRow[], isNestedTable: boolean = false, showPaymentDateColumn: boolean = true) => (
@@ -301,54 +277,8 @@ export default function TransactionsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="max-w-md"
               />
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex flex-col gap-1.5">
-                    <span className="text-xs text-muted-foreground">From Date:</span>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <Button
-                            variant={'outline'}
-                            className={cn('w-full sm:w-[150px] justify-start text-left font-normal', !dateRange.from && 'text-muted-foreground')}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateRange.from ? formatDate(dateRange.from.toISOString()) : <span>Pick a date</span>}
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                        <Calendar
-                            mode="single"
-                            selected={dateRange.from}
-                            onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                     <span className="text-xs text-muted-foreground">To Date:</span>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <Button
-                            variant={'outline'}
-                            className={cn('w-full sm:w-[150px] justify-start text-left font-normal', !dateRange.to && 'text-muted-foreground')}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateRange.to ? formatDate(dateRange.to.toISOString()) : <span>Pick a date</span>}
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                        <Calendar
-                            mode="single"
-                            selected={dateRange.to}
-                            onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                            disabled={(date) => dateRange.from ? date < dateRange.from : false}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                </div>
-              </div>
-              {(searchTerm || dateRange.from || dateRange.to) && (
+              {/* Date picker divs removed */}
+              {(searchTerm) && (
                 <Button variant="ghost" onClick={clearAllFilters} size="sm">
                   <X className="mr-2 h-4 w-4" /> Clear Filters
                 </Button>
