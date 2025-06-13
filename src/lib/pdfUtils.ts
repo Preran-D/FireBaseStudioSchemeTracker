@@ -353,6 +353,35 @@ export const exportCustomerReportsToPdf = (
         if (currentY + 10 > pageHeight - 20) { doc.addPage(); currentY = 20; }
         addTextWithOverflowCheck('No detailed schemes to display for this customer.', 14, currentY, 10, 'italic', 7);
       }
+    } else if (exportType === 'condensed') {
+      addTextWithOverflowCheck('Schemes List (Condensed):', 14, currentY, 12, 'bold', 7);
+      if (customer.detailedSchemes && customer.detailedSchemes.length > 0) {
+        const tableColumnsCondensed = ['Scheme ID', 'Start Date', 'Monthly Amt.', 'Status', 'Payments (Made/Total)', 'Total Paid'];
+        const tableRowsCondensed = customer.detailedSchemes.map(scheme => {
+          const schemeTotals = calculateSchemeTotals(scheme);
+          const status = getSchemeStatus(scheme);
+          return [
+            scheme.id.toUpperCase(),
+            formatDate(scheme.startDate),
+            "Rs." + (scheme.monthlyPaymentAmount),
+            status,
+            `${schemeTotals.paymentsMadeCount || 0}/${scheme.durationMonths}`,
+            "Rs." + (schemeTotals.totalCollected),
+          ];
+        });
+        autoTable(doc, {
+          head: [tableColumnsCondensed],
+          body: tableRowsCondensed,
+          startY: currentY,
+          theme: 'grid',
+          headStyles: { fillColor: [74, 85, 104] }, // Slate color
+          margin: { top: 5, bottom: 2 },
+          didDrawPage: (data) => { currentY = data.cursor?.y || currentY; }, // Ensure currentY is updated on new page
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 5;
+      } else {
+        addTextWithOverflowCheck('No schemes to display for this customer.', 14, currentY, 10, 'italic', 7);
+      }
     } // End of detailed export specific section
 
     // Add a larger gap or a line before the next customer if it's not the last one
