@@ -75,7 +75,7 @@ export const exportGroupSchemesToPdf = (
 
       // Main scheme details
       const mainSchemeTableColumns = [
-        'Customer Name', 'Scheme ID', 'Start Date', 'Monthly Amt.', 'Total Paid', 'Payments (Made/Total)', 'Status'
+        'Customer Name', 'Scheme ID', 'Start Date', 'Monthly Amt.', 'Total Paid', 'Payments', 'Status'
       ];
       const mainSchemeRow = [
         scheme.customerName,
@@ -255,21 +255,21 @@ export const exportCustomerReportsToPdf = (
     let summaryY = currentY;
     addTextWithOverflowCheck(`Total Schemes: ${customer.schemesSummary.totalSchemes}`, summaryX, summaryY, 10, 'normal', 5);
     summaryX += 55;
-    addTextWithOverflowCheck(`Active: ${customer.schemesSummary.activeSchemes}`, summaryX, summaryY, 10, 'normal', 5);
+    // addTextWithOverflowCheck(`Active: ${customer.schemesSummary.activeSchemes}`, summaryX, summaryY, 10, 'normal', 5);
     summaryX += 35;
-    addTextWithOverflowCheck(`Completed: ${customer.schemesSummary.completedSchemes}`, summaryX, summaryY, 10, 'normal', 5);
+    addTextWithOverflowCheck(`Fully Paid: ${customer.schemesSummary.completedSchemes}`, summaryX, summaryY, 10, 'normal', 5);
 
     currentY = summaryY + 5; // Move to next line of summary
     summaryX = 14;
     summaryY = currentY;
     addTextWithOverflowCheck(`Closed: ${customer.schemesSummary.closedSchemes}`, summaryX, summaryY, 10, 'normal', 5);
     summaryX += 55;
-    addTextWithOverflowCheck(`Overdue: ${customer.schemesSummary.overdueSchemes}`, summaryX, summaryY, 10, 'normal', 5);
+    // addTextWithOverflowCheck(`Overdue: ${customer.schemesSummary.overdueSchemes}`, summaryX, summaryY, 10, 'normal', 5);
 
     currentY = summaryY + 5; // Move to next line for total collected
     summaryX = 14;
     summaryY = currentY;
-    addTextWithOverflowCheck(`Total Collected: ${"Rs." + (customer.schemesSummary.totalCollected)}`, summaryX, summaryY, 10, 'normal', 10); // Add more space after this
+    addTextWithOverflowCheck(`Total Paid: ${"Rs." + (customer.schemesSummary.totalCollected)}`, summaryX, summaryY, 10, 'normal', 10); // Add more space after this
 
     if (exportType === 'detailed') {
       if (customer.detailedSchemes.length > 0) {
@@ -354,7 +354,7 @@ export const exportCustomerReportsToPdf = (
         addTextWithOverflowCheck('No detailed schemes to display for this customer.', 14, currentY, 10, 'italic', 7);
       }
     } else if (exportType === 'condensed') {
-      addTextWithOverflowCheck('Schemes List (Condensed):', 14, currentY, 12, 'bold', 7);
+      addTextWithOverflowCheck('Schemes List :', 14, currentY, 12, 'bold', 7);
       if (customer.detailedSchemes && customer.detailedSchemes.length > 0) {
         const tableColumnsCondensed = ['Scheme ID', 'Start Date', 'Monthly Amt.', 'Status', 'Payments (Made/Total)', 'Total Paid'];
         const tableRowsCondensed = customer.detailedSchemes.map(scheme => {
