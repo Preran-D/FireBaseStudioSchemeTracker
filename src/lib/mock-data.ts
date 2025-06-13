@@ -175,6 +175,38 @@ export const unarchiveMockScheme = (schemeId: string): Scheme | undefined => {
   return undefined;
 };
 
+export const archiveAllSchemesForCustomer = (customerName: string): { archivedCount: number; skippedCount: number; notFound: boolean } => {
+  let archivedCount = 0;
+  let skippedCount = 0;
+  let foundCustomerSchemes = false;
+
+  MOCK_SCHEMES.forEach(scheme => {
+    if (scheme.customerName === customerName) {
+      foundCustomerSchemes = true;
+      if (scheme.status === 'Closed') {
+        // archiveMockScheme returns the archived scheme if successful, or undefined
+        const archivedScheme = archiveMockScheme(scheme.id);
+        if (archivedScheme) {
+          archivedCount++;
+        } else {
+          // This case should ideally not happen if the status is 'Closed'
+          // but good to be aware of if archiveMockScheme has other failure conditions
+          console.warn(`Scheme ${scheme.id} was 'Closed' but failed to archive.`);
+          skippedCount++; // Or handle as a different type of error/count
+        }
+      } else {
+        skippedCount++;
+      }
+    }
+  });
+
+  return {
+    archivedCount,
+    skippedCount,
+    notFound: !foundCustomerSchemes,
+  };
+};
+
 export const getMockSchemeById = (id: string): Scheme | undefined => {
   const schemeFromGlobalArray = MOCK_SCHEMES.find(s => s.id === id);
   if (!schemeFromGlobalArray) return undefined;

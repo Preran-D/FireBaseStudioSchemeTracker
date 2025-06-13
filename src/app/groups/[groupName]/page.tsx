@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil } from 'lucide-react';
+import { ArrowLeft, Users, ListChecks, DollarSign, AlertTriangle, Loader2, CreditCard, History, CheckSquare, Trash2, FileDown, Badge, Pencil, Archive, MoreVertical } from 'lucide-react'; // Added Archive, MoreVertical
 import type { Scheme, Payment, PaymentMode, SchemeStatus } from '@/types/scheme';
-import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup } from '@/lib/mock-data';
+import { getMockSchemes, deleteFullMockScheme, updateMockGroupName, deleteMockGroup, archiveMockGroup, archiveAllSchemesForCustomer } from '@/lib/mock-data'; // Added archiveAllSchemesForCustomer
 import { formatCurrency, formatDate, getSchemeStatus, calculateSchemeTotals, cn } from '@/lib/utils';
 import { SchemeStatusBadge } from '@/components/shared/SchemeStatusBadge';
 import { SchemeHistoryPanel } from '@/components/shared/SchemeHistoryPanel';
@@ -21,6 +21,12 @@ import { exportGroupSchemesToPdf } from '@/lib/pdfUtils'; // Import PDF export f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ExportPdfDialog from '@/components/dialogs/ExportPdfDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"; // Added DropdownMenu components
 
 const statusPriorityMap: Record<SchemeStatus, number> = {
   'Overdue': 0,
@@ -54,6 +60,11 @@ export default function GroupDetailsPage() {
   const [isSavingGroupName, setIsSavingGroupName] = useState(false);
   const [isConfirmingDeleteGroup, setIsConfirmingDeleteGroup] = useState(false);
   const [isDeletingGroupState, setIsDeletingGroupState] = useState(false); // Renamed to avoid conflict with scheme deletion
+
+  // State for archiving all schemes for a customer
+  const [customerToArchiveSchemes, setCustomerToArchiveSchemes] = useState<string | null>(null);
+  const [isArchiveCustomerSchemesDialogOpen, setIsArchiveCustomerSchemesDialogOpen] = useState(false);
+  const [isArchivingCustomerSchemes, setIsArchivingCustomerSchemes] = useState(false);
 
   const loadGroupSchemes = () => {
     if (groupName) {
@@ -262,25 +273,73 @@ export default function GroupDetailsPage() {
     setIsDeletingGroupState(true); // Use specific loading state
     setIsConfirmingDeleteGroup(false); // Close dialog immediately
     await new Promise(resolve => delay(resolve, 500));
-    const success = deleteMockGroup(groupName);
+    const success = archiveMockGroup(groupName); // Changed to archiveMockGroup
     if (success) {
       toast({
-        title: "Group Deleted",
-        description: `Group "${groupName}" has been deleted. Schemes are now ungrouped.`,
+        title: "Group Archived", // Changed title
+        description: `Group "${groupName}" has been moved to trash.`, // Changed description
       });
       router.push('/groups'); // Navigate back to groups list
     } else {
       toast({
-        title: "Error Deleting Group",
-        description: `Could not delete group "${groupName}".`,
+        title: "Error Archiving Group", // Changed title
+        description: `Could not archive group "${groupName}".`,
         variant: "destructive",
       });
     }
     setIsDeletingGroupState(false); // Reset specific loading state
   };
 
+  const handleInitiateArchiveCustomerSchemes = (customerName: string) => {
+    setCustomerToArchiveSchemes(customerName);
+    setIsArchiveCustomerSchemesDialogOpen(true);
+  };
 
-  if (isLoading && !isDeletingGroupState) { // Ensure main loader doesn't show if only deleting group
+  const handleConfirmArchiveCustomerSchemes = async () => {
+    if (!customerToArchiveSchemes) return;
+
+    setIsArchivingCustomerSchemes(true);
+    await new Promise(resolve => delay(resolve, 500)); // Simulate API call
+
+    const result = archiveAllSchemesForCustomer(customerToArchiveSchemes);
+
+    if (result.notFound) {
+      toast({
+        title: "No Schemes Found",
+        description: `No schemes found for customer "${customerToArchiveSchemes}".`,
+        variant: "default",
+      });
+    } else {
+      if (result.archivedCount > 0) {
+        toast({
+          title: "Schemes Archived",
+          description: `Successfully archived ${result.archivedCount} closed scheme(s) for "${customerToArchiveSchemes}".`,
+        });
+      }
+      if (result.skippedCount > 0) {
+        toast({
+          title: "Some Schemes Skipped",
+          description: `${result.skippedCount} scheme(s) for "${customerToArchiveSchemes}" were not 'Closed' and were not archived.`,
+          variant: "default",
+        });
+      }
+      if (result.archivedCount === 0 && result.skippedCount === 0) {
+         toast({
+          title: "No Action Taken",
+          description: `No 'Closed' schemes found to archive for "${customerToArchiveSchemes}".`,
+          variant: "default",
+        });
+      }
+    }
+
+    setIsArchivingCustomerSchemes(false);
+    setIsArchiveCustomerSchemesDialogOpen(false);
+    setCustomerToArchiveSchemes(null);
+    loadGroupSchemes(); // Refresh the list
+  };
+
+
+  if (isLoading && !isDeletingGroupState && !isArchivingCustomerSchemes) { // Ensure main loader doesn't show if only deleting group
     return <div className="flex justify-center items-center min-h-[60vh]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
@@ -325,7 +384,7 @@ export default function GroupDetailsPage() {
             </Button>
             <Button variant="outline" size="icon" onClick={handleDeleteGroup} className="h-9 w-9 text-destructive hover:bg-destructive/10" disabled={isDeletingGroupState}>
               {isDeletingGroupState ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              <span className="sr-only">Delete Group</span>
+              <span className="sr-only">Move Group to Trash</span>
             </Button>
           </div>
         </div>
@@ -438,10 +497,27 @@ export default function GroupDetailsPage() {
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.1 + (2 * 0.1) + (groupIndex * 0.05), duration: 0.3 }}
                         >
-                          <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 py-3">
-                            {customerGroup.customerName} (<span className="font-normal text-sm">
-                              {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
-                            </span>)
+                          <TableCell className="font-semibold text-base sticky left-0 bg-card/80 dark:bg-card/80 z-10 py-3 flex items-center justify-between">
+                            <div>
+                              {customerGroup.customerName} (<span className="font-normal text-sm">
+                                {customerGroup.totalSchemes} Scheme{customerGroup.totalSchemes > 1 ? 's' : ''}
+                              </span>)
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 data-[state=open]:bg-muted">
+                                  <MoreVertical className="h-4 w-4" />
+                                  <span className="sr-only">Customer Actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleInitiateArchiveCustomerSchemes(customerGroup.customerName)}>
+                                  <Archive className="mr-2 h-4 w-4 text-orange-600" />
+                                  <span className="text-orange-600">Archive Closed Schemes</span>
+                                </DropdownMenuItem>
+                                {/* Add other customer-level actions here if needed in the future */}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                           <TableCell colSpan={6} className="text-base py-3"></TableCell>
                         </motion.tr>
@@ -506,18 +582,40 @@ export default function GroupDetailsPage() {
       <AlertDialog open={isConfirmingDeleteGroup} onOpenChange={setIsConfirmingDeleteGroup}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Group Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Group Archive</AlertDialogTitle> {/* Changed title */}
             <AlertDialogDescription>
-              Are you sure you want to delete the group "{groupName}"? All schemes within this group will be ungrouped. This action cannot be undone.
-            </AlertDialogDescription>
+              Are you sure you want to archive the group "{groupName}"? This will move the group to a temporary trash location.
+            </AlertDialogDescription> {/* Changed description */}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setIsConfirmingDeleteGroup(false)} disabled={isDeletingGroupState}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteGroup} disabled={isDeletingGroupState} className="bg-destructive hover:bg-destructive/80">
-              {isDeletingGroupState ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Delete Group
+              {isDeletingGroupState ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4"/>}
+              Move to Trash
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog for archiving customer's closed schemes */}
+      <AlertDialog open={isArchiveCustomerSchemesDialogOpen} onOpenChange={setIsArchiveCustomerSchemesDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Archive Customer&apos;s Closed Schemes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to move all &apos;Closed&apos; schemes for customer &quot;{customerToArchiveSchemes}&quot; to the trash?
+              Other schemes (Active, Overdue, etc.) will not be affected. This action can be undone from the archive management page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setIsArchiveCustomerSchemesDialogOpen(false); setCustomerToArchiveSchemes(null);}} disabled={isArchivingCustomerSchemes}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmArchiveCustomerSchemes} disabled={isArchivingCustomerSchemes} className="bg-orange-600 hover:bg-orange-700">
+              {isArchivingCustomerSchemes ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
+              Archive Closed Schemes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
